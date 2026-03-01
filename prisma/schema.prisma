@@ -1,0 +1,47 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+model Portfolio {
+  id          String   @id @default(cuid())
+  name        String   // e.g., "IBKR Account"
+  currency    String   @default("USD")
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  transactions Transaction[]
+}
+
+model Asset {
+  id          String   @id @default(cuid())
+  ticker      String   @unique // e.g., "AAPL"
+  name        String   // e.g., "Apple Inc."
+  market      String   // e.g., "NASDAQ", "NYSE", "OTC"
+  type        String   @default("STOCK") // e.g., "STOCK", "ETF", "CRYPTO"
+  currency    String   @default("USD")
+  
+  transactions Transaction[]
+}
+
+model Transaction {
+  id          String   @id @default(cuid())
+  portfolioId String
+  assetId     String
+  type        String   // e.g., "BUY", "SELL", "DIVIDEND", "SPLIT"
+  date        DateTime
+  quantity    Float    @default(0)
+  price       Float    @default(0)
+  fee         Float    @default(0)
+  currency    String   @default("USD")
+
+  portfolio   Portfolio @relation(fields: [portfolioId], references: [id], onDelete: Cascade)
+  asset       Asset     @relation(fields: [assetId], references: [id], onDelete: Restrict)
+
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+}
