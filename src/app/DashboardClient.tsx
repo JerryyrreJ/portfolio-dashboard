@@ -17,7 +17,8 @@ import {
   LayoutGrid,
   Settings,
   HelpCircle,
-  Bell
+  Bell,
+  RefreshCw
 } from 'lucide-react';
 import AddTransactionModal from './components/AddTransactionModal';
 
@@ -73,6 +74,43 @@ interface DashboardClientProps {
 
 export default function DashboardClient({ portfolioId, portfolioName, holdingsData, chartData, summary }: DashboardClientProps) {
   const [isModalOpen, setIsModalOpen] = useState(false);
+  const [isRefreshing, setIsRefreshing] = useState(false);
+  const [lastUpdated, setLastUpdated] = useState<Date>(new Date());
+
+  // 手动刷新数据
+  const handleRefresh = async () => {
+    setIsRefreshing(true);
+    try {
+      // 使用 router.refresh() 来触发服务器端重新获取数据
+      window.location.reload();
+    } catch (error) {
+      console.error('Failed to refresh:', error);
+    } finally {
+      setIsRefreshing(false);
+    }
+  };
+
+  // 自动刷新数据（每60秒）
+  useEffect(() => {
+    const interval = setInterval(() => {
+      // 更新最后更新时间
+      setLastUpdated(new Date());
+    }, 60000); // 每分钟更新一次显示时间
+
+    return () => clearInterval(interval);
+  }, []);
+
+  // 格式化时间显示
+  const formatLastUpdated = (date: Date) => {
+    const now = new Date();
+    const diff = Math.floor((now.getTime() - date.getTime()) / 1000);
+
+    if (diff < 60) return 'Just now';
+    if (diff < 120) return '1 minute ago';
+    if (diff < 3600) return `${Math.floor(diff / 60)} minutes ago`;
+    if (diff < 7200) return '1 hour ago';
+    return `${Math.floor(diff / 3600)} hours ago`;
+  };
 
   return (
     <div className="min-h-screen bg-slate-50 flex flex-col font-sans text-slate-900">

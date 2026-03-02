@@ -10,7 +10,7 @@ datasource db {
 model Portfolio {
   id          String   @id @default(cuid())
   name        String   // e.g., "IBKR Account"
-  currency    String   @default("USD")
+  currency    String   @default("USD")   // 组合的基础货币（用于显示）
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
 
@@ -35,9 +35,11 @@ model Transaction {
   type        String   // e.g., "BUY", "SELL", "DIVIDEND", "SPLIT"
   date        DateTime
   quantity    Float    @default(0)
-  price       Float    @default(0)
+  price       Float    @default(0)       // 交易时的原始价格（交易货币）
+  priceUSD    Float    @default(0)       // 转换为USD的价格（用于统一计算）
+  exchangeRate Float   @default(1)       // 交易时的汇率（相对于USD）
   fee         Float    @default(0)
-  currency    String   @default("USD")
+  currency    String   @default("USD")   // 交易的原始货币
 
   portfolio   Portfolio @relation(fields: [portfolioId], references: [id], onDelete: Cascade)
   asset       Asset     @relation(fields: [assetId], references: [id], onDelete: Restrict)

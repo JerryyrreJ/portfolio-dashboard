@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState, useCallback, useEffect } from 'react';
-import { X, Search, Loader2, TrendingUp, Calendar, DollarSign, AlertCircle, CheckCircle } from 'lucide-react';
+import { X, Search, Loader2, TrendingUp, TrendingDown, Calendar, DollarSign, AlertCircle, CheckCircle } from 'lucide-react';
 import { useStock } from '@/hooks/useStock';
 
 interface AddTransactionModalProps {
@@ -37,6 +37,7 @@ export default function AddTransactionModal({
 
   // 表单状态
   const [assetType, setAssetType] = useState<'stock' | 'crypto' | 'other'>('stock');
+  const [transactionType, setTransactionType] = useState<'BUY' | 'SELL'>('BUY');
   const [symbol, setSymbol] = useState('');
   const [searchQuery, setSearchQuery] = useState('');
   const [searchResults, setSearchResults] = useState<SearchResult[]>([]);
@@ -53,6 +54,54 @@ export default function AddTransactionModal({
   // 自动价格获取状态
   const [isFetchingPrice, setIsFetchingPrice] = useState(false);
   const [priceSource, setPriceSource] = useState<'api' | 'manual'>('manual');
+
+  // 持仓检查状态
+  const [holdings, setHoldings] = useState<Array<{
+    assetId: string;
+    ticker: string;
+    name: string;
+    market: string;
+    quantity: number;
+    avgCost: number;
+    totalCost: number;
+  }>>([]);
+  const [isLoadingHoldings, setIsLoadingHoldings] = useState(false);
+  const [holdingsError, setHoldingsError] = useState('');
+
+  // 获取持仓数据
+  const fetchHoldings = useCallback(async () => {
+    if (!portfolioId) return;
+
+    setIsLoadingHoldings(true);
+    setHoldingsError('');
+
+    try {
+      const response = await fetch(`/api/holdings?portfolioId=${portfolioId}`);
+      if (!response.ok) {
+        throw new Error('Failed to fetch holdings');
+      }
+      const data = await response.json();
+      setHoldings(data.holdings || []);
+    } catch (error) {
+      console.error('Error fetching holdings:', error);
+      setHoldingsError('Failed to load holdings data');
+    } finally {
+      setIsLoadingHoldings(false);
+    }
+  }, [portfolioId]);
+
+  // 获取当前股票的可卖出数量
+  const getAvailableShares = useCallback((ticker: string): number => {
+    const holding = holdings.find(h => h.ticker === ticker);
+    return holding ? holding.quantity : 0;
+  }, [holdings]);
+
+  // 当打开弹窗时，获取持仓数据
+  useEffect(() => {
+    if (isOpen) {
+      fetchHoldings();
+    }
+  }, [isOpen, fetchHoldings]);
 
   // 搜索股票（防抖）
   useEffect(() => {
@@ -125,11 +174,16 @@ export default function AddTransactionModal({
     setFees('0');
     setNotes('');
     setPriceSource('manual');
+    setTransactionType('BUY');
+    setHoldingsError('');
   };
 
   // 关闭弹窗并重置
   const handleClose = () => {
     handleReset();
+    setTransactionType('BUY');
+    setHoldings([]);
+    setHoldingsError('');
     onClose();
   };
 
@@ -142,6 +196,24 @@ export default function AddTransactionModal({
     e.preventDefault();
 
     if (!selectedStock) return;
+
+    // 卖出交易检查
+    if (transactionType === 'SELL') {
+      const availableShares = getAvailableShares(selectedStock.symbol);
+      const sellQuantity = parseFloat(shares);
+
+      if (sellQuantity > availableShares) {
+        setSubmitStatus('error');
+        setSubmitError(`Cannot sell ${sellQuantity} shares. You only have ${availableShares.toFixed(4)} shares available.`);
+        return;
+      }
+
+      if (availableShares <= 0) {
+        setSubmitStatus('error');
+        setSubmitError(`You don't have any shares of ${selectedStock.symbol} to sell.`);
+        return;
+      }
+    }
 
     setSubmitStatus('loading');
     setSubmitError('');
@@ -182,8 +254,8 @@ export default function AddTransactionModal({
       const transactionData = {
         portfolioId: portfolioId,
         assetId: assetId,
-        type: 'BUY', // 默认买入，可以添加选择
-        quantity: parseFloat(shares),
+        type: transactionType,
+        quantity: transactionType === 'SELL' ? -Math.abs(parseFloat(shares)) : parseFloat(shares),
         price: parseFloat(price),
         fee: parseFloat(fees) || 0,
         date: purchaseDate,
@@ -257,6 +329,39 @@ export default function AddTransactionModal({
                   {type}
                 </button>
               ))}
+            </div>
+          </div>
+
+          {/* Transaction Type */}
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-2">
+              Transaction Type
+            </label>
+            <div className="flex gap-2">
+              <button
+                type="button"
+                onClick={() => setTransactionType('BUY')}
+                className={`px-4 py-2 text-sm font-medium rounded-lg transition-colors flex items-center gap-2 ${
+                  transactionType === 'BUY'
+                    ? 'bg-green-600 text-white'
+                    : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                }`}
+              >
+                <TrendingUp className="w-4 h-4" />
+                Buy
+              </button>
+              <button
+                type="button"
+                onClick={() => setTransactionType('SELL')}
+                className={`px-4 py-2 text-sm font-medium rounded-lg transition-colors flex items-center gap-2 ${
+                  transactionType === 'SELL'
+                    ? 'bg-red-600 text-white'
+                    : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                }`}
+              >
+                <TrendingDown className="w-4 h-4" />
+                Sell
+              </button>
             </div>
           </div>
 
@@ -392,6 +497,11 @@ export default function AddTransactionModal({
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-2">
                 Shares
+                {transactionType === 'SELL' && selectedStock && (
+                  <span className="ml-2 text-xs text-gray-500">
+                    (Available: {getAvailableShares(selectedStock.symbol).toFixed(4)})
+                  </span>
+                )}
               </label>
               <input
                 type="number"
@@ -402,6 +512,11 @@ export default function AddTransactionModal({
                 required
                 className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
               />
+              {transactionType === 'SELL' && selectedStock && getAvailableShares(selectedStock.symbol) <= 0 && (
+                <p className="mt-1 text-xs text-red-600">
+                  No shares available to sell for this stock
+                </p>
+              )}
             </div>
           </div>
 
@@ -409,8 +524,10 @@ export default function AddTransactionModal({
           {price && shares && (
             <div className="p-4 bg-gray-50 rounded-lg">
               <div className="flex justify-between items-center">
-                <span className="text-sm text-gray-600">Total Cost:</span>
-                <span className="text-lg font-semibold text-gray-900">
+                <span className="text-sm text-gray-600">
+                  {transactionType === 'BUY' ? 'Total Cost:' : 'Total Proceeds:'}
+                </span>
+                <span className={`text-lg font-semibold ${transactionType === 'BUY' ? 'text-gray-900' : 'text-green-600'}`}>
                   ${(parseFloat(price) * parseFloat(shares)).toFixed(2)}
                 </span>
               </div>
@@ -418,6 +535,16 @@ export default function AddTransactionModal({
                 <div className="flex justify-between items-center mt-1 text-sm">
                   <span className="text-gray-500">Fees:</span>
                   <span className="text-gray-600">${parseFloat(fees).toFixed(2)}</span>
+                </div>
+              )}
+              {transactionType === 'SELL' && selectedStock && (
+                <div className="mt-2 pt-2 border-t border-gray-200 text-sm">
+                  <div className="flex justify-between items-center">
+                    <span className="text-gray-500">Available to Sell:</span>
+                    <span className={`font-medium ${getAvailableShares(selectedStock.symbol) < parseFloat(shares || '0') ? 'text-red-600' : 'text-gray-900'}`}>
+                      {getAvailableShares(selectedStock.symbol).toFixed(4)} shares
+                    </span>
+                  </div>
                 </div>
               )}
             </div>
@@ -489,7 +616,7 @@ export default function AddTransactionModal({
             </button>
             <button
               type="submit"
-              disabled={!selectedStock || !price || !shares || !purchaseDate || isLoading || submitStatus === 'loading' || submitStatus === 'success'}
+              disabled={!selectedStock || !price || !shares || !purchaseDate || isLoading || submitStatus === 'loading' || submitStatus === 'success' || (transactionType === 'SELL' && getAvailableShares(selectedStock.symbol) <= 0)}
               className="flex-1 px-4 py-2.5 text-sm font-medium text-white bg-indigo-600 rounded-lg hover:bg-indigo-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
             >
               {submitStatus === 'loading' ? (
