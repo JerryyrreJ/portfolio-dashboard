@@ -1,7 +1,16 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { PrismaClient } from '@prisma/client';
 
-const prisma = new PrismaClient();
+// 使用全局实例避免开发模式下的热重载问题
+const globalForPrisma = globalThis as unknown as {
+  prisma: PrismaClient | undefined;
+};
+
+const prisma = globalForPrisma.prisma ?? new PrismaClient();
+
+if (process.env.NODE_ENV !== 'production') {
+  globalForPrisma.prisma = prisma;
+}
 
 // 获取所有资产列表
 export async function GET(request: NextRequest) {
@@ -106,8 +115,10 @@ export async function POST(request: NextRequest) {
 
   } catch (error) {
     console.error('Failed to create asset:', error);
+    const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+    const errorStack = error instanceof Error ? error.stack : undefined;
     return NextResponse.json(
-      { error: 'Failed to create asset' },
+      { error: 'Failed to create asset', details: errorMessage, stack: errorStack },
       { status: 500 }
     );
   }

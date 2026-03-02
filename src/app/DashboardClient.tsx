@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import {
   AreaChart,
   Area,
@@ -18,7 +18,8 @@ import {
   Settings,
   HelpCircle,
   Bell,
-  RefreshCw
+  RefreshCw,
+  Loader2
 } from 'lucide-react';
 import AddTransactionModal from './components/AddTransactionModal';
 
@@ -77,6 +78,43 @@ export default function DashboardClient({ portfolioId, portfolioName, holdingsDa
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [lastUpdated, setLastUpdated] = useState<Date>(new Date());
 
+  // 图表时间范围状态
+  const [chartTimeRange, setChartTimeRange] = useState<'1M' | '3M' | '6M' | '1Y' | 'All'>('All');
+  const [filteredChartData, setFilteredChartData] = useState(chartData);
+
+  // 根据时间范围过滤图表数据
+  useEffect(() => {
+    if (chartTimeRange === 'All') {
+      setFilteredChartData(chartData);
+      return;
+    }
+
+    const now = new Date();
+    let startDate = new Date();
+
+    switch (chartTimeRange) {
+      case '1M':
+        startDate.setMonth(now.getMonth() - 1);
+        break;
+      case '3M':
+        startDate.setMonth(now.getMonth() - 3);
+        break;
+      case '6M':
+        startDate.setMonth(now.getMonth() - 6);
+        break;
+      case '1Y':
+        startDate.setFullYear(now.getFullYear() - 1);
+        break;
+    }
+
+    const filtered = chartData.filter(item => {
+      const itemDate = new Date(item.date);
+      return itemDate >= startDate;
+    });
+
+    setFilteredChartData(filtered);
+  }, [chartTimeRange, chartData]);
+
   // 手动刷新数据
   const handleRefresh = async () => {
     setIsRefreshing(true);
@@ -90,6 +128,77 @@ export default function DashboardClient({ portfolioId, portfolioName, holdingsDa
     }
   };
 
+  // 自动刷新间隔设置（秒）
+  const [autoRefreshInterval, setAutoRefreshInterval] = useState<number>(0); // 0 表示关闭
+  const [lastRefreshTime, setLastRefreshTime] = useState<Date>(new Date());
+  const [countdown, setCountdown] = useState<number>(0);
+
+  // 根据时间范围过滤图表数据
+  useEffect(() => {
+    if (chartTimeRange === 'All') {
+      setFilteredChartData(chartData);
+      return;
+    }
+
+    const now = new Date();
+    let startDate = new Date();
+
+    switch (chartTimeRange) {
+      case '1M':
+        startDate.setMonth(now.getMonth() - 1);
+        break;
+      case '3M':
+        startDate.setMonth(now.getMonth() - 3);
+        break;
+      case '6M':
+        startDate.setMonth(now.getMonth() - 6);
+        break;
+      case '1Y':
+        startDate.setFullYear(now.getFullYear() - 1);
+        break;
+    }
+
+    const filtered = chartData.filter(item => {
+      const itemDate = new Date(item.date);
+      return itemDate >= startDate;
+    });
+
+    setFilteredChartData(filtered);
+  }, [chartTimeRange, chartData]);
+
+  // 根据时间范围过滤图表数据
+  useEffect(() => {
+    if (chartTimeRange === 'All') {
+      setFilteredChartData(chartData);
+      return;
+    }
+
+    const now = new Date();
+    let startDate = new Date();
+
+    switch (chartTimeRange) {
+      case '1M':
+        startDate.setMonth(now.getMonth() - 1);
+        break;
+      case '3M':
+        startDate.setMonth(now.getMonth() - 3);
+        break;
+      case '6M':
+        startDate.setMonth(now.getMonth() - 6);
+        break;
+      case '1Y':
+        startDate.setFullYear(now.getFullYear() - 1);
+        break;
+    }
+
+    const filtered = chartData.filter(item => {
+      const itemDate = new Date(item.date);
+      return itemDate >= startDate;
+    });
+
+    setFilteredChartData(filtered);
+  }, [chartTimeRange, chartData]);
+
   // 自动刷新数据（每60秒）
   useEffect(() => {
     const interval = setInterval(() => {
@@ -99,6 +208,63 @@ export default function DashboardClient({ portfolioId, portfolioName, holdingsDa
 
     return () => clearInterval(interval);
   }, []);
+
+  // 自动刷新倒计时
+  useEffect(() => {
+    if (autoRefreshInterval <= 0) {
+      setCountdown(0);
+      return;
+    }
+
+    const interval = setInterval(() => {
+      const now = new Date();
+      const nextRefresh = new Date(lastRefreshTime.getTime() + autoRefreshInterval * 1000);
+      const remaining = Math.max(0, Math.ceil((nextRefresh.getTime() - now.getTime()) / 1000));
+
+      setCountdown(remaining);
+
+      if (remaining === 0) {
+        // 触发刷新
+        handleRefresh();
+        setLastRefreshTime(new Date());
+      }
+    }, 1000);
+
+    return () => clearInterval(interval);
+  }, [autoRefreshInterval, lastRefreshTime]);
+
+  // 根据时间范围过滤图表数据
+  useEffect(() => {
+    if (chartTimeRange === 'All') {
+      setFilteredChartData(chartData);
+      return;
+    }
+
+    const now = new Date();
+    let startDate = new Date();
+
+    switch (chartTimeRange) {
+      case '1M':
+        startDate.setMonth(now.getMonth() - 1);
+        break;
+      case '3M':
+        startDate.setMonth(now.getMonth() - 3);
+        break;
+      case '6M':
+        startDate.setMonth(now.getMonth() - 6);
+        break;
+      case '1Y':
+        startDate.setFullYear(now.getFullYear() - 1);
+        break;
+    }
+
+    const filtered = chartData.filter(item => {
+      const itemDate = new Date(item.date);
+      return itemDate >= startDate;
+    });
+
+    setFilteredChartData(filtered);
+  }, [chartTimeRange, chartData]);
 
   // 格式化时间显示
   const formatLastUpdated = (date: Date) => {
@@ -158,46 +324,48 @@ export default function DashboardClient({ portfolioId, portfolioName, holdingsDa
         {/* 标题 & 操作按钮 */}
         <div className="flex justify-between items-center mb-6">
           <h1 className="text-3xl font-serif text-gray-900 tracking-tight">{portfolioName}</h1>
-          <div className="flex space-x-3">
+          <div className="flex items-center space-x-3">
+            {/* 自动刷新设置 */}
+            <select
+              value={autoRefreshInterval}
+              onChange={(e) => {
+                setAutoRefreshInterval(Number(e.target.value));
+                setLastRefreshTime(new Date());
+              }}
+              className="px-3 py-2 bg-gray-50 text-gray-700 text-sm font-medium rounded-md border border-gray-200 hover:bg-gray-100 transition-colors"
+            >
+              <option value={0}>Auto Refresh: Off</option>
+              <option value={30}>Auto Refresh: 30s</option>
+              <option value={60}>Auto Refresh: 1m</option>
+              <option value={300}>Auto Refresh: 5m</option>
+            </select>
+
+            {/* 刷新按钮 */}
+            <button
+              onClick={handleRefresh}
+              disabled={isRefreshing}
+              className="px-4 py-2 bg-gray-100 text-gray-700 text-sm font-medium rounded-md border border-gray-200 hover:bg-gray-200 transition-colors flex items-center space-x-2 disabled:opacity-50"
+            >
+              <RefreshCw className={`w-4 h-4 ${isRefreshing ? 'animate-spin' : ''}`} />
+              <span>Refresh</span>
+              {countdown > 0 && <span className="text-xs text-gray-500">({countdown}s)</span>}
+            </button>
+
             <button className="px-4 py-2 bg-indigo-50 text-indigo-600 text-sm font-medium rounded-md border border-indigo-100 hover:bg-indigo-100 transition-colors">
               Share checker
             </button>
-            <button 
+            <button
               onClick={() => setIsModalOpen(true)}
               className="px-4 py-2 bg-indigo-600 text-white text-sm font-medium rounded-md shadow-sm hover:bg-indigo-700 flex items-center space-x-1 transition-colors"
             >
               <Plus className="w-4 h-4" />
-              <span>Add investment</span>
+              <span>Add Trade</span>
             </button>
           </div>
         </div>
 
         {/* 过滤器 & 概览卡片区域 */}
         <div className="bg-white rounded-xl shadow-sm border border-gray-200 mb-8 overflow-hidden">
-          {/* 筛选栏 */}
-          <div className="bg-slate-50 border-b border-gray-200 p-4 flex flex-wrap items-center gap-4 text-sm">
-            <div className="flex items-center space-x-2">
-              <span className="text-gray-500 font-medium">Date range</span>
-              <div className="flex bg-white border border-gray-200 rounded-md overflow-hidden shadow-sm">
-                {['Today', '7D', '12M', 'YTD', 'FY'].map(label => (
-                  <button key={label} className="px-3 py-1.5 border-r border-gray-200 hover:bg-gray-50">{label}</button>
-                ))}
-                <button className="px-3 py-1.5 border-r border-gray-200 bg-indigo-50 text-indigo-700 font-medium">All</button>
-                <div className="px-3 py-1.5 flex items-center text-gray-600 bg-white">
-                  Since Inception
-                </div>
-              </div>
-            </div>
-
-            <div className="flex items-center space-x-2 ml-4">
-              <span className="text-gray-500 font-medium">Group by</span>
-              <button className="bg-white border border-gray-200 rounded-md px-3 py-1.5 flex items-center justify-between w-40 shadow-sm">
-                <span>Market</span>
-                <ChevronDown className="w-4 h-4 text-gray-400" />
-              </button>
-            </div>
-          </div>
-
           {/* 核心指标 */}
           <div className="grid grid-cols-5 gap-6 p-6 border-b border-gray-100">
             <div>
@@ -242,15 +410,33 @@ export default function DashboardClient({ portfolioId, portfolioName, holdingsDa
                 <h2 className="text-lg font-semibold text-gray-900">Investment value - stacked</h2>
                 <p className="text-sm text-gray-500">Since first purchase | Grouped by Market</p>
               </div>
-              <button className="border border-gray-200 rounded-md px-3 py-1.5 flex items-center space-x-2 text-sm text-gray-700 bg-white hover:bg-gray-50 shadow-sm">
-                <span>Value - Stacked</span>
-                <ChevronDown className="w-4 h-4" />
-              </button>
+              <div className="flex items-center space-x-3">
+                {/* 时间范围选择 */}
+                <div className="flex bg-gray-100 rounded-lg p-1 space-x-1">
+                  {(['1M', '3M', '6M', '1Y', 'All'] as const).map((range) => (
+                    <button
+                      key={range}
+                      onClick={() => setChartTimeRange(range)}
+                      className={`px-3 py-1 text-xs font-medium rounded-md transition-colors ${
+                        chartTimeRange === range
+                          ? 'bg-white text-gray-900 shadow-sm'
+                          : 'text-gray-600 hover:text-gray-900'
+                      }`}
+                    >
+                      {range}
+                    </button>
+                  ))}
+                </div>
+                <button className="border border-gray-200 rounded-md px-3 py-1.5 flex items-center space-x-2 text-sm text-gray-700 bg-white hover:bg-gray-50 shadow-sm">
+                  <span>Value - Stacked</span>
+                  <ChevronDown className="w-4 h-4" />
+                </button>
+              </div>
             </div>
 
             <div className="h-72 w-full">
               <ResponsiveContainer width="100%" height="100%">
-                <AreaChart data={chartData} margin={{ top: 10, right: 0, left: -20, bottom: 0 }}>
+                <AreaChart data={filteredChartData} margin={{ top: 10, right: 0, left: -20, bottom: 0 }}>
                   <CartesianGrid strokeDasharray="3 3" vertical={true} horizontal={false} stroke="#e5e7eb" />
                   <XAxis dataKey="date" axisLine={false} tickLine={false} tick={{ fontSize: 12, fill: '#6b7280' }} dy={10} />
                   <YAxis axisLine={false} tickLine={false} tick={{ fontSize: 12, fill: '#6b7280' }} />
@@ -258,7 +444,7 @@ export default function DashboardClient({ portfolioId, portfolioName, holdingsDa
                   {/* 动态渲染包含的市场 */}
                   {Array.from(new Set(holdingsData.map(g => g.market))).map((market, idx) => {
                     const colors = [
-                      { stroke: '#c084fc', fill: '#e9d5ff' }, // NYSE (purple)
+                      { stroke: '#6b7280', fill: '#e5e7eb' }, // Gray
                       { stroke: '#f87171', fill: '#fecaca' }, // NASDAQ (red)
                       { stroke: '#fbbf24', fill: '#fde68a' }, // OTC (yellow)
                       { stroke: '#60a5fa', fill: '#bfdbfe' }, // Others (blue)
