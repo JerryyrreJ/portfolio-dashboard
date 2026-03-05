@@ -18,10 +18,7 @@ export async function GET(request: NextRequest) {
 
     const asset = await prisma.asset.findFirst({
       where: {
-        ticker: {
-          equals: ticker,
-          mode: 'insensitive', // 不区分大小写
-        },
+        ticker: ticker.toUpperCase(),
       },
     });
 
