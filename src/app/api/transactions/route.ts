@@ -45,7 +45,6 @@ export async function POST(request: NextRequest) {
         price: parseFloat(body.price),
         fee: parseFloat(body.fee || 0),
         date: new Date(body.date),
-        notes: body.notes || null,
       },
       include: {
         asset: true,
@@ -62,7 +61,6 @@ export async function POST(request: NextRequest) {
         price: transaction.price,
         fee: transaction.fee,
         date: transaction.date,
-        notes: transaction.notes,
         asset: {
           ticker: transaction.asset.ticker,
           name: transaction.asset.name,
@@ -97,7 +95,7 @@ export async function GET(request: NextRequest) {
     const limit = parseInt(searchParams.get('limit') || '50');
     const offset = parseInt(searchParams.get('offset') || '0');
 
-    const where = portfolioId ? { portfolioId: parseInt(portfolioId) } : {};
+    const where = portfolioId ? { portfolioId: portfolioId } : {};
 
     const [transactions, total] = await Promise.all([
       prisma.transaction.findMany({
@@ -122,7 +120,6 @@ export async function GET(request: NextRequest) {
         price: t.price,
         fee: t.fee,
         date: t.date,
-        notes: t.notes,
         asset: {
           ticker: t.asset.ticker,
           name: t.asset.name,

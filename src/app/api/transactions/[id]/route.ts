@@ -9,10 +9,9 @@ export async function DELETE(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    const { id: idStr } = await params;
-    const id = parseInt(idStr);
+    const { id } = await params;
 
-    if (isNaN(id)) {
+    if (!id) {
       return NextResponse.json(
         { error: 'Invalid transaction ID' },
         { status: 400 }

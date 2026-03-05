@@ -6,13 +6,12 @@ import { ArrowLeft, Filter, Download, TrendingUp, TrendingDown, Search } from 'l
 const prisma = new PrismaClient();
 
 interface TransactionWithAsset {
-  id: number;
+  id: string;
   type: string;
   quantity: number;
   price: number;
   fee: number;
   date: Date;
-  notes: string | null;
   asset: {
     ticker: string;
     name: string;
@@ -21,7 +20,7 @@ interface TransactionWithAsset {
 }
 
 async function getTransactions(
-  portfolioId: number,
+  portfolioId: string,
   searchParams: { [key: string]: string | undefined }
 ): Promise<{ transactions: TransactionWithAsset[]; total: number }> {
   const page = parseInt(searchParams.page || '1');

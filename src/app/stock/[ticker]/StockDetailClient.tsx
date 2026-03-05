@@ -36,7 +36,7 @@ import {
 } from 'lucide-react';
 
 interface Transaction {
-  id: number;
+  id: string;
   date: string;
   type: 'BUY' | 'SELL';
   quantity: number;
