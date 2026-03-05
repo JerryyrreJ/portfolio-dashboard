@@ -8,7 +8,7 @@ interface AddTransactionModalProps {
   isOpen: boolean;
   onClose: () => void;
   portfolioName: string;
-  portfolioId: number;
+  portfolioId: string;
 }
 
 interface SearchResult {

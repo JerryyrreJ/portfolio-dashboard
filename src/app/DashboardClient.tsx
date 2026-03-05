@@ -66,7 +66,7 @@ interface Summary {
 }
 
 interface DashboardClientProps {
-  portfolioId: number;
+  portfolioId: string;
   portfolioName: string;
   holdingsData: HoldingsGroup[];
   chartData: any[];
