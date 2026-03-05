@@ -19,12 +19,11 @@ interface SearchResult {
 }
 
 // 资产类型映射到数据库中的 ID
-// 注意：这需要根据你的实际数据库数据调整
 const ASSET_ID_MAP: Record<string, number> = {
-  'AMD': 1,    // 假设 AMD 的 ID 是 1
-  'GOOG': 2,   // 假设 GOOG 的 ID 是 2
-  'EWY': 3,    // 假设 EWY 的 ID 是 3
-  'XIACY': 4,  // 假设 XIACY 的 ID 是 4
+  'AMD': 1,
+  'GOOG': 2,
+  'EWY': 3,
+  'XIACY': 4,
 };
 
 export default function AddTransactionModal({
@@ -108,13 +107,13 @@ export default function AddTransactionModal({
     const timer = setTimeout(async () => {
       if (searchQuery.length >= 1 && !selectedStock) {
         const results = await searchStock(searchQuery);
-        setSearchResults(results.slice(0, 10)); // 最多显示10条
+        setSearchResults(results.slice(0, 10));
         setShowSearchResults(true);
       } else {
         setSearchResults([]);
         setShowSearchResults(false);
       }
-    }, 300); // 300ms 防抖
+    }, 300);
 
     return () => clearTimeout(timer);
   }, [searchQuery, searchStock, selectedStock]);
@@ -130,7 +129,6 @@ export default function AddTransactionModal({
     setIsFetchingPrice(true);
     const quote = await getQuote(stock.symbol);
     if (quote && quote.c > 0) {
-      // 如果还没有输入价格，自动填入当前价格
       if (!price) {
         setPrice(quote.c.toFixed(2));
         setPriceSource('api');
@@ -151,10 +149,8 @@ export default function AddTransactionModal({
         setPrice(historical.price.toFixed(2));
         setPriceSource('api');
       } else {
-        // 如果无法获取历史价格，尝试获取当前价格作为参考
         const quote = await getQuote(selectedStock.symbol);
         if (quote && quote.c > 0) {
-          // 保持当前价格不变，但提示用户
           console.warn('Historical price not available, using current price as reference');
         }
       }
@@ -220,7 +216,6 @@ export default function AddTransactionModal({
 
     try {
       // 查找资产 ID（从数据库中获取）
-      // 注意：这里需要根据你的实际数据结构调整
       const ticker = selectedStock.symbol;
 
       // 首先尝试从 API 查找资产
@@ -238,12 +233,14 @@ export default function AddTransactionModal({
           body: JSON.stringify({
             ticker: selectedStock.symbol,
             name: selectedStock.description,
-            market: 'US', // 默认美股，可以根据需要调整
+            market: 'US',
           }),
         });
 
         if (!createAssetRes.ok) {
-          throw new Error('Failed to create asset');
+          const errorData = await createAssetRes.json().catch(() => ({}));
+          console.error('Create asset failed:', errorData);
+          throw new Error(errorData.details || errorData.error || 'Failed to create asset');
         }
 
         const newAsset = await createAssetRes.json();
@@ -278,7 +275,7 @@ export default function AddTransactionModal({
       // 成功后关闭弹窗并刷新页面
       setTimeout(() => {
         handleClose();
-        window.location.reload(); // 刷新页面以显示新数据
+        window.location.reload();
       }, 1500);
 
     } catch (error) {
@@ -296,7 +293,7 @@ export default function AddTransactionModal({
         {/* Header */}
         <div className="sticky top-0 z-10 flex items-center justify-between px-6 py-4 bg-white border-b border-gray-200">
           <div>
-            <h2 className="text-xl font-semibold text-gray-900">Add Transaction</h2>
+            <h2 className="text-xl font-semibold text-gray-900">Add Trade</h2>
             <p className="text-sm text-gray-500">{portfolioName}</p>
           </div>
           <button
@@ -322,7 +319,7 @@ export default function AddTransactionModal({
                   onClick={() => setAssetType(type)}
                   className={`px-4 py-2 text-sm font-medium rounded-lg capitalize transition-colors ${
                     assetType === type
-                      ? 'bg-indigo-600 text-white'
+                      ? 'bg-gray-900 text-white'
                       : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
                   }`}
                 >
@@ -383,7 +380,7 @@ export default function AddTransactionModal({
                   }
                 }}
                 placeholder="Search by symbol or company name..."
-                className="w-full pl-10 pr-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
+                className="w-full pl-10 pr-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-gray-900 focus:border-gray-900"
                 disabled={isLoading}
               />
               {isLoading && (
@@ -416,11 +413,11 @@ export default function AddTransactionModal({
 
             {/* Selected Stock Info */}
             {selectedStock && (
-              <div className="mt-2 p-3 bg-indigo-50 border border-indigo-200 rounded-lg">
+              <div className="mt-2 p-3 bg-gray-50 border border-gray-200 rounded-lg">
                 <div className="flex items-center justify-between">
                   <div>
-                    <span className="font-semibold text-indigo-900">{selectedStock.symbol}</span>
-                    <p className="text-sm text-indigo-700">{selectedStock.description}</p>
+                    <span className="font-semibold text-gray-900">{selectedStock.symbol}</span>
+                    <p className="text-sm text-gray-600">{selectedStock.description}</p>
                   </div>
                   <button
                     type="button"
@@ -430,7 +427,7 @@ export default function AddTransactionModal({
                       setSearchQuery('');
                       setPrice('');
                     }}
-                    className="text-indigo-600 hover:text-indigo-800"
+                    className="text-gray-400 hover:text-gray-600"
                   >
                     <X className="w-4 h-4" />
                   </button>
@@ -452,10 +449,10 @@ export default function AddTransactionModal({
               value={purchaseDate}
               onChange={handleDateChange}
               required
-              className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
+              className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-gray-900 focus:border-gray-900"
             />
             {isFetchingPrice && (
-              <p className="mt-1 text-sm text-indigo-600 flex items-center gap-1">
+              <p className="mt-1 text-sm text-gray-600 flex items-center gap-1">
                 <Loader2 className="w-3 h-3 animate-spin" />
                 Fetching historical price for this date...
               </p>
@@ -483,11 +480,11 @@ export default function AddTransactionModal({
                     setPriceSource('manual');
                   }}
                   required
-                  className="w-full pl-7 pr-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
+                  className="w-full pl-7 pr-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-gray-900 focus:border-gray-900"
                 />
               </div>
               {priceSource === 'api' && price && (
-                <p className="mt-1 text-xs text-green-600 flex items-center gap-1">
+                <p className="mt-1 text-xs text-green-700 flex items-center gap-1">
                   <TrendingUp className="w-3 h-3" />
                   Auto-filled from market data
                 </p>
@@ -510,7 +507,7 @@ export default function AddTransactionModal({
                 value={shares}
                 onChange={(e) => setShares(e.target.value)}
                 required
-                className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
+                className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-gray-900 focus:border-gray-900"
               />
               {transactionType === 'SELL' && selectedStock && getAvailableShares(selectedStock.symbol) <= 0 && (
                 <p className="mt-1 text-xs text-red-600">
@@ -522,12 +519,12 @@ export default function AddTransactionModal({
 
           {/* Total Preview */}
           {price && shares && (
-            <div className="p-4 bg-gray-50 rounded-lg">
+            <div className="p-4 bg-gray-50 rounded-lg border border-gray-200">
               <div className="flex justify-between items-center">
                 <span className="text-sm text-gray-600">
                   {transactionType === 'BUY' ? 'Total Cost:' : 'Total Proceeds:'}
                 </span>
-                <span className={`text-lg font-semibold ${transactionType === 'BUY' ? 'text-gray-900' : 'text-green-600'}`}>
+                <span className={`text-lg font-semibold ${transactionType === 'BUY' ? 'text-gray-900' : 'text-green-700'}`}>
                   ${(parseFloat(price) * parseFloat(shares)).toFixed(2)}
                 </span>
               </div>
@@ -559,12 +556,17 @@ export default function AddTransactionModal({
               <div className="relative">
                 <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500">$</span>
                 <input
-                  type="number"
-                  step="0.01"
-                  min="0"
+                  type="text"
+                  inputMode="decimal"
+                  pattern="^[0-9]*\.?[0-9]*$"
                   value={fees}
-                  onChange={(e) => setFees(e.target.value)}
-                  className="w-full pl-7 pr-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
+                  onChange={(e) => {
+                    const value = e.target.value;
+                    if (value === '' || /^[0-9]*\.?[0-9]*$/.test(value)) {
+                      setFees(value);
+                    }
+                  }}
+                  className="w-full pl-7 pr-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-gray-900 focus:border-gray-900"
                 />
               </div>
             </div>
@@ -578,7 +580,7 @@ export default function AddTransactionModal({
                 value={notes}
                 onChange={(e) => setNotes(e.target.value)}
                 placeholder="e.g., Dividend reinvestment"
-                className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
+                className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-gray-900 focus:border-gray-900"
               />
             </div>
           </div>
@@ -617,7 +619,7 @@ export default function AddTransactionModal({
             <button
               type="submit"
               disabled={!selectedStock || !price || !shares || !purchaseDate || isLoading || submitStatus === 'loading' || submitStatus === 'success' || (transactionType === 'SELL' && getAvailableShares(selectedStock.symbol) <= 0)}
-              className="flex-1 px-4 py-2.5 text-sm font-medium text-white bg-indigo-600 rounded-lg hover:bg-indigo-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+              className="flex-1 px-4 py-2.5 text-sm font-medium text-white bg-gray-900 rounded-lg hover:bg-gray-800 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
             >
               {submitStatus === 'loading' ? (
                 <span className="flex items-center justify-center gap-2">
@@ -630,7 +632,7 @@ export default function AddTransactionModal({
                   Saved!
                 </span>
               ) : (
-                'Add Transaction'
+                'Add Trade'
               )}
             </button>
           </div>
