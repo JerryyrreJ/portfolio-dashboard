@@ -61,15 +61,13 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // 检查是否已存在相同 ticker 的资产
-    const existingAsset = await prisma.asset.findFirst({
-      where: {
-        ticker: {
-          equals: body.ticker,
-          mode: 'insensitive',
-        },
-      },
+    // 检查是否已存在相同 ticker 的资产 (case-insensitive)
+    const allAssets = await prisma.asset.findMany({
+      select: { id: true, ticker: true, name: true },
     });
+    const existingAsset = allAssets.find(
+      (a) => a.ticker.toLowerCase() === body.ticker.toLowerCase()
+    );
 
     if (existingAsset) {
       return NextResponse.json(
