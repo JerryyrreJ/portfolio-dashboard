@@ -129,8 +129,6 @@ export async function getBatchQuotes(
 ): Promise<Record<string, StockQuote>> {
   const results: Record<string, StockQuote> = {};
 
-  // 注意：Finnhub 免费版没有批量接口，需要逐个请求
-  // 建议在前端使用 Promise.all 并发请求，或添加延迟避免限流
   for (const symbol of symbols) {
     try {
       const quote = await getQuote(symbol);
@@ -141,4 +139,90 @@ export async function getBatchQuotes(
   }
 
   return results;
+}
+
+// ---- Company Profile ----
+
+export interface CompanyProfile {
+  country: string;
+  currency: string;
+  exchange: string;
+  ipo: string;
+  logo: string;
+  marketCapitalization: number;
+  name: string;
+  phone: string;
+  shareOutstanding: number;
+  ticker: string;
+  weburl: string;
+  finnhubIndustry: string;
+}
+
+/**
+ * 获取公司基本资料
+ * @param symbol 股票代码
+ */
+export async function getCompanyProfile(symbol: string): Promise<CompanyProfile> {
+  return fetchFinnhub('/stock/profile2', { symbol: symbol.toUpperCase() });
+}
+
+// ---- Company News ----
+
+export interface NewsArticle {
+  category: string;
+  datetime: number;
+  headline: string;
+  id: number;
+  image: string;
+  related: string;
+  source: string;
+  summary: string;
+  url: string;
+}
+
+/**
+ * 获取公司新闻
+ * @param symbol 股票代码
+ * @param from 开始日期 YYYY-MM-DD
+ * @param to 结束日期 YYYY-MM-DD
+ */
+export async function getCompanyNews(
+  symbol: string,
+  from: string,
+  to: string
+): Promise<NewsArticle[]> {
+  return fetchFinnhub('/company-news', {
+    symbol: symbol.toUpperCase(),
+    from,
+    to,
+  });
+}
+
+// ---- Basic Financials / Key Metrics ----
+
+export interface BasicFinancials {
+  metric: {
+    '52WeekHigh'?: number;
+    '52WeekLow'?: number;
+    '52WeekHighDate'?: string;
+    '52WeekLowDate'?: string;
+    peBasicExclExtraTTM?: number;
+    peNormalizedAnnual?: number;
+    epsBasicExclExtraItemsTTM?: number;
+    epsTTM?: number;
+    dividendYieldIndicatedAnnual?: number;
+    beta?: number;
+    [key: string]: number | string | undefined;
+  };
+}
+
+/**
+ * 获取股票关键财务指标
+ * @param symbol 股票代码
+ */
+export async function getBasicFinancials(symbol: string): Promise<BasicFinancials> {
+  return fetchFinnhub('/stock/metric', {
+    symbol: symbol.toUpperCase(),
+    metric: 'all',
+  });
 }

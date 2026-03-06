@@ -1,66 +1,57 @@
 import { PrismaClient } from '@prisma/client'
 import { notFound } from 'next/navigation'
 import StockDetailClient from './StockDetailClient'
-import { getQuote, getCandles } from '@/lib/finnhub'
+import { getQuote, getCandles, getCompanyProfile, getBasicFinancials } from '@/lib/finnhub'
 
 const prisma = new PrismaClient()
 
-// 降级用的默认价格
+// Fallback prices for when Finnhub API is unavailable
 const FALLBACK_PRICES: Record<string, number> = {
-  'AMD': 200.21,
-  'GOOG': 311.43,
-  'EWY': 151.37,
-  'XIACY': 22.06
+  AMD: 200.21,
+  GOOG: 311.43,
+  EWY: 151.37,
+  XIACY: 22.06,
 }
 
 interface PageProps {
-  params: { ticker: string }
+  params: Promise<{ ticker: string }>
 }
 
 export default async function StockDetailPage({ params }: PageProps) {
-  const { ticker } = params
+  const { ticker } = await params
   const decodedTicker = decodeURIComponent(ticker).toUpperCase()
 
-  // 1. 从数据库获取资产信息和交易记录
+  // 1. Fetch asset + transactions from DB
   const asset = await prisma.asset.findUnique({
     where: { ticker: decodedTicker },
     include: {
       transactions: {
-        include: {
-          portfolio: true
-        },
-        orderBy: { date: 'asc' }
-      }
-    }
+        include: { portfolio: true },
+        orderBy: { date: 'desc' },
+      },
+    },
   })
 
   if (!asset) {
     notFound()
   }
 
-  // 2. 计算持仓数据
+  // 2. Compute position data (process in chronological order)
+  const chronoTx = [...asset.transactions].reverse()
   let totalQty = 0
   let totalCost = 0
   let totalFees = 0
 
-  const transactions = asset.transactions.map(t => {
-    const qty = t.type === 'BUY' ? t.quantity : -t.quantity
-    const cost = t.type === 'BUY'
-      ? (t.price * t.quantity) + t.fee
-      : -(t.price * t.quantity) + t.fee
-
+  const transactions = chronoTx.map((t) => {
     if (t.type === 'BUY') {
       totalQty += t.quantity
-      totalCost += (t.price * t.quantity) + t.fee
-    } else {
-      totalQty -= t.quantity
-      // 卖出时按比例扣除成本
-      if (totalQty + t.quantity > 0) {
-        const avgCost = totalCost / (totalQty + t.quantity)
+      totalCost += t.price * t.quantity + t.fee
+    } else if (t.type === 'SELL') {
+      if (totalQty > 0) {
+        const avgCost = totalCost / totalQty
         totalCost -= avgCost * t.quantity
-      } else {
-        totalCost = 0
       }
+      totalQty -= t.quantity
     }
     totalFees += t.fee
 
@@ -71,11 +62,11 @@ export default async function StockDetailPage({ params }: PageProps) {
       quantity: t.quantity,
       price: t.price,
       fee: t.fee,
-      portfolioName: t.portfolio.name
+      portfolioName: t.portfolio.name,
     }
   })
 
-  // 3. 获取实时股价
+  // 3. Real-time stock quote
   let currentPrice = FALLBACK_PRICES[decodedTicker] || 0
   let priceChange = 0
   let priceChangePercent = 0
@@ -95,13 +86,13 @@ export default async function StockDetailPage({ params }: PageProps) {
       dayLow = quote.l || 0
       dayOpen = quote.o || 0
       prevClose = quote.pc || 0
-      lastUpdated = new Date((quote.t || Date.now()) * 1000)
+      lastUpdated = new Date((quote.t || Math.floor(Date.now() / 1000)) * 1000)
     }
   } catch (error) {
     console.error('Failed to fetch quote:', error)
   }
 
-  // 4. 获取历史价格数据用于图表
+  // 4. Historical price chart (1 year, weekly)
   const now = Math.floor(Date.now() / 1000)
   const oneYearAgo = now - 365 * 24 * 60 * 60
   let chartData: { date: string; price: number }[] = []
@@ -110,20 +101,64 @@ export default async function StockDetailPage({ params }: PageProps) {
     const candles = await getCandles(decodedTicker, oneYearAgo, now, 'W')
     if (candles && candles.s === 'ok' && candles.c.length > 0) {
       chartData = candles.c.map((close: number, i: number) => ({
-        date: new Date(candles.t[i] * 1000).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }),
-        price: close
+        date: new Date(candles.t[i] * 1000).toLocaleDateString('en-US', {
+          month: 'short',
+          day: 'numeric',
+        }),
+        price: close,
       }))
     }
   } catch (error) {
     console.error('Failed to fetch chart data:', error)
   }
 
-  // 5. 计算持仓统计
+  // 5. Company profile
+  let profile = null
+  try {
+    const p = await getCompanyProfile(decodedTicker)
+    if (p && p.name) profile = p
+  } catch (error) {
+    console.error('Failed to fetch company profile:', error)
+  }
+
+  // 6. Key financial metrics
+  let metrics = null
+  try {
+    const fin = await getBasicFinancials(decodedTicker)
+    if (fin && fin.metric) {
+      metrics = {
+        week52High: fin.metric['52WeekHigh'] || 0,
+        week52Low: fin.metric['52WeekLow'] || 0,
+        peRatio: (fin.metric.peBasicExclExtraTTM || fin.metric.peNormalizedAnnual || 0) as number,
+        eps: (fin.metric.epsBasicExclExtraItemsTTM || fin.metric.epsTTM || 0) as number,
+        beta: (fin.metric.beta || 0) as number,
+        dividendYield: (fin.metric.dividendYieldIndicatedAnnual || 0) as number,
+      }
+    }
+  } catch (error) {
+    console.error('Failed to fetch metrics:', error)
+  }
+
+  // 7. Position metrics
   const currentValue = currentPrice * totalQty
   const costBasis = totalCost
   const totalReturn = currentValue - costBasis
   const totalReturnPercent = costBasis > 0 ? (totalReturn / costBasis) * 100 : 0
   const avgBuyPrice = totalQty > 0 ? costBasis / totalQty : 0
+
+  // 8. Default portfolio for modal
+  let defaultPortfolioId = ''
+  let defaultPortfolioName = ''
+  if (asset.transactions.length > 0) {
+    defaultPortfolioId = asset.transactions[0].portfolioId
+    defaultPortfolioName = asset.transactions[0].portfolio.name
+  } else {
+    const portfolio = await prisma.portfolio.findFirst()
+    if (portfolio) {
+      defaultPortfolioId = portfolio.id
+      defaultPortfolioName = portfolio.name
+    }
+  }
 
   const stockData = {
     ticker: decodedTicker,
@@ -145,7 +180,11 @@ export default async function StockDetailPage({ params }: PageProps) {
     avgBuyPrice,
     totalFees,
     chartData,
-    transactions
+    transactions,
+    portfolioId: defaultPortfolioId,
+    portfolioName: defaultPortfolioName,
+    profile,
+    metrics,
   }
 
   return <StockDetailClient stockData={stockData} />
