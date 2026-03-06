@@ -75,6 +75,7 @@ interface DashboardClientProps {
 }
 
 export default function DashboardClient({ portfolioId, portfolioName, holdingsData, chartData, summary }: DashboardClientProps) {
+  const router = useRouter();
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [lastUpdated, setLastUpdated] = useState<Date>(new Date());
@@ -91,7 +92,7 @@ export default function DashboardClient({ portfolioId, portfolioName, holdingsDa
     }
 
     const now = new Date();
-    let startDate = new Date();
+    const startDate = new Date();
 
     switch (chartTimeRange) {
       case '1M':
@@ -142,7 +143,7 @@ export default function DashboardClient({ portfolioId, portfolioName, holdingsDa
     }
 
     const now = new Date();
-    let startDate = new Date();
+    const startDate = new Date();
 
     switch (chartTimeRange) {
       case '1M':
@@ -175,7 +176,7 @@ export default function DashboardClient({ portfolioId, portfolioName, holdingsDa
     }
 
     const now = new Date();
-    let startDate = new Date();
+    const startDate = new Date();
 
     switch (chartTimeRange) {
       case '1M':
@@ -242,7 +243,7 @@ export default function DashboardClient({ portfolioId, portfolioName, holdingsDa
     }
 
     const now = new Date();
-    let startDate = new Date();
+    const startDate = new Date();
 
     switch (chartTimeRange) {
       case '1M':
@@ -504,13 +505,13 @@ export default function DashboardClient({ portfolioId, portfolioName, holdingsDa
                 
                 {/* 数据行 */}
                 {group.holdings.map((asset, j) => (
-                  <div key={asset.ticker} className="flex items-center px-4 py-4 border-b border-gray-100 hover:bg-gray-50/50 transition-colors">
+                  <div key={asset.ticker} className="flex items-center px-4 py-4 border-b border-gray-100 hover:bg-indigo-50/30 transition-colors cursor-pointer group" onClick={() => router.push(`/stock/${asset.ticker}`)}>
                     <div className="flex-1 flex items-center space-x-3">
-                      <div className="w-8 h-8 rounded border border-gray-200 bg-white shadow-sm flex items-center justify-center font-bold text-xs text-gray-600">
+                      <div className="w-8 h-8 rounded border border-gray-200 bg-white shadow-sm flex items-center justify-center font-bold text-xs text-gray-600 group-hover:border-indigo-200 group-hover:bg-indigo-50 transition-colors">
                         {asset.ticker.charAt(0)}
                       </div>
                       <div>
-                        <div className="font-semibold text-indigo-600 text-sm hover:underline cursor-pointer">{asset.ticker}</div>
+                        <div className="font-semibold text-indigo-600 text-sm group-hover:underline">{asset.ticker}</div>
                         <div className="text-xs text-gray-500 mt-0.5 truncate max-w-xs">{asset.name}</div>
                       </div>
                     </div>
