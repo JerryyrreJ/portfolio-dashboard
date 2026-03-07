@@ -46,3 +46,8 @@ README.md
 GEMINI.md
 /.claude
 /.GEMINI
+
+# Database
+*.db
+*.db-journal
+prisma/prisma/dev.db

@@ -135,7 +135,7 @@ export default async function Page() {
     totalCostBase += h.totalCost;
 
     return {
-      ticker: `${h.asset.ticker} | ${h.asset.market}`,
+      ticker: h.asset.ticker,
       name: h.asset.name,
       market: h.asset.market,
       price: currentPrice,

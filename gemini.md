@@ -19,20 +19,27 @@ A Next.js-based stock portfolio management dashboard with real-time stock price 
 src/
 ├── app/                      # Next.js App Router
 │   ├── api/                 # API Routes
-│   │   ├── assets/         # Asset management APIs
+│   │   ├── assets/         # Asset management APIs (lookup, create)
+│   │   ├── exchange-rates/ # Currency exchange APIs
+│   │   ├── holdings/       # Current holdings calculation APIs
+│   │   ├── stock/          # Finnhub API wrappers (candles, news, quote, search)
 │   │   └── transactions/   # Transaction CRUD APIs
 │   ├── components/         # Reusable components
-│   │   └── AddTransactionModal.tsx
+│   │   ├── AddTransactionModal.tsx  # Custom Apple-style trade modal
+│   │   └── CurrencySelector.tsx
 │   ├── stock/[ticker]/     # Stock detail page
-│   │   ├── page.tsx        # Server component
-│   │   └── StockDetailClient.tsx
+│   │   ├── page.tsx        # Server component (data fetching & DB cache)
+│   │   └── StockDetailClient.tsx # Client component (charts & tabs)
 │   ├── transactions/       # Transaction history page
-│   ├── page.tsx            # Dashboard (Home)
+│   │   └── page.tsx        # History list with Finnhub logos
+│   ├── page.tsx            # Dashboard (Home) Server Component
+│   ├── DashboardClient.tsx # Dashboard Client Component
+│   ├── actions.ts          # Server actions
 │   └── layout.tsx
 ├── lib/
-│   └── finnhub.ts          # Finnhub API client
+│   └── finnhub.ts          # Finnhub API client (quote, history, news)
 └── hooks/
-    └── useStock.ts         # Stock data hooks
+    └── useStock.ts         # React hooks for stock data
 ```
 
 ### Database Schema (Prisma)
@@ -145,7 +152,3 @@ npx prisma migrate dev
 npx prisma db seed
 npx prisma studio
 ```
-
----
-
-Generated with Claude Code
