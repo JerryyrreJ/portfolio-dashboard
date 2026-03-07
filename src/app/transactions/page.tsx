@@ -112,7 +112,7 @@ export default async function TransactionsPage({
 }) {
   // 获取第一个投资组合（暂时简化处理）
   const portfolios = await getPortfolios();
-  const defaultPortfolioId = portfolios[0]?.id || 1;
+  const defaultPortfolioId = portfolios[0]?.id || '1';
 
   const { transactions, total } = await getTransactions(defaultPortfolioId, searchParams);
 
