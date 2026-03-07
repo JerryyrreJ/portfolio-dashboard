@@ -1,7 +1,8 @@
 'use client';
 
-import React, { useState, useCallback, useEffect } from 'react';
-import { X, Search, Loader2, TrendingUp, TrendingDown, Calendar, DollarSign, AlertCircle, CheckCircle } from 'lucide-react';
+import React, { useState, useCallback, useEffect, useRef } from 'react';
+import { X, Search as SearchIcon, Loader2, TrendingUp, TrendingDown, Calendar as CalendarIcon, DollarSign, AlertCircle, CheckCircle, ChevronRight, Hash, ChevronLeft } from 'lucide-react';
+import { format, addMonths, subMonths, startOfMonth, endOfMonth, startOfWeek, endOfWeek, isSameMonth, isSameDay, addDays, eachDayOfInterval } from 'date-fns';
 import { useStock } from '@/hooks/useStock';
 
 interface AddTransactionModalProps {
@@ -18,14 +19,6 @@ interface SearchResult {
   type: string;
 }
 
-// 资产类型映射到数据库中的 ID
-const ASSET_ID_MAP: Record<string, number> = {
-  'AMD': 1,
-  'GOOG': 2,
-  'EWY': 3,
-  'XIACY': 4,
-};
-
 export default function AddTransactionModal({
   isOpen,
   onClose,
@@ -33,9 +26,9 @@ export default function AddTransactionModal({
   portfolioId
 }: AddTransactionModalProps) {
   const { searchStock, getQuote, getHistoricalPrice, isLoading } = useStock();
+  const calendarRef = useRef<HTMLDivElement>(null);
 
   // 表单状态
-  const [assetType, setAssetType] = useState<'stock' | 'crypto' | 'other'>('stock');
   const [transactionType, setTransactionType] = useState<'BUY' | 'SELL'>('BUY');
   const [symbol, setSymbol] = useState('');
   const [searchQuery, setSearchQuery] = useState('');
@@ -43,190 +36,147 @@ export default function AddTransactionModal({
   const [showSearchResults, setShowSearchResults] = useState(false);
   const [selectedStock, setSelectedStock] = useState<SearchResult | null>(null);
 
-  // 价格和日期
-  const [purchaseDate, setPurchaseDate] = useState('');
+  // 日期相关
+  const [purchaseDate, setPurchaseDate] = useState(new Date().toISOString().split('T')[0]);
+  const [showCalendar, setShowCalendar] = useState(false);
+  const [currentMonth, setCurrentMonth] = useState(new Date());
+
+  // 价格和数量
   const [price, setPrice] = useState('');
   const [shares, setShares] = useState('');
   const [fees, setFees] = useState('0');
   const [notes, setNotes] = useState('');
 
-  // 自动价格获取状态
+  // 状态
   const [isFetchingPrice, setIsFetchingPrice] = useState(false);
   const [priceSource, setPriceSource] = useState<'api' | 'manual'>('manual');
+  const [holdings, setHoldings] = useState<Array<{ ticker: string; quantity: number }>>([]);
 
-  // 持仓检查状态
-  const [holdings, setHoldings] = useState<Array<{
-    assetId: string;
-    ticker: string;
-    name: string;
-    market: string;
-    quantity: number;
-    avgCost: number;
-    totalCost: number;
-  }>>([]);
-  const [isLoadingHoldings, setIsLoadingHoldings] = useState(false);
-  const [holdingsError, setHoldingsError] = useState('');
+  // 点击外部关闭日历
+  useEffect(() => {
+    function handleClickOutside(event: MouseEvent) {
+      if (calendarRef.current && !calendarRef.current.contains(event.target as Node)) {
+        setShowCalendar(false);
+      }
+    }
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, []);
 
-  // 获取持仓数据
   const fetchHoldings = useCallback(async () => {
     if (!portfolioId) return;
-
-    setIsLoadingHoldings(true);
-    setHoldingsError('');
-
     try {
       const response = await fetch(`/api/holdings?portfolioId=${portfolioId}`);
-      if (!response.ok) {
-        throw new Error('Failed to fetch holdings');
+      if (response.ok) {
+        const data = await response.json();
+        setHoldings(data.holdings || []);
       }
-      const data = await response.json();
-      setHoldings(data.holdings || []);
     } catch (error) {
       console.error('Error fetching holdings:', error);
-      setHoldingsError('Failed to load holdings data');
-    } finally {
-      setIsLoadingHoldings(false);
     }
   }, [portfolioId]);
 
-  // 获取当前股票的可卖出数量
   const getAvailableShares = useCallback((ticker: string): number => {
     const holding = holdings.find(h => h.ticker === ticker);
     return holding ? holding.quantity : 0;
   }, [holdings]);
 
-  // 当打开弹窗时，获取持仓数据
   useEffect(() => {
     if (isOpen) {
       fetchHoldings();
+      setPurchaseDate(new Date().toISOString().split('T')[0]);
     }
   }, [isOpen, fetchHoldings]);
 
-  // 搜索股票（防抖）
+  // 搜索股票逻辑
   useEffect(() => {
     const timer = setTimeout(async () => {
       if (searchQuery.length >= 1 && !selectedStock) {
         const results = await searchStock(searchQuery);
-        setSearchResults(results.slice(0, 10));
+        setSearchResults(results.slice(0, 8));
         setShowSearchResults(true);
       } else {
         setSearchResults([]);
         setShowSearchResults(false);
       }
     }, 300);
-
     return () => clearTimeout(timer);
   }, [searchQuery, searchStock, selectedStock]);
 
-  // 当选择股票后，自动获取实时价格作为参考
   const handleSelectStock = useCallback(async (stock: SearchResult) => {
     setSelectedStock(stock);
     setSymbol(stock.symbol);
-    setSearchQuery(`${stock.symbol} - ${stock.description}`);
+    setSearchQuery(stock.symbol);
     setShowSearchResults(false);
 
-    // 获取实时价格作为参考
     setIsFetchingPrice(true);
     const quote = await getQuote(stock.symbol);
     if (quote && quote.c > 0) {
-      if (!price) {
-        setPrice(quote.c.toFixed(2));
-        setPriceSource('api');
-      }
+      setPrice(quote.c.toFixed(2));
+      setPriceSource('api');
     }
     setIsFetchingPrice(false);
-  }, [getQuote, price]);
+  }, [getQuote]);
 
-  // 当选择日期后，自动获取该日期的收盘价
-  const handleDateChange = useCallback(async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const date = e.target.value;
-    setPurchaseDate(date);
+  const handleDateSelect = useCallback(async (date: Date) => {
+    const dateStr = format(date, 'yyyy-MM-dd');
+    setPurchaseDate(dateStr);
+    setShowCalendar(false);
 
-    if (selectedStock && date) {
+    if (selectedStock) {
       setIsFetchingPrice(true);
-      const historical = await getHistoricalPrice(selectedStock.symbol, date);
+      const historical = await getHistoricalPrice(selectedStock.symbol, dateStr);
       if (historical && historical.price > 0) {
         setPrice(historical.price.toFixed(2));
         setPriceSource('api');
-      } else {
-        const quote = await getQuote(selectedStock.symbol);
-        if (quote && quote.c > 0) {
-          console.warn('Historical price not available, using current price as reference');
-        }
       }
       setIsFetchingPrice(false);
     }
-  }, [selectedStock, getHistoricalPrice, getQuote]);
+  }, [selectedStock, getHistoricalPrice]);
 
-  // 重置表单
   const handleReset = () => {
     setSymbol('');
     setSearchQuery('');
     setSelectedStock(null);
     setSearchResults([]);
-    setPurchaseDate('');
     setPrice('');
     setShares('');
     setFees('0');
     setNotes('');
     setPriceSource('manual');
-    setTransactionType('BUY');
-    setHoldingsError('');
+    setSubmitStatus('idle');
   };
 
-  // 关闭弹窗并重置
   const handleClose = () => {
     handleReset();
-    setTransactionType('BUY');
-    setHoldings([]);
-    setHoldingsError('');
     onClose();
   };
 
-  // 提交状态
   const [submitStatus, setSubmitStatus] = useState<'idle' | 'loading' | 'success' | 'error'>('idle');
   const [submitError, setSubmitError] = useState<string>('');
 
-  // 提交表单
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-
     if (!selectedStock) return;
 
-    // 卖出交易检查
     if (transactionType === 'SELL') {
-      const availableShares = getAvailableShares(selectedStock.symbol);
-      const sellQuantity = parseFloat(shares);
-
-      if (sellQuantity > availableShares) {
+      const available = getAvailableShares(selectedStock.symbol);
+      if (parseFloat(shares) > available) {
         setSubmitStatus('error');
-        setSubmitError(`Cannot sell ${sellQuantity} shares. You only have ${availableShares.toFixed(4)} shares available.`);
-        return;
-      }
-
-      if (availableShares <= 0) {
-        setSubmitStatus('error');
-        setSubmitError(`You don't have any shares of ${selectedStock.symbol} to sell.`);
+        setSubmitError(`Insufficient shares. You have ${available.toFixed(4)} available.`);
         return;
       }
     }
 
     setSubmitStatus('loading');
-    setSubmitError('');
-
     try {
-      // 查找资产 ID（从数据库中获取）
-      const ticker = selectedStock.symbol;
-
-      // 首先尝试从 API 查找资产
-      const assetLookupRes = await fetch(`/api/assets/lookup?ticker=${encodeURIComponent(ticker)}`);
-      let assetId: number;
+      const assetLookupRes = await fetch(`/api/assets/lookup?ticker=${encodeURIComponent(selectedStock.symbol)}`);
+      let assetId: string;
 
       if (assetLookupRes.ok) {
         const assetData = await assetLookupRes.json();
         assetId = assetData.id;
       } else {
-        // 如果资产不存在，创建新资产
         const createAssetRes = await fetch('/api/assets', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
@@ -236,404 +186,300 @@ export default function AddTransactionModal({
             market: 'US',
           }),
         });
-
-        if (!createAssetRes.ok) {
-          const errorData = await createAssetRes.json().catch(() => ({}));
-          console.error('Create asset failed:', errorData);
-          throw new Error(errorData.details || errorData.error || 'Failed to create asset');
-        }
-
         const newAsset = await createAssetRes.json();
         assetId = newAsset.id;
       }
 
-      // 创建交易记录
-      const transactionData = {
-        portfolioId: portfolioId,
-        assetId: assetId,
-        type: transactionType,
-        quantity: transactionType === 'SELL' ? -Math.abs(parseFloat(shares)) : parseFloat(shares),
-        price: parseFloat(price),
-        fee: parseFloat(fees) || 0,
-        date: purchaseDate,
-        notes: notes || null,
-      };
-
       const response = await fetch('/api/transactions', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(transactionData),
+        body: JSON.stringify({
+          portfolioId,
+          assetId,
+          type: transactionType,
+          quantity: transactionType === 'SELL' ? -Math.abs(parseFloat(shares)) : parseFloat(shares),
+          price: parseFloat(price),
+          fee: parseFloat(fees) || 0,
+          date: purchaseDate,
+          notes: notes || null,
+        }),
       });
 
-      if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData.error || 'Failed to create transaction');
-      }
-
+      if (!response.ok) throw new Error('Submission failed');
       setSubmitStatus('success');
-
-      // 成功后关闭弹窗并刷新页面
-      setTimeout(() => {
-        handleClose();
-        window.location.reload();
-      }, 1500);
-
+      setTimeout(() => { handleClose(); window.location.reload(); }, 1000);
     } catch (error) {
-      console.error('Failed to submit transaction:', error);
       setSubmitStatus('error');
-      setSubmitError(error instanceof Error ? error.message : 'Failed to create transaction');
+      setSubmitError('Failed to record transaction');
     }
+  };
+
+  const [showYearPicker, setShowYearPicker] = useState(false);
+
+  // Calendar Components Logic
+  const renderCalendar = () => {
+    const monthStart = startOfMonth(currentMonth);
+    const monthEnd = endOfMonth(monthStart);
+    const startDate = startOfWeek(monthStart);
+    const endDate = endOfWeek(monthEnd);
+    const days = eachDayOfInterval({ start: startDate, end: endDate });
+
+    // 生成年份范围（前后10年）
+    const currentYear = currentMonth.getFullYear();
+    const years = Array.from({ length: 12 }, (_, i) => currentYear - 10 + i);
+
+    return (
+      <div className="p-4 w-[300px] select-none">
+        <div className="flex items-center justify-between mb-4 px-1">
+          <button 
+            type="button" 
+            onClick={() => setShowYearPicker(!showYearPicker)}
+            className="text-[14px] font-bold text-black hover:bg-gray-100 px-2 py-1 rounded-lg transition-colors flex items-center gap-1"
+          >
+            {format(currentMonth, 'MMMM yyyy')}
+            <ChevronRight className={`w-3 h-3 transition-transform duration-200 ${showYearPicker ? 'rotate-90' : ''}`} />
+          </button>
+          <div className="flex items-center gap-1">
+            <button type="button" onClick={() => setCurrentMonth(subMonths(currentMonth, 1))} className="p-1.5 hover:bg-gray-100 rounded-lg transition-colors"><ChevronLeft className="w-4 h-4 text-gray-500" /></button>
+            <button type="button" onClick={() => setCurrentMonth(addMonths(currentMonth, 1))} className="p-1.5 hover:bg-gray-100 rounded-lg transition-colors"><ChevronRight className="w-4 h-4 text-gray-500" /></button>
+          </div>
+        </div>
+
+        {showYearPicker ? (
+          <div className="grid grid-cols-3 gap-2 animate-in fade-in zoom-in-95 duration-200">
+            {Array.from({ length: 12 }, (_, i) => currentYear - 9 + i).map(year => (
+              <button
+                key={year}
+                type="button"
+                onClick={() => {
+                  const newDate = new Date(currentMonth);
+                  newDate.setFullYear(year);
+                  setCurrentMonth(newDate);
+                  setShowYearPicker(false);
+                }}
+                className={`py-3 text-[13px] font-semibold rounded-xl transition-all ${year === currentYear ? 'bg-black text-white' : 'hover:bg-gray-50 text-gray-600'}`}
+              >
+                {year}
+              </button>
+            ))}
+            <div className="col-span-3 flex justify-between mt-2 pt-2 border-t border-gray-100">
+              <button type="button" onClick={() => {
+                const newDate = new Date(currentMonth);
+                newDate.setFullYear(currentYear - 12);
+                setCurrentMonth(newDate);
+              }} className="p-1 hover:bg-gray-50 rounded text-gray-400"><ChevronLeft className="w-4 h-4" /></button>
+              <button type="button" onClick={() => {
+                const newDate = new Date(currentMonth);
+                newDate.setFullYear(currentYear + 12);
+                setCurrentMonth(newDate);
+              }} className="p-1 hover:bg-gray-50 rounded text-gray-400"><ChevronRight className="w-4 h-4" /></button>
+            </div>
+          </div>
+        ) : (
+          <>
+            <div className="grid grid-cols-7 mb-2">
+              {['S', 'M', 'T', 'W', 'T', 'F', 'S'].map((d, i) => (
+                <span key={i} className="text-center text-[10px] font-bold text-gray-300">{d}</span>
+              ))}
+            </div>
+            <div className="grid grid-cols-7 gap-px">
+              {days.map((day, i) => {
+                const isSelected = isSameDay(day, new Date(purchaseDate));
+                const isToday = isSameDay(day, new Date());
+                const isCurrentMonth = isSameMonth(day, monthStart);
+                return (
+                  <button
+                    key={i}
+                    type="button"
+                    onClick={() => handleDateSelect(day)}
+                    className={`h-9 flex items-center justify-center text-[13px] rounded-xl transition-all relative
+                      ${isSelected ? 'bg-black text-white font-bold' : 'hover:bg-gray-50 text-gray-700'}
+                      ${!isCurrentMonth ? 'opacity-20' : ''}
+                    `}
+                  >
+                    {format(day, 'd')}
+                    {isToday && !isSelected && <div className="absolute bottom-1 w-1 h-1 rounded-full bg-black" />}
+                  </button>
+                );
+              })}
+            </div>
+          </>
+        )}
+      </div>
+    );
   };
 
   if (!isOpen) return null;
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm">
-      <div className="relative w-full max-w-2xl max-h-[90vh] overflow-y-auto bg-white rounded-xl shadow-2xl">
-        {/* Header */}
-        <div className="sticky top-0 z-10 flex items-center justify-between px-6 py-4 bg-white border-b border-gray-200">
+    <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/40 backdrop-blur-md transition-all">
+      <div className="relative w-full max-w-[500px] bg-white rounded-[32px] shadow-[0_20px_70px_-10px_rgba(0,0,0,0.15)] border border-gray-100 overflow-hidden flex flex-col animate-in fade-in zoom-in duration-200">
+        
+        {/* Header - Apple Style */}
+        <div className="px-8 pt-8 pb-4 flex items-center justify-between">
           <div>
-            <h2 className="text-xl font-semibold text-gray-900">Add Trade</h2>
-            <p className="text-sm text-gray-500">{portfolioName}</p>
+            <h2 className="text-[24px] font-bold text-black tracking-tight leading-none">Record Trade</h2>
+            <p className="text-[13px] text-gray-400 font-medium mt-2">Portfolio: <span className="text-black font-semibold">{portfolioName}</span></p>
           </div>
-          <button
-            onClick={handleClose}
-            className="p-2 text-gray-400 transition-colors rounded-lg hover:text-gray-600 hover:bg-gray-100"
-          >
+          <button onClick={handleClose} className="p-2 text-gray-300 hover:text-black transition-colors rounded-full hover:bg-gray-50">
             <X className="w-5 h-5" />
           </button>
         </div>
 
-        {/* Form */}
-        <form onSubmit={handleSubmit} className="p-6 space-y-6">
-          {/* Asset Type */}
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">
-              Asset Type
-            </label>
-            <div className="flex gap-2">
-              {(['stock', 'crypto', 'other'] as const).map((type) => (
-                <button
-                  key={type}
-                  type="button"
-                  onClick={() => setAssetType(type)}
-                  className={`px-4 py-2 text-sm font-medium rounded-lg capitalize transition-colors ${
-                    assetType === type
-                      ? 'bg-gray-900 text-white'
-                      : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
-                  }`}
-                >
-                  {type}
-                </button>
-              ))}
-            </div>
+        <form onSubmit={handleSubmit} className="p-8 pt-2 space-y-6">
+          
+          {/* Side Switch - Full Width Colorful Toggle */}
+          <div className="bg-gray-100 p-1.5 rounded-2xl flex relative h-12">
+            <div 
+              className={`absolute inset-1.5 w-[calc(50%-6px)] rounded-xl shadow-sm transition-all duration-300 ease-out ${
+                transactionType === 'BUY' ? 'bg-emerald-500 translate-x-0' : 'bg-rose-500 translate-x-[100%]'
+              }`}
+            />
+            <button 
+              type="button" 
+              onClick={() => setTransactionType('BUY')} 
+              className={`flex-1 text-[14px] font-bold relative z-10 transition-colors duration-200 ${transactionType === 'BUY' ? 'text-white' : 'text-gray-400 hover:text-gray-600'}`}
+            >
+              BUY
+            </button>
+            <button 
+              type="button" 
+              onClick={() => setTransactionType('SELL')} 
+              className={`flex-1 text-[14px] font-bold relative z-10 transition-colors duration-200 ${transactionType === 'SELL' ? 'text-white' : 'text-gray-400 hover:text-gray-600'}`}
+            >
+              SELL
+            </button>
           </div>
 
-          {/* Transaction Type */}
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">
-              Transaction Type
-            </label>
-            <div className="flex gap-2">
-              <button
-                type="button"
-                onClick={() => setTransactionType('BUY')}
-                className={`px-4 py-2 text-sm font-medium rounded-lg transition-colors flex items-center gap-2 ${
-                  transactionType === 'BUY'
-                    ? 'bg-green-600 text-white'
-                    : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
-                }`}
-              >
-                <TrendingUp className="w-4 h-4" />
-                Buy
-              </button>
-              <button
-                type="button"
-                onClick={() => setTransactionType('SELL')}
-                className={`px-4 py-2 text-sm font-medium rounded-lg transition-colors flex items-center gap-2 ${
-                  transactionType === 'SELL'
-                    ? 'bg-red-600 text-white'
-                    : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
-                }`}
-              >
-                <TrendingDown className="w-4 h-4" />
-                Sell
-              </button>
-            </div>
-          </div>
-
-          {/* Stock Search */}
-          <div className="relative">
-            <label className="block text-sm font-medium text-gray-700 mb-2">
-              Search Stock
-            </label>
+          {/* Search Box */}
+          <div className="relative group">
+            <label className="text-[11px] font-bold text-gray-400 uppercase tracking-widest mb-2 block px-1">Ticker / Symbol</label>
             <div className="relative">
-              <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" />
+              <SearchIcon className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-300 group-focus-within:text-black transition-colors" />
               <input
                 type="text"
                 value={searchQuery}
-                onChange={(e) => {
-                  setSearchQuery(e.target.value);
-                  if (selectedStock && e.target.value !== `${selectedStock.symbol} - ${selectedStock.description}`) {
-                    setSelectedStock(null);
-                    setSymbol('');
-                  }
-                }}
-                placeholder="Search by symbol or company name..."
-                className="w-full pl-10 pr-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-gray-900 focus:border-gray-900"
-                disabled={isLoading}
+                onChange={(e) => { setSearchQuery(e.target.value); if (selectedStock) setSelectedStock(null); }}
+                placeholder="Search symbol (e.g. AAPL)"
+                className="w-full pl-11 pr-10 py-3.5 bg-gray-50 border-none rounded-[18px] text-[15px] font-semibold focus:ring-2 focus:ring-black/5 focus:bg-white transition-all outline-none"
+                autoComplete="off"
               />
-              {isLoading && (
-                <Loader2 className="absolute right-3 top-1/2 -translate-y-1/2 w-5 h-5 animate-spin text-gray-400" />
-              )}
+              {isLoading && <Loader2 className="absolute right-4 top-1/2 -translate-y-1/2 w-4 h-4 animate-spin text-gray-300" />}
             </div>
 
-            {/* Search Results Dropdown */}
+            {/* Suggestions */}
             {showSearchResults && searchResults.length > 0 && (
-              <div className="absolute z-20 w-full mt-1 bg-white border border-gray-200 rounded-lg shadow-lg max-h-60 overflow-y-auto">
+              <div className="absolute z-50 w-full mt-2 bg-white/95 backdrop-blur-xl border border-gray-100 rounded-2xl shadow-[0_10px_40px_-10px_rgba(0,0,0,0.1)] max-h-60 overflow-y-auto p-2">
                 {searchResults.map((stock) => (
-                  <button
-                    key={stock.symbol}
-                    type="button"
-                    onClick={() => handleSelectStock(stock)}
-                    className="w-full px-4 py-3 text-left hover:bg-gray-50 border-b border-gray-100 last:border-b-0"
-                  >
-                    <div className="flex items-center justify-between">
-                      <div>
-                        <span className="font-semibold text-gray-900">{stock.symbol}</span>
-                        <span className="ml-2 text-sm text-gray-500">{stock.displaySymbol}</span>
-                      </div>
-                      <span className="text-xs text-gray-400 uppercase">{stock.type}</span>
+                  <button key={stock.symbol} type="button" onClick={() => handleSelectStock(stock)} className="w-full p-3 text-left hover:bg-gray-50 rounded-xl flex items-center justify-between group transition-colors">
+                    <div>
+                      <span className="font-bold text-black">{stock.symbol}</span>
+                      <p className="text-[11px] text-gray-400 font-medium truncate max-w-[200px] mt-0.5">{stock.description}</p>
                     </div>
-                    <p className="text-sm text-gray-600 mt-1 truncate">{stock.description}</p>
+                    <ChevronRight className="w-4 h-4 text-gray-200 opacity-0 group-hover:opacity-100 transition-all -translate-x-2 group-hover:translate-x-0" />
                   </button>
                 ))}
               </div>
             )}
-
-            {/* Selected Stock Info */}
-            {selectedStock && (
-              <div className="mt-2 p-3 bg-gray-50 border border-gray-200 rounded-lg">
-                <div className="flex items-center justify-between">
-                  <div>
-                    <span className="font-semibold text-gray-900">{selectedStock.symbol}</span>
-                    <p className="text-sm text-gray-600">{selectedStock.description}</p>
-                  </div>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setSelectedStock(null);
-                      setSymbol('');
-                      setSearchQuery('');
-                      setPrice('');
-                    }}
-                    className="text-gray-400 hover:text-gray-600"
-                  >
-                    <X className="w-4 h-4" />
-                  </button>
-                </div>
-              </div>
-            )}
           </div>
 
-          {/* Purchase Date */}
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">
-              <span className="flex items-center gap-2">
-                <Calendar className="w-4 h-4" />
-                Purchase Date
-              </span>
+          {/* Selected Info Summary */}
+          {selectedStock && (
+            <div className={`p-4 rounded-2xl border flex items-center justify-between ${transactionType === 'BUY' ? 'bg-emerald-50/30 border-emerald-100/50' : 'bg-rose-50/30 border-rose-100/50'}`}>
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-xl bg-white shadow-sm flex items-center justify-center font-bold text-gray-800 border border-gray-100">{selectedStock.symbol.charAt(0)}</div>
+                <div>
+                  <p className="font-bold text-black leading-tight">{selectedStock.symbol}</p>
+                  <p className="text-[11px] text-gray-400 font-medium">{selectedStock.description}</p>
+                </div>
+              </div>
+              {transactionType === 'SELL' && (
+                <div className="text-right">
+                  <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">Available</p>
+                  <p className="font-bold text-black tabular-nums">{getAvailableShares(selectedStock.symbol).toLocaleString()}</p>
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* Custom Calendar Trigger */}
+          <div className="space-y-2 relative" ref={calendarRef}>
+            <label className="text-[11px] font-bold text-gray-400 uppercase tracking-widest px-1 flex justify-between">
+              <span>Trade Date</span>
+              {isFetchingPrice && <span className="text-gray-400 flex items-center gap-1 normal-case tracking-normal font-medium"><Loader2 className="w-3 h-3 animate-spin" /> Fetching historical price...</span>}
             </label>
-            <input
-              type="date"
-              value={purchaseDate}
-              onChange={handleDateChange}
-              required
-              className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-gray-900 focus:border-gray-900"
-            />
-            {isFetchingPrice && (
-              <p className="mt-1 text-sm text-gray-600 flex items-center gap-1">
-                <Loader2 className="w-3 h-3 animate-spin" />
-                Fetching historical price for this date...
-              </p>
+            <button 
+              type="button" 
+              onClick={() => setShowCalendar(!showCalendar)}
+              className="w-full pl-11 pr-4 py-3.5 bg-gray-50 border-none rounded-[18px] text-[14px] font-bold flex items-center justify-start relative hover:bg-gray-100 transition-colors"
+            >
+              <CalendarIcon className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-300" />
+              {format(new Date(purchaseDate), 'MMMM d, yyyy')}
+            </button>
+
+            {/* Floating Apple Calendar */}
+            {showCalendar && (
+              <div className="absolute z-[60] left-0 top-[100%] mt-2 bg-white/95 backdrop-blur-xl border border-gray-100 rounded-[24px] shadow-[0_15px_50px_-10px_rgba(0,0,0,0.15)] animate-in fade-in slide-in-from-top-2 duration-200">
+                {renderCalendar()}
+              </div>
             )}
           </div>
 
-          {/* Price and Shares */}
-          <div className="grid grid-cols-2 gap-4">
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                <span className="flex items-center gap-2">
-                  <DollarSign className="w-4 h-4" />
-                  Price per Share
-                </span>
-              </label>
+          {/* Inputs Grid: Shares & Unit Price */}
+          <div className="grid grid-cols-2 gap-6">
+            <div className="space-y-2">
+              <label className="text-[11px] font-bold text-gray-400 uppercase tracking-widest px-1">Shares</label>
               <div className="relative">
-                <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500">$</span>
-                <input
-                  type="number"
-                  step="0.01"
-                  min="0"
-                  value={price}
-                  onChange={(e) => {
-                    setPrice(e.target.value);
-                    setPriceSource('manual');
-                  }}
-                  required
-                  className="w-full pl-7 pr-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-gray-900 focus:border-gray-900"
-                />
+                <Hash className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-300" />
+                <input type="number" step="0.0001" value={shares} onChange={(e) => setShares(e.target.value)} placeholder="0.00" className="w-full pl-11 pr-4 py-3.5 bg-gray-50 border-none rounded-[18px] text-[15px] font-bold tabular-nums outline-none focus:ring-2 focus:ring-black/5" />
               </div>
-              {priceSource === 'api' && price && (
-                <p className="mt-1 text-xs text-green-700 flex items-center gap-1">
-                  <TrendingUp className="w-3 h-3" />
-                  Auto-filled from market data
-                </p>
-              )}
             </div>
-
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                Shares
-                {transactionType === 'SELL' && selectedStock && (
-                  <span className="ml-2 text-xs text-gray-500">
-                    (Available: {getAvailableShares(selectedStock.symbol).toFixed(4)})
-                  </span>
-                )}
-              </label>
-              <input
-                type="number"
-                step="0.0001"
-                min="0"
-                value={shares}
-                onChange={(e) => setShares(e.target.value)}
-                required
-                className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-gray-900 focus:border-gray-900"
-              />
-              {transactionType === 'SELL' && selectedStock && getAvailableShares(selectedStock.symbol) <= 0 && (
-                <p className="mt-1 text-xs text-red-600">
-                  No shares available to sell for this stock
-                </p>
-              )}
+            <div className="space-y-2">
+              <label className="text-[11px] font-bold text-gray-400 uppercase tracking-widest px-1">Unit Price</label>
+              <div className="relative">
+                <DollarSign className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-300" />
+                <input type="number" step="0.01" value={price} onChange={(e) => { setPrice(e.target.value); setPriceSource('manual'); }} placeholder="0.00" className={`w-full pl-11 pr-4 py-3.5 border-none rounded-[18px] text-[15px] font-bold tabular-nums outline-none focus:ring-2 focus:ring-black/5 transition-colors ${priceSource === 'api' ? 'bg-blue-50/50 text-blue-900 ring-1 ring-blue-100' : 'bg-gray-50 text-black'}`} />
+              </div>
             </div>
           </div>
 
-          {/* Total Preview */}
-          {price && shares && (
-            <div className="p-4 bg-gray-50 rounded-lg border border-gray-200">
-              <div className="flex justify-between items-center">
-                <span className="text-sm text-gray-600">
-                  {transactionType === 'BUY' ? 'Total Cost:' : 'Total Proceeds:'}
-                </span>
-                <span className={`text-lg font-semibold ${transactionType === 'BUY' ? 'text-gray-900' : 'text-green-700'}`}>
-                  ${(parseFloat(price) * parseFloat(shares)).toFixed(2)}
-                </span>
-              </div>
-              {fees && parseFloat(fees) > 0 && (
-                <div className="flex justify-between items-center mt-1 text-sm">
-                  <span className="text-gray-500">Fees:</span>
-                  <span className="text-gray-600">${parseFloat(fees).toFixed(2)}</span>
-                </div>
-              )}
-              {transactionType === 'SELL' && selectedStock && (
-                <div className="mt-2 pt-2 border-t border-gray-200 text-sm">
-                  <div className="flex justify-between items-center">
-                    <span className="text-gray-500">Available to Sell:</span>
-                    <span className={`font-medium ${getAvailableShares(selectedStock.symbol) < parseFloat(shares || '0') ? 'text-red-600' : 'text-gray-900'}`}>
-                      {getAvailableShares(selectedStock.symbol).toFixed(4)} shares
-                    </span>
-                  </div>
-                </div>
-              )}
-            </div>
-          )}
-
-          {/* Fees and Notes */}
-          <div className="grid grid-cols-2 gap-4">
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                Fees (Optional)
-              </label>
+          {/* Fee & Optional Notes Grid */}
+          <div className="grid grid-cols-2 gap-6">
+            <div className="space-y-2">
+              <label className="text-[11px] font-bold text-gray-400 uppercase tracking-widest px-1">Fee (Optional)</label>
               <div className="relative">
-                <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500">$</span>
-                <input
-                  type="text"
-                  inputMode="decimal"
-                  pattern="^[0-9]*\.?[0-9]*$"
-                  value={fees}
-                  onChange={(e) => {
-                    const value = e.target.value;
-                    if (value === '' || /^[0-9]*\.?[0-9]*$/.test(value)) {
-                      setFees(value);
-                    }
-                  }}
-                  className="w-full pl-7 pr-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-gray-900 focus:border-gray-900"
-                />
+                <DollarSign className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-300" />
+                <input type="number" step="0.01" value={fees} onChange={(e) => setFees(e.target.value)} className="w-full pl-11 pr-4 py-3.5 bg-gray-50 border-none rounded-[18px] text-[15px] font-bold outline-none focus:ring-2 focus:ring-black/5" />
               </div>
             </div>
-
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                Notes (Optional)
-              </label>
-              <input
-                type="text"
-                value={notes}
-                onChange={(e) => setNotes(e.target.value)}
-                placeholder="e.g., Dividend reinvestment"
-                className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-gray-900 focus:border-gray-900"
-              />
+            <div className="space-y-2">
+              <label className="text-[11px] font-bold text-gray-400 uppercase tracking-widest px-1">Notes</label>
+              <input type="text" value={notes} onChange={(e) => setNotes(e.target.value)} placeholder="Optional" className="w-full px-4 py-3.5 bg-gray-50 border-none rounded-[18px] text-[13px] font-medium outline-none focus:ring-2 focus:ring-black/5" />
             </div>
           </div>
 
-          {/* Status Messages */}
+          {/* Submission Feedback */}
           {submitStatus === 'success' && (
-            <div className="p-4 bg-green-50 border border-green-200 rounded-lg flex items-center gap-3">
-              <CheckCircle className="w-5 h-5 text-green-600" />
-              <div>
-                <p className="font-medium text-green-900">Transaction created successfully!</p>
-                <p className="text-sm text-green-700">Refreshing page...</p>
-              </div>
+            <div className="p-4 bg-emerald-50 rounded-2xl border border-emerald-100 flex items-center gap-3 animate-in slide-in-from-top-2">
+              <CheckCircle className="w-5 h-5 text-emerald-600" />
+              <p className="text-[14px] font-bold text-emerald-900">Recorded successfully!</p>
             </div>
           )}
-
           {submitStatus === 'error' && (
-            <div className="p-4 bg-red-50 border border-red-200 rounded-lg flex items-start gap-3">
-              <AlertCircle className="w-5 h-5 text-red-600 mt-0.5" />
-              <div>
-                <p className="font-medium text-red-900">Failed to create transaction</p>
-                <p className="text-sm text-red-700">{submitError}</p>
-              </div>
+            <div className="p-4 bg-rose-50 rounded-2xl border border-rose-100 flex items-start gap-3 animate-in shake-1 duration-300">
+              <AlertCircle className="w-5 h-5 text-rose-600 shrink-0 mt-0.5" />
+              <p className="text-[13px] font-bold text-rose-900 leading-tight">{submitError}</p>
             </div>
           )}
 
-          {/* Actions */}
-          <div className="flex gap-3 pt-4 border-t border-gray-200">
-            <button
-              type="button"
-              onClick={handleClose}
-              disabled={submitStatus === 'loading'}
-              className="flex-1 px-4 py-2.5 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors disabled:opacity-50"
-            >
-              Cancel
-            </button>
+          {/* CTA Button */}
+          <div className="pt-2">
             <button
               type="submit"
-              disabled={!selectedStock || !price || !shares || !purchaseDate || isLoading || submitStatus === 'loading' || submitStatus === 'success' || (transactionType === 'SELL' && getAvailableShares(selectedStock.symbol) <= 0)}
-              className="flex-1 px-4 py-2.5 text-sm font-medium text-white bg-gray-900 rounded-lg hover:bg-gray-800 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+              disabled={!selectedStock || !price || !shares || submitStatus !== 'idle'}
+              className="w-full py-4 bg-black text-white text-[16px] font-bold rounded-[20px] shadow-lg shadow-black/10 hover:bg-gray-800 active:scale-[0.98] disabled:bg-gray-200 disabled:shadow-none transition-all flex items-center justify-center gap-2"
             >
-              {submitStatus === 'loading' ? (
-                <span className="flex items-center justify-center gap-2">
-                  <Loader2 className="w-4 h-4 animate-spin" />
-                  Saving...
-                </span>
-              ) : submitStatus === 'success' ? (
-                <span className="flex items-center justify-center gap-2">
-                  <CheckCircle className="w-4 h-4" />
-                  Saved!
-                </span>
-              ) : (
-                'Add Trade'
-              )}
+              {submitStatus === 'loading' ? <Loader2 className="w-5 h-5 animate-spin" /> : <span>Confirm Transaction</span>}
             </button>
           </div>
         </form>

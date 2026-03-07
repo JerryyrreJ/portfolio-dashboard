@@ -15,15 +15,21 @@ async function fetchFinnhub(endpoint: string, params: Record<string, string> = {
     url.searchParams.append(key, value);
   });
 
-  const response = await fetch(url.toString(), {
-    next: { revalidate: 60 }, // 缓存 60 秒
-  });
+  try {
+    const response = await fetch(url.toString(), {
+      next: { revalidate: 60 }, // 缓存 60 秒
+    });
 
-  if (!response.ok) {
-    throw new Error(`Finnhub API error: ${response.status} ${response.statusText}`);
+    if (!response.ok) {
+      console.warn(`Finnhub API error: ${response.status} ${response.statusText} for ${endpoint}`);
+      return null;
+    }
+
+    return await response.json();
+  } catch (error) {
+    console.warn(`Finnhub fetch exception for ${endpoint}:`, error);
+    return null;
   }
-
-  return response.json();
 }
 
 // 类型定义
@@ -118,6 +124,48 @@ export async function getPriceOnDate(
     console.error('Failed to get historical price:', error);
   }
   return null;
+}
+
+/**
+ * 获取过去12个月的每月收盘价
+ * @param symbol 股票代码
+ */
+export async function get12MonthHistory(symbol: string): Promise<{date: string, price: number}[]> {
+  const to = Math.floor(Date.now() / 1000);
+  const from = to - 365 * 24 * 60 * 60; // 一年前
+
+  try {
+    // 获取过去一年的周线数据，因为月线 M 在免费版可能受限或数据稀疏，周线更容易获取
+    const candle = await getCandles(symbol, from, to, 'W');
+    if (candle.s !== 'ok' || !candle.c || candle.c.length === 0) {
+      return [];
+    }
+
+    const monthlyPoints: Record<string, {date: string, price: number}> = {};
+
+    // 遍历所有数据点，按 "YYYY-MM" 分组，保留该月最后一个数据点（即月底价格）
+    for (let i = 0; i < candle.t.length; i++) {
+      const dateObj = new Date(candle.t[i] * 1000);
+      const monthKey = `${dateObj.getFullYear()}-${String(dateObj.getMonth() + 1).padStart(2, '0')}`;
+      
+      monthlyPoints[monthKey] = {
+        date: dateObj.toLocaleDateString('en-US', { month: 'short', year: 'numeric' }),
+        price: candle.c[i]
+      };
+    }
+
+    // 将对象转为数组并按时间排序
+    const sortedPoints = Object.values(monthlyPoints).sort((a, b) => {
+      return new Date(a.date).getTime() - new Date(b.date).getTime();
+    });
+
+    // 只取最近的12个月
+    return sortedPoints.slice(-12);
+
+  } catch (error) {
+    console.error(`Failed to get 12 month history for ${symbol}:`, error);
+    return [];
+  }
 }
 
 /**

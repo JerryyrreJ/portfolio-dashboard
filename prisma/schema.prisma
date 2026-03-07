@@ -24,6 +24,8 @@ model Asset {
   market      String   // e.g., "NASDAQ", "NYSE", "OTC"
   type        String   @default("STOCK") // e.g., "STOCK", "ETF", "CRYPTO"
   currency    String   @default("USD")
+  priceHistory String? // JSON string: [{date: string, price: number}]
+  historyLastUpdated DateTime?
   
   transactions Transaction[]
 }

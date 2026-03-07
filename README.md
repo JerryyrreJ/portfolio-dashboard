@@ -115,8 +115,3 @@ portfolio-dashboard/
 ## 📄 许可证
 
 [MIT License](LICENSE)
-
----
-
-Generated with [Claude Code](https://claude.ai/code)
-via [Happy](https://happy.engineering)
