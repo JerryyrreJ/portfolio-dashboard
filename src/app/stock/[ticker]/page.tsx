@@ -17,8 +17,9 @@ interface PageProps {
   params: Promise<{ ticker: string }>
 }
 
-export default async function StockDetailPage({ params }: PageProps) {
-  const { ticker } = await params
+export default async function StockDetailPage(props: PageProps) {
+  const params = await props.params
+  const { ticker } = params
   const decodedTicker = decodeURIComponent(ticker).toUpperCase()
 
   // 1. Fetch asset + transactions from DB
