@@ -23,35 +23,89 @@ import {
   Key,
   TrendingUp,
   FileText,
-  UserCircle
+  UserCircle,
+  AlertCircle,
+  CheckCircle2,
+  Loader2,
+  Eye
 } from 'lucide-react';
 import AuthPanel from '@/app/components/settings/AuthPanel';
 import { createClient } from '@/lib/supabase';
 import { User } from '@supabase/supabase-js';
+import Notification from '@/app/components/Notification';
 
 export default function SettingsPage() {
   const [activeSection, setActiveSection] = useState('portfolio');
   const [user, setUser] = useState<User | null>(null);
-  const [loading, setLoading] = useState(true);
   const router = useRouter();
   
   const supabase = createClient();
 
+  // Inline edit states
+  const [isEditingEmail, setIsEditingEmail] = useState(false);
+  const [isEditingPassword, setIsEditingPassword] = useState(false);
+  const [newEmail, setNewEmail] = useState('');
+  const [newPassword, setNewPassword] = useState('');
+  const [confirmPassword, setConfirmPassword] = useState('');
+  const [showPassword, setShowPassword] = useState(false);
+  const [authActionLoading, setAuthActionLoading] = useState(false);
+  const [authError, setAuthError] = useState<string | null>(null);
+
+  const [isEditingPortfolioName, setIsEditingPortfolioName] = useState(false);
+  const [isEditingBaseCurrency, setIsEditingBaseCurrency] = useState(false);
+  const [portfolioName, setPortfolioName] = useState('Main Account');
+  const [baseCurrency, setBaseCurrency] = useState('USD');
+  const [portfolioActionLoading, setPortfolioActionLoading] = useState(false);
+  const [portfolioError, setPortfolioError] = useState<string | null>(null);
+
+  // Global Notification State
+  const [notification, setNotification] = useState<{
+    show: boolean;
+    type: 'success' | 'error' | 'loading';
+    title: string;
+    message: string;
+  }>({
+    show: false,
+    type: 'success',
+    title: '',
+    message: '',
+  });
+
+  const showNotification = (type: 'success' | 'error' | 'loading', title: string, message: string) => {
+    setNotification({ show: true, type, title, message });
+  };
+
   useEffect(() => {
-    const fetchUser = async () => {
+    const fetchUserAndPortfolio = async () => {
       const { data: { user } } = await supabase.auth.getUser();
       setUser(user);
-      setLoading(false);
+      
+      if (user) {
+        try {
+          const res = await fetch('/api/portfolio');
+          if (res.ok) {
+            const data = await res.json();
+            setPortfolioName(data.portfolio.name || 'Main Account');
+            setBaseCurrency(data.portfolio.currency || 'USD');
+          }
+        } catch (e) {
+          console.error("Failed to fetch portfolio settings", e);
+        }
+      }
     };
 
-    fetchUser();
+    fetchUserAndPortfolio();
 
     const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
       setUser(session?.user ?? null);
+      if (!session?.user) {
+        setPortfolioName('Main Account');
+        setBaseCurrency('USD');
+      }
     });
 
     return () => subscription.unsubscribe();
-  }, []);
+  }, [supabase.auth]);
 
   const isLoggedIn = !!user;
 
@@ -59,25 +113,101 @@ export default function SettingsPage() {
   const accountRef = useRef<HTMLDivElement>(null);
   const portfolioRef = useRef<HTMLDivElement>(null);
   const preferencesRef = useRef<HTMLDivElement>(null);
-  const securityRef = useRef<HTMLDivElement>(null);
   const notificationsRef = useRef<HTMLDivElement>(null);
 
-  const navItems = [
+  const navItems = React.useMemo(() => [
     { id: 'portfolio', name: 'Portfolio', icon: <Wallet className="w-4 h-4" />, ref: portfolioRef },
     { id: 'preferences', name: 'Preferences', icon: <Settings className="w-4 h-4" />, ref: preferencesRef },
     { id: 'notifications', name: 'Notifications', icon: <Bell className="w-4 h-4" />, ref: notificationsRef },
-    ...(isLoggedIn ? [{ id: 'security', name: 'Security & Privacy', icon: <Shield className="w-4 h-4" />, ref: securityRef }] : []),
-    { id: 'account', name: 'Account', icon: <UserCircle className="w-4 h-4" />, ref: accountRef },
-  ];
+    { id: 'account', name: isLoggedIn ? 'Account & Security' : 'Account', icon: <UserCircle className="w-4 h-4" />, ref: accountRef },
+  ], [isLoggedIn]);
 
   const handleSignOut = async () => {
     await supabase.auth.signOut();
   };
 
+  const handleUpdatePortfolio = async (e: React.FormEvent, field: 'name' | 'currency') => {
+    e.preventDefault();
+    if (!isLoggedIn) return;
+
+    setPortfolioActionLoading(true);
+    setPortfolioError(null);
+
+    try {
+      const payload = field === 'name' ? { name: portfolioName } : { currency: baseCurrency };
+      const res = await fetch('/api/portfolio', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+      });
+
+      if (!res.ok) {
+        const errorData = await res.json();
+        throw new Error(errorData.error || 'Failed to update portfolio');
+      }
+
+      showNotification('success', 'Settings Saved', 'Your portfolio configuration has been updated successfully.');
+      
+      if (field === 'name') {
+        setIsEditingPortfolioName(false);
+      } else {
+        setIsEditingBaseCurrency(false);
+      }
+    } catch (err: any) {
+      setPortfolioError(err.message || 'Failed to update portfolio');
+      showNotification('error', 'Update Failed', err.message || 'We could not save your changes.');
+    } finally {
+      setPortfolioActionLoading(false);
+    }
+  };
+
+  const handleUpdateEmail = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!newEmail || newEmail === user?.email) return;
+    setAuthActionLoading(true);
+    setAuthError(null);
+    try {
+      const { error } = await supabase.auth.updateUser({ email: newEmail });
+      if (error) throw error;
+      showNotification('success', 'Verification Sent', 'We have sent a link to your new email. Please verify it to complete the change.');
+      setIsEditingEmail(false);
+    } catch (err: any) {
+      setAuthError(err.message || 'Failed to update email');
+      showNotification('error', 'Update Failed', err.message || 'Failed to update your email address.');
+    } finally {
+      setAuthActionLoading(false);
+    }
+  };
+
+  const handleUpdatePassword = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!newPassword || newPassword !== confirmPassword) {
+      setAuthError('Passwords do not match');
+      return;
+    }
+    if (newPassword.length < 6) {
+      setAuthError('Password must be at least 6 characters');
+      return;
+    }
+    setAuthActionLoading(true);
+    setAuthError(null);
+    try {
+      const { error } = await supabase.auth.updateUser({ password: newPassword });
+      if (error) throw error;
+      showNotification('success', 'Password Updated', 'Your password has been changed successfully.');
+      setIsEditingPassword(false);
+      setNewPassword('');
+      setConfirmPassword('');
+    } catch (err: any) {
+      setAuthError(err.message || 'Failed to update password');
+      showNotification('error', 'Update Failed', err.message || 'Failed to change your password.');
+    } finally {
+      setAuthActionLoading(false);
+    }
+  };
+
   // Intersection Observer to update active nav item based on scroll position
   useEffect(() => {
-    if (loading) return;
-
     const observerOptions = {
       root: null,
       rootMargin: '-20% 0px -60% 0px', // Trigger when section is near top third of screen
@@ -99,7 +229,7 @@ export default function SettingsPage() {
     });
 
     return () => observer.disconnect();
-  }, [loading, navItems]);
+  }, [navItems]);
 
   const scrollToSection = (id: string, ref: React.RefObject<HTMLDivElement | null>) => {
     setActiveSection(id);
@@ -119,16 +249,15 @@ export default function SettingsPage() {
     </button>
   );
 
-  if (loading) {
-    return (
-      <div className="min-h-screen bg-[#FBFBFD] flex items-center justify-center">
-        <div className="w-6 h-6 border-2 border-black/10 border-t-black rounded-full animate-spin" />
-      </div>
-    );
-  }
-
   return (
     <div className="min-h-screen bg-[#FBFBFD] text-[#1D1D1F] font-sans antialiased flex flex-col">
+      <Notification 
+        show={notification.show} 
+        type={notification.type} 
+        title={notification.title} 
+        message={notification.message} 
+        onClose={() => setNotification({ ...notification, show: false })} 
+      />
       {/* Header */}
       <header className="bg-white/80 backdrop-blur-xl border-b border-gray-100 px-6 h-[56px] flex items-center sticky top-0 z-50 transition-all">
         <Link href="/" className="flex items-center space-x-2 text-[14px] font-semibold text-gray-500 hover:text-black transition-colors group">
@@ -182,26 +311,139 @@ export default function SettingsPage() {
               {/* General Group */}
               <div className="space-y-4">
                 <h3 className="text-[11px] font-bold text-gray-400 uppercase tracking-[0.1em] pl-1">General</h3>
-                <div className="bg-gray-50/50 rounded-2xl border border-gray-100 overflow-hidden">
-                  <div className="px-5 py-4 flex items-center justify-between border-b border-gray-100">
-                    <div className="flex items-center space-x-4">
-                      <div className="w-8 h-8 rounded-lg bg-white border border-gray-100 shadow-sm flex items-center justify-center"><Wallet className="w-4 h-4 text-gray-400" /></div>
-                      <div>
-                        <div className="text-[14px] font-bold text-black leading-tight">Portfolio Name</div>
-                        <div className="text-[13px] text-gray-500 font-medium mt-0.5">Main Account</div>
+                <div className="bg-gray-50/50 rounded-2xl border border-gray-100 overflow-hidden transition-all duration-300">
+                  <div className="border-b border-gray-100 bg-white sm:bg-transparent">
+                    <div className="px-5 py-4 flex items-center justify-between">
+                      <div className="flex items-center space-x-4">
+                        <div className="w-8 h-8 rounded-lg bg-white border border-gray-100 shadow-sm flex items-center justify-center"><Wallet className="w-4 h-4 text-gray-400" /></div>
+                        <div>
+                          <div className="text-[14px] font-bold text-black leading-tight">Portfolio Name</div>
+                          <div className="text-[13px] text-gray-500 font-medium mt-0.5">{portfolioName}</div>
+                        </div>
+                      </div>
+                      <button 
+                        onClick={() => {
+                          setIsEditingPortfolioName(!isEditingPortfolioName);
+                          setIsEditingBaseCurrency(false);
+                          setPortfolioError(null);
+                        }}
+                        className={`text-[13px] font-bold px-3 py-1.5 rounded-lg transition-colors shadow-sm active:scale-95 border ${
+                          isEditingPortfolioName 
+                            ? 'bg-gray-100 border-gray-200 text-gray-700' 
+                            : 'bg-white border-gray-100 text-black hover:bg-gray-100'
+                        }`}
+                      >
+                        {isEditingPortfolioName ? 'Cancel' : 'Edit'}
+                      </button>
+                    </div>
+                    {/* Expandable Portfolio Name Editor */}
+                    <div className={`grid transition-all duration-300 ease-in-out ${isEditingPortfolioName ? 'grid-rows-[1fr] opacity-100' : 'grid-rows-[0fr] opacity-0'}`}>
+                      <div className="overflow-hidden">
+                        <div className="p-5 bg-white border-t border-gray-100/60 space-y-4">
+                          <form onSubmit={(e) => handleUpdatePortfolio(e, 'name')} className="space-y-4">
+                            <div>
+                              <label className="block text-[11px] font-bold text-gray-400 uppercase tracking-wider mb-2">Portfolio Name</label>
+                              <input 
+                                type="text" 
+                                required
+                                value={portfolioName}
+                                onChange={(e) => setPortfolioName(e.target.value)}
+                                placeholder="Enter portfolio name"
+                                className="w-full px-4 py-2.5 bg-gray-50/50 rounded-xl text-[14px] text-black font-medium border border-gray-200 focus:border-black focus:ring-1 focus:ring-black outline-none transition-all placeholder:text-gray-400"
+                              />
+                            </div>
+                            <button 
+                              type="submit"
+                              disabled={portfolioActionLoading || !portfolioName.trim()}
+                              className="w-full bg-black text-white text-[13px] font-bold py-2.5 rounded-xl hover:bg-gray-800 transition-colors active:scale-[0.98] disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2 shadow-sm"
+                            >
+                              {portfolioActionLoading && isEditingPortfolioName && <Loader2 className="w-4 h-4 animate-spin" />}
+                              {portfolioActionLoading && isEditingPortfolioName ? 'Updating...' : 'Save Name'}
+                            </button>
+                          </form>
+                        </div>
                       </div>
                     </div>
-                    <button className="text-[13px] font-bold text-black border border-gray-100 bg-white hover:bg-gray-100 px-3 py-1.5 rounded-lg transition-colors shadow-sm active:scale-95">Edit</button>
                   </div>
-                  <div className="px-5 py-4 flex items-center justify-between">
-                    <div className="flex items-center space-x-4">
-                      <div className="w-8 h-8 rounded-lg bg-white border border-gray-100 shadow-sm flex items-center justify-center"><Globe className="w-4 h-4 text-gray-400" /></div>
-                      <div>
-                        <div className="text-[14px] font-bold text-black leading-tight">Base Currency</div>
-                        <div className="text-[13px] text-gray-500 font-medium mt-0.5">USD ($)</div>
+
+                  <div className="bg-white sm:bg-transparent">
+                    <div className="px-5 py-4 flex items-center justify-between">
+                      <div className="flex items-center space-x-4">
+                        <div className="w-8 h-8 rounded-lg bg-white border border-gray-100 shadow-sm flex items-center justify-center"><Globe className="w-4 h-4 text-gray-400" /></div>
+                        <div>
+                          <div className="text-[14px] font-bold text-black leading-tight">Base Currency</div>
+                          <div className="text-[13px] text-gray-500 font-medium mt-0.5">{baseCurrency}</div>
+                        </div>
+                      </div>
+                      <button 
+                        onClick={() => {
+                          setIsEditingBaseCurrency(!isEditingBaseCurrency);
+                          setIsEditingPortfolioName(false);
+                          setPortfolioError(null);
+                        }}
+                        className={`text-[13px] font-bold px-3 py-1.5 rounded-lg transition-colors shadow-sm active:scale-95 border ${
+                          isEditingBaseCurrency 
+                            ? 'bg-gray-100 border-gray-200 text-gray-700' 
+                            : 'bg-white border-gray-100 text-black hover:bg-gray-100'
+                        }`}
+                      >
+                        {isEditingBaseCurrency ? 'Cancel' : 'Change'}
+                      </button>
+                    </div>
+                    {/* Expandable Base Currency Editor */}
+                    <div className={`grid transition-all duration-300 ease-in-out ${isEditingBaseCurrency ? 'grid-rows-[1fr] opacity-100' : 'grid-rows-[0fr] opacity-0'}`}>
+                      <div className="overflow-hidden">
+                        <div className="p-5 bg-white border-t border-gray-100/60 space-y-4">
+                          <form onSubmit={(e) => handleUpdatePortfolio(e, 'currency')} className="space-y-4">
+                            <div>
+                              <label className="block text-[11px] font-bold text-gray-400 uppercase tracking-wider mb-3">Select Currency</label>
+                              <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+                                {[
+                                  { code: 'USD', name: 'US Dollar', symbol: '$' },
+                                  { code: 'EUR', name: 'Euro', symbol: '€' },
+                                  { code: 'GBP', name: 'British Pound', symbol: '£' },
+                                  { code: 'JPY', name: 'Japanese Yen', symbol: '¥' },
+                                  { code: 'CNY', name: 'Chinese Yuan', symbol: '¥' },
+                                  { code: 'HKD', name: 'Hong Kong Dollar', symbol: '$' },
+                                  { code: 'AUD', name: 'Australian Dollar', symbol: '$' },
+                                  { code: 'CAD', name: 'Canadian Dollar', symbol: '$' },
+                                  { code: 'CHF', name: 'Swiss Franc', symbol: 'Fr' },
+                                ].map((currency) => (
+                                  <button
+                                    key={currency.code}
+                                    type="button"
+                                    onClick={() => setBaseCurrency(currency.code)}
+                                    className={`flex items-center justify-between px-4 py-3 rounded-xl border text-[13px] transition-all active:scale-95 ${
+                                      baseCurrency === currency.code
+                                        ? 'border-black bg-black text-white shadow-sm'
+                                        : 'border-gray-200 bg-white text-black hover:border-gray-300 hover:bg-gray-50'
+                                    }`}
+                                  >
+                                    <div className="flex flex-col items-start">
+                                      <span className="font-bold leading-none">{currency.code}</span>
+                                      <span className={`text-[10px] mt-1 font-medium ${baseCurrency === currency.code ? 'text-gray-300' : 'text-gray-400'}`}>
+                                        {currency.name}
+                                      </span>
+                                    </div>
+                                    <span className={`text-[14px] font-medium ${baseCurrency === currency.code ? 'text-gray-300' : 'text-gray-400'}`}>
+                                      {currency.symbol}
+                                    </span>
+                                  </button>
+                                ))}
+                              </div>
+                            </div>
+                            <button 
+                              type="submit"
+                              disabled={portfolioActionLoading}
+                              className="w-full bg-black text-white text-[13px] font-bold py-2.5 rounded-xl hover:bg-gray-800 transition-colors active:scale-[0.98] disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2 shadow-sm mt-4"
+                            >
+                              {portfolioActionLoading && isEditingBaseCurrency && <Loader2 className="w-4 h-4 animate-spin" />}
+                              {portfolioActionLoading && isEditingBaseCurrency ? 'Updating...' : 'Save Currency'}
+                            </button>
+                          </form>
+                        </div>
                       </div>
                     </div>
-                    <button className="text-[13px] font-bold text-black border border-gray-100 bg-white hover:bg-gray-100 px-3 py-1.5 rounded-lg transition-colors shadow-sm active:scale-95">Change</button>
                   </div>
                 </div>
               </div>
@@ -285,90 +527,13 @@ export default function SettingsPage() {
             </div>
           </div>
 
-          {/* SECTION: SECURITY */}
-          {isLoggedIn && (
-            <div id="security" ref={securityRef} className="scroll-mt-32">
-              <div className="mb-6 flex items-center gap-3">
-                <h2 className="text-[20px] font-bold text-black tracking-tight">Security & Privacy</h2>
-              </div>
-              
-              <div className="space-y-6 bg-white rounded-[32px] p-8 shadow-sm border border-gray-100 mb-16">
-                <div className="space-y-4">
-                  <h3 className="text-[11px] font-bold text-gray-400 uppercase tracking-[0.1em] pl-1">Login Credentials</h3>
-                  <div className="bg-gray-50/50 rounded-2xl border border-gray-100 overflow-hidden">
-                    <div className="px-5 py-4 flex items-center justify-between border-b border-gray-100">
-                      <div className="flex items-center space-x-4">
-                        <div className="w-8 h-8 rounded-lg bg-white border border-gray-100 shadow-sm flex items-center justify-center"><Mail className="w-4 h-4 text-gray-400" /></div>
-                        <div>
-                          <div className="text-[14px] font-bold text-black leading-tight">Email Address</div>
-                          <div className="text-[13px] text-gray-500 font-medium mt-0.5">{user?.email}</div>
-                        </div>
-                      </div>
-                      <button className="text-[13px] font-bold text-black border border-gray-100 bg-white hover:bg-gray-100 px-3 py-1.5 rounded-lg transition-colors shadow-sm active:scale-95">Change</button>
-                    </div>
-                    <div className="px-5 py-4 flex items-center justify-between">
-                      <div className="flex items-center space-x-4">
-                        <div className="w-8 h-8 rounded-lg bg-white border border-gray-100 shadow-sm flex items-center justify-center"><Lock className="w-4 h-4 text-gray-400" /></div>
-                        <div>
-                          <div className="text-[14px] font-bold text-black leading-tight">Password</div>
-                          <div className="text-[13px] text-gray-500 font-medium mt-0.5 tracking-widest mt-1">••••••••</div>
-                        </div>
-                      </div>
-                      <button className="text-[13px] font-bold text-black border border-gray-100 bg-white hover:bg-gray-100 px-3 py-1.5 rounded-lg transition-colors shadow-sm active:scale-95">Update</button>
-                    </div>
-                  </div>
-                </div>
-                <div className="space-y-4">
-                  <h3 className="text-[11px] font-bold text-gray-400 uppercase tracking-[0.1em] pl-1">Access Control</h3>
-                  <div className="bg-gray-50/50 rounded-2xl border border-gray-100 overflow-hidden">
-                    <div className="px-5 py-4 flex items-center justify-between border-b border-gray-100">
-                      <div className="flex items-center space-x-4">
-                        <div className="w-8 h-8 rounded-lg bg-white border border-gray-100 shadow-sm flex items-center justify-center"><ShieldCheck className="w-4 h-4 text-gray-400" /></div>
-                        <div>
-                          <div className="text-[14px] font-bold text-black leading-tight">Two-Factor Auth</div>
-                          <div className="text-[13px] text-gray-500 font-medium mt-0.5">Disabled</div>
-                        </div>
-                      </div>
-                      <button className="text-[13px] font-bold text-black border border-gray-100 bg-white hover:bg-gray-100 px-3 py-1.5 rounded-lg transition-colors shadow-sm active:scale-95">Enable</button>
-                    </div>
-                    <div className="px-5 py-4 flex items-center justify-between">
-                      <div className="flex items-center space-x-4">
-                        <div className="w-8 h-8 rounded-lg bg-white border border-gray-100 shadow-sm flex items-center justify-center"><Fingerprint className="w-4 h-4 text-gray-400" /></div>
-                        <div>
-                          <div className="text-[14px] font-bold text-black leading-tight">Passkeys</div>
-                          <div className="text-[12px] text-gray-400 font-medium mt-0.5">FaceID / TouchID</div>
-                        </div>
-                      </div>
-                      <button className="text-[13px] font-bold text-black border border-gray-100 bg-white hover:bg-gray-100 px-3 py-1.5 rounded-lg transition-colors shadow-sm active:scale-95">Setup</button>
-                    </div>
-                  </div>
-                </div>
-                <div className="space-y-4">
-                  <h3 className="text-[11px] font-bold text-gray-400 uppercase tracking-[0.1em] pl-1">API Management</h3>
-                  <div className="bg-gray-50/50 rounded-2xl border border-gray-100 overflow-hidden">
-                    <div className="px-5 py-4 flex items-center justify-between">
-                      <div className="flex items-center space-x-4">
-                        <div className="w-8 h-8 rounded-lg bg-white border border-gray-100 shadow-sm flex items-center justify-center"><Key className="w-4 h-4 text-gray-400" /></div>
-                        <div>
-                          <div className="text-[14px] font-bold text-black leading-tight">Finnhub API Key</div>
-                          <div className="text-[13px] text-gray-500 font-medium mt-0.5 tracking-widest mt-1">••••••••••••</div>
-                        </div>
-                      </div>
-                      <button className="text-[13px] font-bold text-black border border-gray-100 bg-white hover:bg-gray-100 px-3 py-1.5 rounded-lg transition-colors shadow-sm active:scale-95">Manage</button>
-                    </div>
-                  </div>
-                </div>
-              </div>
-            </div>
-          )}
-
           {/* SECTION: NOTIFICATIONS */}
           <div id="notifications" ref={notificationsRef} className="scroll-mt-32">
             <div className="mb-6 flex items-center gap-3">
               <h2 className="text-[20px] font-bold text-black tracking-tight">Notifications</h2>
             </div>
             
-            <div className="space-y-6 bg-white rounded-[32px] p-8 shadow-sm border border-gray-100">
+            <div className="space-y-6 bg-white rounded-[32px] p-8 shadow-sm border border-gray-100 mb-16">
               <div className="space-y-4">
                 <h3 className="text-[11px] font-bold text-gray-400 uppercase tracking-[0.1em] pl-1">Market Alerts</h3>
                 <div className="bg-gray-50/50 rounded-2xl border border-gray-100 overflow-hidden">
@@ -412,38 +577,249 @@ export default function SettingsPage() {
             </div>
           </div>
 
-          {/* SECTION: ACCOUNT */}
-          <div id="account" ref={accountRef} className="scroll-mt-32 mt-16">
+          {/* SECTION: ACCOUNT & SECURITY */}
+          <div id="account" ref={accountRef} className="scroll-mt-32">
             <div className="mb-6">
-              <h2 className="text-[20px] font-bold text-black tracking-tight">Account</h2>
-              <p className="text-[13px] text-gray-400 font-medium mt-1">Manage your account authentication and cloud synchronization.</p>
+              <h2 className="text-[20px] font-bold text-black tracking-tight">{isLoggedIn ? 'Account & Security' : 'Account'}</h2>
+              <p className="text-[13px] text-gray-400 font-medium mt-1">
+                {isLoggedIn 
+                  ? 'Manage your account profile, authentication, and security preferences.' 
+                  : 'Log in or create an account to sync your portfolio.'}
+              </p>
             </div>
             
             <div className="bg-white rounded-[32px] p-8 shadow-sm border border-gray-100">
               {isLoggedIn ? (
-                <div className="space-y-6">
-                  <div className="flex items-center justify-between p-4 bg-gray-50/50 rounded-2xl border border-gray-100">
-                    <div className="flex items-center space-x-4">
-                      <div className="w-12 h-12 rounded-full bg-black text-white flex items-center justify-center font-bold text-lg">
-                        {user?.email?.[0].toUpperCase()}
+                <div className="space-y-8">
+                  {/* Profile Block */}
+                  <div className="space-y-4">
+                    <h3 className="text-[11px] font-bold text-gray-400 uppercase tracking-[0.1em] pl-1">Profile</h3>
+                    <div className="space-y-4">
+                      <div className="flex items-center justify-between p-4 bg-gray-50/50 rounded-2xl border border-gray-100">
+                        <div className="flex items-center space-x-4">
+                          <div className="w-12 h-12 rounded-full bg-black text-white flex items-center justify-center font-bold text-lg">
+                            {user?.email?.[0].toUpperCase()}
+                          </div>
+                          <div>
+                            <div className="text-[15px] font-bold text-black">{user?.email?.split('@')[0]}</div>
+                            <div className="text-[13px] text-gray-500 font-medium">{user?.email}</div>
+                          </div>
+                        </div>
+                        <button 
+                          onClick={handleSignOut}
+                          className="text-[13px] font-bold text-rose-500 border border-rose-100 bg-white hover:bg-rose-50 px-4 py-2 rounded-xl transition-all shadow-sm active:scale-95"
+                        >
+                          Sign Out
+                        </button>
                       </div>
-                      <div>
-                        <div className="text-[15px] font-bold text-black">{user?.email?.split('@')[0]}</div>
-                        <div className="text-[13px] text-gray-500 font-medium">{user?.email}</div>
+                      <div className="p-4 bg-emerald-50/30 rounded-2xl border border-emerald-100 flex items-start space-x-3">
+                        <ShieldCheck className="w-5 h-5 text-emerald-500 mt-0.5" />
+                        <div>
+                          <div className="text-[13px] font-bold text-emerald-700">Account Verified</div>
+                          <div className="text-[12px] text-emerald-600/80 font-medium mt-0.5">Your data is securely synchronized with Supabase Cloud.</div>
+                        </div>
                       </div>
                     </div>
-                    <button 
-                      onClick={handleSignOut}
-                      className="text-[13px] font-bold text-rose-500 border border-rose-100 bg-white hover:bg-rose-50 px-4 py-2 rounded-xl transition-all shadow-sm active:scale-95"
-                    >
-                      Sign Out
-                    </button>
                   </div>
-                  <div className="p-4 bg-emerald-50/30 rounded-2xl border border-emerald-100 flex items-start space-x-3">
-                    <ShieldCheck className="w-5 h-5 text-emerald-500 mt-0.5" />
-                    <div>
-                      <div className="text-[13px] font-bold text-emerald-700">Account Verified</div>
-                      <div className="text-[12px] text-emerald-600/80 font-medium mt-0.5">Your data is being synchronized with Supabase Cloud.</div>
+
+                  {/* Login Credentials */}
+                  <div className="space-y-4">
+                    <h3 className="text-[11px] font-bold text-gray-400 uppercase tracking-[0.1em] pl-1">Login Credentials</h3>
+                    <div className="bg-gray-50/50 rounded-2xl border border-gray-100 overflow-hidden transition-all duration-300">
+                      
+                      {/* Email Row */}
+                      <div className="border-b border-gray-100 bg-white sm:bg-transparent">
+                        <div className="px-5 py-4 flex items-center justify-between">
+                          <div className="flex items-center space-x-4">
+                            <div className="w-8 h-8 rounded-lg bg-white border border-gray-100 shadow-sm flex items-center justify-center"><Mail className="w-4 h-4 text-gray-400" /></div>
+                            <div>
+                              <div className="text-[14px] font-bold text-black leading-tight">Email Address</div>
+                              <div className="text-[13px] text-gray-500 font-medium mt-0.5">{user?.email}</div>
+                            </div>
+                          </div>
+                          <button 
+                            onClick={() => {
+                              setIsEditingEmail(!isEditingEmail);
+                              setIsEditingPassword(false);
+                              setAuthError(null);
+                              setEmailSuccess(false);
+                              setNewEmail('');
+                            }}
+                            className={`text-[13px] font-bold px-3 py-1.5 rounded-lg transition-colors shadow-sm active:scale-95 border ${
+                              isEditingEmail 
+                                ? 'bg-gray-100 border-gray-200 text-gray-700' 
+                                : 'bg-white border-gray-100 text-black hover:bg-gray-100'
+                            }`}
+                          >
+                            {isEditingEmail ? 'Cancel' : 'Change'}
+                          </button>
+                        </div>
+                        
+                        {/* Expandable Email Editor */}
+                        <div className={`grid transition-all duration-300 ease-in-out ${isEditingEmail ? 'grid-rows-[1fr] opacity-100' : 'grid-rows-[0fr] opacity-0'}`}>
+                          <div className="overflow-hidden">
+                            <div className="p-5 bg-white border-t border-gray-100/60 space-y-4">
+                              <form onSubmit={handleUpdateEmail} className="space-y-4">
+                                <div>
+                                  <label className="block text-[11px] font-bold text-gray-400 uppercase tracking-wider mb-2">New Email Address</label>
+                                  <input 
+                                    type="email" 
+                                    required
+                                    value={newEmail}
+                                    onChange={(e) => setNewEmail(e.target.value)}
+                                    placeholder="Enter your new email"
+                                    className="w-full px-4 py-2.5 bg-gray-50/50 rounded-xl text-[14px] text-black font-medium border border-gray-200 focus:border-black focus:ring-1 focus:ring-black outline-none transition-all placeholder:text-gray-400"
+                                  />
+                                </div>
+                                {authError && isEditingEmail && (
+                                  <div className="p-3 bg-rose-50 border border-rose-100 rounded-xl flex items-start gap-3">
+                                    <AlertCircle className="w-4 h-4 text-rose-500 shrink-0 mt-0.5" />
+                                    <p className="text-[13px] text-rose-600 font-medium leading-tight">{authError}</p>
+                                  </div>
+                                )}
+                                <button 
+                                  type="submit"
+                                  disabled={authActionLoading || !newEmail || newEmail === user?.email}
+                                  className="w-full bg-black text-white text-[13px] font-bold py-2.5 rounded-xl hover:bg-gray-800 transition-colors active:scale-[0.98] disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2 shadow-sm"
+                                >
+                                  {authActionLoading && isEditingEmail && <Loader2 className="w-4 h-4 animate-spin" />}
+                                  {authActionLoading && isEditingEmail ? 'Updating...' : 'Update Email'}
+                                </button>
+                              </form>
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* Password Row */}
+                      <div className="bg-white sm:bg-transparent">
+                        <div className="px-5 py-4 flex items-center justify-between">
+                          <div className="flex items-center space-x-4">
+                            <div className="w-8 h-8 rounded-lg bg-white border border-gray-100 shadow-sm flex items-center justify-center"><Lock className="w-4 h-4 text-gray-400" /></div>
+                            <div>
+                              <div className="text-[14px] font-bold text-black leading-tight">Password</div>
+                              <div className="text-[13px] text-gray-500 font-medium mt-0.5 tracking-widest mt-1">••••••••</div>
+                            </div>
+                          </div>
+                          <button 
+                            onClick={() => {
+                              setIsEditingPassword(!isEditingPassword);
+                              setIsEditingEmail(false);
+                              setAuthError(null);
+                              setPasswordSuccess(false);
+                              setNewPassword('');
+                              setConfirmPassword('');
+                            }}
+                            className={`text-[13px] font-bold px-3 py-1.5 rounded-lg transition-colors shadow-sm active:scale-95 border ${
+                              isEditingPassword 
+                                ? 'bg-gray-100 border-gray-200 text-gray-700' 
+                                : 'bg-white border-gray-100 text-black hover:bg-gray-100'
+                            }`}
+                          >
+                            {isEditingPassword ? 'Cancel' : 'Update'}
+                          </button>
+                        </div>
+                        
+                        {/* Expandable Password Editor */}
+                        <div className={`grid transition-all duration-300 ease-in-out ${isEditingPassword ? 'grid-rows-[1fr] opacity-100' : 'grid-rows-[0fr] opacity-0'}`}>
+                          <div className="overflow-hidden">
+                            <div className="p-5 bg-white border-t border-gray-100/60 space-y-4">
+                              <form onSubmit={handleUpdatePassword} className="space-y-4">
+                                <div>
+                                  <label className="block text-[11px] font-bold text-gray-400 uppercase tracking-wider mb-2">New Password</label>
+                                  <div className="relative">
+                                    <input 
+                                      type={showPassword ? "text" : "password"} 
+                                      required
+                                      value={newPassword}
+                                      onChange={(e) => setNewPassword(e.target.value)}
+                                      placeholder="Enter new password"
+                                      className="w-full px-4 py-2.5 bg-gray-50/50 rounded-xl text-[14px] text-black font-medium border border-gray-200 focus:border-black focus:ring-1 focus:ring-black outline-none transition-all placeholder:text-gray-400"
+                                    />
+                                    <button 
+                                      type="button"
+                                      onClick={() => setShowPassword(!showPassword)}
+                                      className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 transition-colors"
+                                    >
+                                      {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                                    </button>
+                                  </div>
+                                </div>
+                                <div>
+                                  <label className="block text-[11px] font-bold text-gray-400 uppercase tracking-wider mb-2">Confirm New Password</label>
+                                  <input 
+                                    type={showPassword ? "text" : "password"} 
+                                    required
+                                    value={confirmPassword}
+                                    onChange={(e) => setConfirmPassword(e.target.value)}
+                                    placeholder="Confirm new password"
+                                    className="w-full px-4 py-2.5 bg-gray-50/50 rounded-xl text-[14px] text-black font-medium border border-gray-200 focus:border-black focus:ring-1 focus:ring-black outline-none transition-all placeholder:text-gray-400"
+                                  />
+                                </div>
+                                {authError && isEditingPassword && (
+                                  <div className="p-3 bg-rose-50 border border-rose-100 rounded-xl flex items-start gap-3">
+                                    <AlertCircle className="w-4 h-4 text-rose-500 shrink-0 mt-0.5" />
+                                    <p className="text-[13px] text-rose-600 font-medium leading-tight">{authError}</p>
+                                  </div>
+                                )}
+                                <button 
+                                  type="submit"
+                                  disabled={authActionLoading || !newPassword || newPassword !== confirmPassword}
+                                  className="w-full bg-black text-white text-[13px] font-bold py-2.5 rounded-xl hover:bg-gray-800 transition-colors active:scale-[0.98] disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2 shadow-sm"
+                                >
+                                  {authActionLoading && isEditingPassword && <Loader2 className="w-4 h-4 animate-spin" />}
+                                  {authActionLoading && isEditingPassword ? 'Updating...' : 'Update Password'}
+                                </button>
+                              </form>
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+
+                    </div>
+                  </div>
+
+                  {/* Access Control */}
+                  <div className="space-y-4">
+                    <h3 className="text-[11px] font-bold text-gray-400 uppercase tracking-[0.1em] pl-1">Access Control</h3>
+                    <div className="bg-gray-50/50 rounded-2xl border border-gray-100 overflow-hidden">
+                      <div className="px-5 py-4 flex items-center justify-between border-b border-gray-100">
+                        <div className="flex items-center space-x-4">
+                          <div className="w-8 h-8 rounded-lg bg-white border border-gray-100 shadow-sm flex items-center justify-center"><ShieldCheck className="w-4 h-4 text-gray-400" /></div>
+                          <div>
+                            <div className="text-[14px] font-bold text-black leading-tight">Two-Factor Auth</div>
+                            <div className="text-[13px] text-gray-500 font-medium mt-0.5">Disabled</div>
+                          </div>
+                        </div>
+                        <button className="text-[13px] font-bold text-black border border-gray-100 bg-white hover:bg-gray-100 px-3 py-1.5 rounded-lg transition-colors shadow-sm active:scale-95">Enable</button>
+                      </div>
+                      <div className="px-5 py-4 flex items-center justify-between">
+                        <div className="flex items-center space-x-4">
+                          <div className="w-8 h-8 rounded-lg bg-white border border-gray-100 shadow-sm flex items-center justify-center"><Fingerprint className="w-4 h-4 text-gray-400" /></div>
+                          <div>
+                            <div className="text-[14px] font-bold text-black leading-tight">Passkeys</div>
+                            <div className="text-[12px] text-gray-400 font-medium mt-0.5">FaceID / TouchID</div>
+                          </div>
+                        </div>
+                        <button className="text-[13px] font-bold text-black border border-gray-100 bg-white hover:bg-gray-100 px-3 py-1.5 rounded-lg transition-colors shadow-sm active:scale-95">Setup</button>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* API Management */}
+                  <div className="space-y-4">
+                    <h3 className="text-[11px] font-bold text-gray-400 uppercase tracking-[0.1em] pl-1">API Management</h3>
+                    <div className="bg-gray-50/50 rounded-2xl border border-gray-100 overflow-hidden">
+                      <div className="px-5 py-4 flex items-center justify-between">
+                        <div className="flex items-center space-x-4">
+                          <div className="w-8 h-8 rounded-lg bg-white border border-gray-100 shadow-sm flex items-center justify-center"><Key className="w-4 h-4 text-gray-400" /></div>
+                          <div>
+                            <div className="text-[14px] font-bold text-black leading-tight">Finnhub API Key</div>
+                            <div className="text-[13px] text-gray-500 font-medium mt-0.5 tracking-widest mt-1">••••••••••••</div>
+                          </div>
+                        </div>
+                        <button className="text-[13px] font-bold text-black border border-gray-100 bg-white hover:bg-gray-100 px-3 py-1.5 rounded-lg transition-colors shadow-sm active:scale-95">Manage</button>
+                      </div>
                     </div>
                   </div>
                 </div>

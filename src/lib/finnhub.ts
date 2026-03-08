@@ -15,10 +15,16 @@ async function fetchFinnhub(endpoint: string, params: Record<string, string> = {
     url.searchParams.append(key, value);
   });
 
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), 4000); // 4秒超时
+
   try {
     const response = await fetch(url.toString(), {
       next: { revalidate: 60 }, // 缓存 60 秒
+      signal: controller.signal
     });
+    
+    clearTimeout(timeoutId);
 
     if (!response.ok) {
       console.warn(`Finnhub API error: ${response.status} ${response.statusText} for ${endpoint}`);
@@ -26,8 +32,9 @@ async function fetchFinnhub(endpoint: string, params: Record<string, string> = {
     }
 
     return await response.json();
-  } catch (error) {
-    console.warn(`Finnhub fetch exception for ${endpoint}:`, error);
+  } catch (error: any) {
+    clearTimeout(timeoutId);
+    console.warn(`Finnhub fetch exception for ${endpoint}:`, error.message || error);
     return null;
   }
 }

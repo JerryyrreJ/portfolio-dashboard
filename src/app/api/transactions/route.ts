@@ -1,7 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { PrismaClient } from '@prisma/client';
 
-const prisma = new PrismaClient();
+import prisma from '@/lib/prisma';
 
 // 创建新交易记录
 export async function POST(request: NextRequest) {

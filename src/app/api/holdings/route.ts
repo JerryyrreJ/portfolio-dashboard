@@ -1,7 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { PrismaClient } from '@prisma/client';
 
-const prisma = new PrismaClient();
+import prisma from '@/lib/prisma';
 
 // 计算投资组合的当前持仓
 export async function GET(request: NextRequest) {
