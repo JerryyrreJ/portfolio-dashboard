@@ -23,6 +23,7 @@ import {
   ArrowDownRight
 } from 'lucide-react';
 import AddTransactionModal from './components/AddTransactionModal';
+import Link from 'next/link';
 
 // --- 辅助格式化组件 ---
 interface FormatValueProps {
@@ -39,7 +40,7 @@ const FormatValue: React.FC<FormatValueProps> = ({ val, isPercentage = false, is
   const displayVal = Math.abs(val).toFixed(2);
   
   return (
-    <span className={`font-semibold ${color} tabular-nums flex items-center gap-0.5`}>
+    <span className={`font-semibold ${color} tabular-nums flex items-center justify-end gap-0.5`}>
       {isPositive ? <ArrowUpRight className="w-3 h-3" /> : <ArrowDownRight className="w-3 h-3" />}
       {prefix}{displayVal}{isPercentage ? '%' : ''}
     </span>
@@ -54,8 +55,9 @@ interface Asset {
   value: number;
   capGain: number;
   return: number;
+  market: string;
+  logo?: string;
 }
-
 interface HoldingsGroup {
   market: string;
   holdings: Asset[];
@@ -144,10 +146,16 @@ export default function DashboardClient({ portfolioId, portfolioName, holdingsDa
               className="bg-gray-100 border-none rounded-lg py-1.5 pl-9 pr-4 text-[13px] w-44 focus:w-60 focus:ring-1 focus:ring-black/5 focus:bg-white transition-all duration-300"
             />
           </div>
-          <div className="flex items-center space-x-2 text-[14px] font-semibold cursor-pointer text-gray-500 hover:text-black transition-colors">
-            <div className="w-6 h-6 rounded-full bg-gray-200 flex items-center justify-center text-[11px] text-gray-500">JD</div>
-            <span>Account</span>
-          </div>
+          {/* Account Link - Direct navigation to settings */}
+          <Link 
+            href="/settings"
+            className="flex items-center space-x-2.5 group transition-all"
+          >
+            <div className="w-7 h-7 rounded-full bg-gradient-to-br from-gray-100 to-gray-200 border border-gray-200 flex items-center justify-center text-[10px] font-bold text-gray-600 group-hover:border-gray-400 transition-colors shadow-sm overflow-hidden">
+              JD
+            </div>
+            <span className="text-[13px] font-bold text-gray-500 group-hover:text-black transition-colors hidden sm:block">John Doe</span>
+          </Link>
         </div>
       </header>
 
@@ -262,12 +270,12 @@ export default function DashboardClient({ portfolioId, portfolioName, holdingsDa
                     <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f0f0f0" />
                     <XAxis dataKey="date" axisLine={false} tickLine={false} tick={{ fontSize: 10, fill: '#a1a1aa', fontWeight: 500 }} dy={8} />
                     <YAxis axisLine={false} tickLine={false} tick={{ fontSize: 10, fill: '#a1a1aa', fontWeight: 500 }} width={60} />
-                    <Tooltip 
-                      contentStyle={{ borderRadius: '12px', border: 'none', boxShadow: '0 8px 20px -5px rgb(0 0 0 / 0.1)', backgroundColor: 'rgba(255, 255, 255, 0.95)', backdropFilter: 'blur(8px)', padding: '10px' }} 
+                    <Tooltip
+                      contentStyle={{ borderRadius: '12px', border: 'none', boxShadow: '0 8px 20px -5px rgb(0 0 0 / 0.1)', backgroundColor: 'rgba(255, 255, 255, 0.95)', backdropFilter: 'blur(8px)', padding: '10px' }}
                       itemStyle={{ fontSize: '11px', fontWeight: 'bold', padding: '2px 0' }}
                       labelStyle={{ marginBottom: '4px', color: '#888', fontSize: '10px', fontWeight: '600' }}
-                    />
-                    {Array.from(new Set(holdingsData.map(g => g.market))).map((market) => {
+                      formatter={(value: number) => [`$${value.toFixed(2)}`, undefined]}
+                    />                    {Array.from(new Set(holdingsData.map(g => g.market))).map((market) => {
                       const color = MARKET_COLORS[market] || MARKET_COLORS['Other'];
                       return (
                         <Area 
@@ -336,8 +344,13 @@ export default function DashboardClient({ portfolioId, portfolioName, holdingsDa
                       >
                         <td className="px-6 py-3">
                           <div className="flex items-center space-x-3">
-                            <div className="w-8 h-8 rounded-lg bg-gray-100 flex items-center justify-center font-bold text-[11px] text-gray-900 border border-gray-100 shadow-sm">
-                              {asset.ticker.charAt(0)}
+                            <div className="w-8 h-8 rounded-full bg-white flex items-center justify-center font-bold text-[11px] text-gray-900 border border-gray-100 shadow-sm overflow-hidden">
+                              {asset.logo ? (
+                                // eslint-disable-next-line @next/next/no-img-element
+                                <img src={asset.logo} alt={asset.ticker} className="w-full h-full object-cover" />
+                              ) : (
+                                asset.ticker.charAt(0)
+                              )}
                             </div>
                             <div>
                               <div className="font-bold text-black text-[14px] leading-tight group-hover:underline underline-offset-2">{asset.ticker}</div>

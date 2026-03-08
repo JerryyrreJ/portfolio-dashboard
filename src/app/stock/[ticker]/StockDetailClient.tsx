@@ -279,10 +279,10 @@ export default function StockDetailClient({ stockData }: { stockData: StockData 
         {/* Header: Logo, Name, Price & Actions */}
         <div className="flex flex-col lg:flex-row lg:items-end justify-between mb-8 gap-6">
           <div className="flex items-center gap-5">
-            <div className="w-16 h-16 rounded-[18px] bg-white border border-gray-100 shadow-sm flex items-center justify-center overflow-hidden flex-shrink-0">
+            <div className="w-16 h-16 rounded-full bg-white border border-gray-100 shadow-sm flex items-center justify-center overflow-hidden flex-shrink-0">
               {profile?.logo ? (
                 // eslint-disable-next-line @next/next/no-img-element
-                <img src={profile.logo} alt={ticker} className="w-10 h-10 object-contain" />
+                <img src={profile.logo} alt={ticker} className="w-full h-full object-cover" />
               ) : (
                 <span className="text-2xl font-bold text-gray-800">{ticker.charAt(0)}</span>
               )}
@@ -330,34 +330,76 @@ export default function StockDetailClient({ stockData }: { stockData: StockData 
           <div className="col-span-12 lg:col-span-9 space-y-6">
             
             {/* Chart Section */}
-            <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-6">
-              <div className="flex justify-between items-center mb-6">
-                <h3 className="text-[15px] font-bold text-black tracking-tight uppercase tracking-widest">Price History</h3>
-                <div className="flex bg-gray-50 rounded-lg p-0.5 border border-gray-100">
-                  {TIME_RANGES.map((r) => (
-                    <button key={r} onClick={() => setTimeRange(r)} className={`px-3 py-1 text-[11px] font-bold rounded-md transition-all ${timeRange === r ? 'bg-white text-black shadow-sm' : 'text-gray-400 hover:text-black'}`}>
-                      {r}
-                    </button>
-                  ))}
+            <div className="bg-white rounded-[32px] border border-gray-100 shadow-sm p-8 pb-4 relative overflow-hidden group/chart">
+              <div className="flex justify-between items-center mb-10">
+                <div>
+                  <h3 className="text-[16px] font-bold text-black tracking-tight flex items-center gap-2">
+                    Performance
+                    <span className="text-[10px] font-bold text-gray-400 px-2 py-0.5 bg-gray-50 rounded-full border border-gray-100 uppercase tracking-widest">12 Months</span>
+                  </h3>
                 </div>
               </div>
-              <div className="h-[280px] relative">
-                {isChartLoading && <div className="absolute inset-0 flex items-center justify-center bg-white/50 backdrop-blur-sm z-10 rounded-xl"><RefreshCw className="w-6 h-6 animate-spin text-gray-300" /></div>}
+              
+              <div className="h-[340px] w-full -ml-6 relative">
+                {isChartLoading && (
+                  <div className="absolute inset-0 flex items-center justify-center bg-white/40 backdrop-blur-[2px] z-20 transition-all duration-500">
+                    <div className="flex flex-col items-center gap-3">
+                      <RefreshCw className="w-6 h-6 animate-spin text-black/20" />
+                      <span className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">Updating Market Data</span>
+                    </div>
+                  </div>
+                )}
                 <ResponsiveContainer width="100%" height="100%">
-                  <AreaChart data={chartData} margin={{ top: 5, right: 0, left: -25, bottom: 0 }}>
+                  <AreaChart data={chartData} margin={{ top: 10, right: 10, left: 0, bottom: 0 }}>
                     <defs>
                       <linearGradient id="colorPrice" x1="0" y1="0" x2="0" y2="1">
-                        <stop offset="5%" stopColor={isUp ? '#34C759' : '#FF3B30'} stopOpacity={0.1}/>
-                        <stop offset="95%" stopColor={isUp ? '#34C759' : '#FF3B30'} stopOpacity={0}/>
+                        <stop offset="5%" stopColor={isUp ? '#10b981' : '#f43f5e'} stopOpacity={0.12}/>
+                        <stop offset="95%" stopColor={isUp ? '#10b981' : '#f43f5e'} stopOpacity={0}/>
                       </linearGradient>
                     </defs>
-                    <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f5f5f5" />
-                    <XAxis dataKey="date" axisLine={false} tickLine={false} tick={{ fontSize: 10, fill: '#a1a1aa', fontWeight: 600 }} dy={8} />
-                    <YAxis axisLine={false} tickLine={false} tick={{ fontSize: 10, fill: '#a1a1aa', fontWeight: 600 }} width={60} domain={[chartMin, chartMax]} />
-                    <Tooltip content={<ChartTooltip />} cursor={{ stroke: '#eee', strokeWidth: 1 }} />
-                    <Area type="monotone" dataKey="price" stroke={isUp ? '#34C759' : '#FF3B30'} strokeWidth={2.5} fill="url(#colorPrice)" dot={false} activeDot={{ r: 4, strokeWidth: 0, fill: isUp ? '#34C759' : '#FF3B30' }} />
-                    {avgBuyPrice > 0 && avgBuyPrice >= chartMin && avgBuyPrice <= chartMax && (
-                      <ReferenceLine y={avgBuyPrice} stroke="#000" strokeDasharray="4 4" strokeWidth={1} label={{ value: `AVG $${avgBuyPrice.toFixed(2)}`, fill: '#888', fontSize: 9, fontWeight: 'bold', position: 'insideBottomRight' }} />
+                    <CartesianGrid strokeDasharray="0" vertical={false} stroke="#f8f8f8" strokeWidth={1} />
+                    <XAxis 
+                      dataKey="date" 
+                      axisLine={false} 
+                      tickLine={false} 
+                      tick={{ fontSize: 10, fill: '#94a3b8', fontWeight: 600 }} 
+                      dy={15}
+                      interval="preserveStartEnd"
+                    />
+                    <YAxis 
+                      hide={true}
+                      domain={[chartMin * 0.98, chartMax * 1.02]} 
+                    />
+                    <Tooltip 
+                      content={<ChartTooltip />} 
+                      cursor={{ stroke: '#f1f1f1', strokeWidth: 1.5 }} 
+                    />
+                    <Area 
+                      type="monotone" 
+                      dataKey="price" 
+                      stroke={isUp ? '#10b981' : '#f43f5e'} 
+                      strokeWidth={3} 
+                      fill="url(#colorPrice)" 
+                      dot={false} 
+                      activeDot={{ r: 5, strokeWidth: 0, fill: isUp ? '#10b981' : '#f43f5e' }}
+                      animationDuration={1500}
+                    />
+                    {avgBuyPrice > 0 && avgBuyPrice >= chartMin * 0.9 && avgBuyPrice <= chartMax * 1.1 && (
+                      <ReferenceLine 
+                        y={avgBuyPrice} 
+                        stroke="#000" 
+                        strokeDasharray="6 6" 
+                        strokeWidth={1} 
+                        strokeOpacity={0.15}
+                        label={{ 
+                          value: `AVG $${avgBuyPrice.toFixed(2)}`, 
+                          fill: '#94a3b8', 
+                          fontSize: 9, 
+                          fontWeight: 700, 
+                          position: 'insideBottomRight',
+                          offset: 10
+                        }} 
+                      />
                     )}
                   </AreaChart>
                 </ResponsiveContainer>

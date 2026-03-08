@@ -1,5 +1,6 @@
 import { PrismaClient } from '@prisma/client'
 import DashboardClient from './DashboardClient'
+import { getCompanyProfile } from '@/lib/finnhub'
 
 const prisma = new PrismaClient()
 
@@ -89,22 +90,18 @@ export default async function Page() {
       holdingsMap.set(ticker, {
         asset: t.asset,
         totalQty: 0,
-        totalCost: 0, // 包含了买入价格 * 数量 + 手续费
+        totalCost: 0, 
       })
     }
     const current = holdingsMap.get(ticker);
     
-    // 处理买入和卖出计算
     if (t.type === 'BUY') {
       current.totalQty += t.quantity;
       current.totalCost += (t.price * t.quantity) + t.fee;
     } else if (t.type === 'SELL') {
-      current.totalQty += t.quantity; // 卖出时客户端传来的 quantity 是负数
-      // 简单处理：卖出时按比例扣除成本 (Cost Basis)
       if (current.totalQty > 0) {
-         // 粗略估算平均成本
          const avgCost = current.totalCost / (current.totalQty - t.quantity);
-         current.totalCost += (avgCost * t.quantity); // t.quantity 是负数，所以总成本减少
+         current.totalCost += (avgCost * t.quantity); 
       } else {
          current.totalCost = 0;
       }
@@ -115,17 +112,38 @@ export default async function Page() {
   let totalValue = 0;
   let totalCostBase = 0;
 
-  // 获取所有持仓股票的实时价格
   const uniqueTickers = Array.from(new Set(
     Array.from(holdingsMap.values()).map(h => h.asset.ticker)
   ));
 
   console.log('Fetching real-time prices for:', uniqueTickers);
   const realTimePrices = await fetchBatchQuotes(uniqueTickers);
-  console.log('Received prices:', realTimePrices);
+
+  // 4. 智能 Logo 缓存逻辑
+  const assetsWithLogo = Array.from(holdingsMap.values()).map(h => h.asset);
+  const logoMap: Record<string, string | null> = {};
+  
+  for (const asset of assetsWithLogo) {
+    let currentLogo = asset.logo;
+    if (!currentLogo) {
+      console.log(`Fetching and caching logo for ${asset.ticker}`);
+      try {
+        const profile = await getCompanyProfile(asset.ticker);
+        if (profile?.logo) {
+          await prisma.asset.update({
+            where: { id: asset.id },
+            data: { logo: profile.logo }
+          });
+          currentLogo = profile.logo;
+        }
+      } catch (err) {
+        console.error(`Failed to cache logo for ${asset.ticker}:`, err);
+      }
+    }
+    logoMap[asset.ticker] = currentLogo;
+  }
 
   const calculatedHoldings = Array.from(holdingsMap.values()).map(h => {
-    // 优先使用 Finnhub 实时价格，否则使用降级价格
     const currentPrice = realTimePrices[h.asset.ticker] ?? FALLBACK_PRICES[h.asset.ticker] ?? 0;
     const value = currentPrice * h.totalQty;
     const capGain = value - h.totalCost;
@@ -143,6 +161,7 @@ export default async function Page() {
       value: value,
       capGain: capGain,
       return: returnPct,
+      logo: logoMap[h.asset.ticker], // 使用最新获取的 Logo
     }
   });
 

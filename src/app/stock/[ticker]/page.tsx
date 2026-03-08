@@ -98,28 +98,27 @@ export default async function StockDetailPage(props: PageProps) {
     console.error('Failed to fetch quote:', error)
   }
 
-  // 4. Historical price chart (12 months, cached in DB)
+  // 4. Historical price chart (12 months, persistent in DB)
   let chartData: { date: string; price: number }[] = []
-  const CACHE_EXPIRY_MS = 24 * 60 * 60 * 1000 // 24 hours
 
-  const isCacheValid = asset.historyLastUpdated && 
-    (currentTime - new Date(asset.historyLastUpdated).getTime() < CACHE_EXPIRY_MS) &&
-    asset.priceHistory
-
-  if (isCacheValid) {
+  // 只要数据库里有历史数据，就直接使用，不再重新调用 API
+  if (asset.priceHistory) {
     try {
-      chartData = JSON.parse(asset.priceHistory!)
+      chartData = JSON.parse(asset.priceHistory)
+      console.log(`Using persistent history cache for ${decodedTicker}`);
     } catch (e) {
-      console.error('Failed to parse cached price history:', e)
+      console.error('Failed to parse persistent price history:', e)
     }
   }
 
+  // 只有在数据库里完全没有数据时，才去获取一次
   if (chartData.length === 0) {
     try {
+      console.log(`No history found in DB. Fetching once for ${decodedTicker}`);
       const history = await get12MonthHistory(decodedTicker)
       if (history.length > 0) {
         chartData = history
-        // Update cache in DB
+        // 将历史数据存入数据库，此后将永远从数据库读取
         await prisma.asset.update({
           where: { id: asset.id },
           data: {
@@ -129,44 +128,48 @@ export default async function StockDetailPage(props: PageProps) {
         })
       }
     } catch (error) {
-      console.error('Failed to fetch and cache history:', error)
+      console.error('Failed to fetch and persist history:', error)
     }
   }
 
-  // Final fallback if everything fails
+  // Final fallback: If data is still missing, keep it empty to inform user
   if (chartData.length === 0) {
-    const basePrice = FALLBACK_PRICES[decodedTicker] || currentPrice || 150
-    // Use pseudo-randomness based on ticker string length to satisfy pure render rules
-    const pseudoRandom = (decodedTicker.length % 10) / 100 
-    chartData = Array.from({ length: 12 }, (_, i) => ({
-      date: new Date(currentTime - (12 - i) * 30 * 24 * 60 * 60 * 1000).toLocaleDateString('en-US', { month: 'short', year: 'numeric' }),
-      price: basePrice * (0.95 + pseudoRandom + (i * 0.01))
-    }))
+    console.warn(`No real historical data could be retrieved for ${decodedTicker}`);
+    // Keep chartData as [] to show empty state instead of fake data
   }
 
-  // 5. Company profile
-  let profile = null
+  // 5. Company profile & Logo Caching
+  // Initialize profile with DB data immediately to prevent flickering
+  let profile: any = {
+    name: asset.name,
+    ticker: decodedTicker,
+    exchange: asset.market,
+    logo: asset.logo || '', 
+    finnhubIndustry: 'Technology',
+    country: 'US',
+    currency: 'USD',
+    weburl: '',
+    ipo: '2000-01-01',
+    marketCapitalization: 1000000
+  };
+
   try {
     const p = await getCompanyProfile(decodedTicker)
     if (p && p.name) {
-      profile = p
-    } else {
-      // Fallback profile
-      profile = {
-        name: asset.name,
-        ticker: decodedTicker,
-        exchange: asset.market,
-        logo: '',
-        finnhubIndustry: 'Technology',
-        country: 'US',
-        currency: 'USD',
-        weburl: '',
-        ipo: '2000-01-01',
-        marketCapitalization: 1000000
+      // Merge Finnhub data into our profile, but keep our logo if it's already there
+      profile = { ...profile, ...p };
+      
+      // Update logo cache if it's missing or different
+      if (p.logo && p.logo !== asset.logo) {
+        await prisma.asset.update({
+          where: { id: asset.id },
+          data: { logo: p.logo }
+        }).catch(err => console.error("Failed to update logo cache:", err));
       }
     }
   } catch (error) {
-    console.error('Failed to fetch company profile:', error)
+    console.error('Failed to fetch company profile from Finnhub:', error)
+    // Profile is already initialized with DB/Fallback data, so we're safe
   }
 
   // 6. Key financial metrics
