@@ -21,7 +21,8 @@ import {
   ChevronRight,
   Wallet,
   ArrowUpRight,
-  ArrowDownRight
+  ArrowDownRight,
+  User
 } from 'lucide-react';
 import AddTransactionModal from './components/AddTransactionModal';
 import Link from 'next/link';
@@ -90,7 +91,6 @@ export default function DashboardClient({ portfolioId, portfolioName, holdingsDa
   const router = useRouter();
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isRefreshing, setIsRefreshing] = useState(false);
-  const [isLoggedIn, setIsLoggedIn] = useState(false);
 
   // 图表时间范围状态
   const [chartTimeRange, setChartTimeRange] = useState<'1M' | '3M' | '6M' | '1Y' | 'All'>('All');
@@ -212,31 +212,15 @@ export default function DashboardClient({ portfolioId, portfolioName, holdingsDa
   return (
     <div className="min-h-screen bg-[#FBFBFD] text-[#1D1D1F] font-sans antialiased">
       
-      {/* Optional Top utility banner for local storage */}
-      {!isLoggedIn && (
-        <div className="bg-gray-100/80 backdrop-blur text-center py-2 border-b border-gray-200">
-          <p className="text-[12px] font-medium text-gray-500">
-            Your data is saved locally.{' '}
-            <button 
-              onClick={() => setIsLoggedIn(true)} 
-              className="text-black font-semibold hover:underline"
-            >
-              Sign in
-            </button>{' '}
-            to back up and sync across devices.
-          </p>
-        </div>
-      )}
-
       {/* 顶部导航栏 - 更舒适的高度和字体 */}
       <header className="bg-white/70 backdrop-blur-xl border-b border-gray-100 px-6 h-[56px] flex items-center justify-between sticky top-0 z-50">
         <div className="flex items-center space-x-8">
-          <div className="flex items-center space-x-2 text-black font-bold text-[17px] tracking-tight">
-            <div className="bg-black text-white p-1 rounded-md">
-              <TrendingUp className="w-4 h-4" />
+            <div className="flex items-center space-x-2 text-black font-bold text-[17px] tracking-tight">
+              <div className="bg-black text-white p-1 rounded-md">
+                <TrendingUp className="w-4 h-4" />
+              </div>
+              <span>Folio</span>
             </div>
-            <span>PortfolioUI</span>
-          </div>
           <nav className="hidden md:flex space-x-7 text-[14px] font-semibold text-gray-400">
             <a href="/" className="text-black border-b-2 border-black py-[16px]">Investments</a>
             <a href="/transactions" className="hover:text-black transition-colors py-[16px]">Transactions</a>
@@ -253,24 +237,15 @@ export default function DashboardClient({ portfolioId, portfolioName, holdingsDa
             />
           </div>
           {/* Account Link - Direct navigation to settings */}
-          {isLoggedIn ? (
-            <Link 
-              href="/settings"
-              className="flex items-center space-x-2.5 group transition-all"
-            >
-              <div className="w-7 h-7 rounded-full bg-gradient-to-br from-gray-100 to-gray-200 border border-gray-200 flex items-center justify-center text-[10px] font-bold text-gray-600 group-hover:border-gray-400 transition-colors shadow-sm overflow-hidden">
-                JD
-              </div>
-              <span className="text-[13px] font-bold text-gray-500 group-hover:text-black transition-colors hidden sm:block">John Doe</span>
-            </Link>
-          ) : (
-            <button 
-              onClick={() => setIsLoggedIn(true)}
-              className="text-sm font-medium text-gray-500 hover:text-black transition-colors"
-            >
-              Sign in
-            </button>
-          )}
+          <Link 
+            href="/settings"
+            className="flex items-center space-x-2.5 group transition-all"
+          >
+            <div className="w-7 h-7 rounded-full bg-gray-100 border border-gray-200 flex items-center justify-center text-gray-500 group-hover:border-gray-400 group-hover:text-black transition-colors shadow-sm overflow-hidden">
+              <User className="w-4 h-4" />
+            </div>
+            <span className="text-[13px] font-bold text-gray-500 group-hover:text-black transition-colors hidden sm:block">Account</span>
+          </Link>
         </div>
       </header>
 
