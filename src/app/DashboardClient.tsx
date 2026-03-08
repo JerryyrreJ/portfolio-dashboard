@@ -104,9 +104,8 @@ export default function DashboardClient({ portfolioId, portfolioName, holdingsDa
 
   // 初始化和监听本地数据
   useEffect(() => {
-    // 简单判断是否是本地模拟用户
+    // 非本地模式（已登录），无需加载 localStorage
     if (portfolioId !== 'local-portfolio') {
-      setIsLoggedIn(true);
       return;
     }
 

@@ -110,13 +110,32 @@ export default function AddTransactionModal({
     setShowSearchResults(false);
 
     setIsFetchingPrice(true);
-    const quote = await getQuote(stock.symbol);
-    if (quote && quote.c > 0) {
-      setPrice(quote.c.toFixed(2));
-      setPriceSource('api');
+    const today = new Date().toISOString().split('T')[0];
+
+    if (purchaseDate && purchaseDate !== today) {
+      // 用户已选历史日期，取当日收盘价
+      const historical = await getHistoricalPrice(stock.symbol, purchaseDate);
+      if (historical && historical.price > 0) {
+        setPrice(historical.price.toFixed(2));
+        setPriceSource('api');
+      } else {
+        // 历史价格不可用（远古数据等），降级到今日价
+        const quote = await getQuote(stock.symbol);
+        if (quote && quote.c > 0) {
+          setPrice(quote.c.toFixed(2));
+          setPriceSource('api');
+        }
+      }
+    } else {
+      // 今天或未选日期，取实时价
+      const quote = await getQuote(stock.symbol);
+      if (quote && quote.c > 0) {
+        setPrice(quote.c.toFixed(2));
+        setPriceSource('api');
+      }
     }
     setIsFetchingPrice(false);
-  }, [getQuote]);
+  }, [purchaseDate, getQuote, getHistoricalPrice]);
 
   const handleDateSelect = useCallback(async (date: Date) => {
     const dateStr = format(date, 'yyyy-MM-dd');

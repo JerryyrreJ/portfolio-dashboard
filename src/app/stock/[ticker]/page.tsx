@@ -2,6 +2,7 @@ import { PrismaClient } from '@prisma/client'
 import { notFound } from 'next/navigation'
 import StockDetailClient from './StockDetailClient'
 import { getQuote, getCandles, getCompanyProfile, getBasicFinancials, get12MonthHistory } from '@/lib/finnhub'
+import { getUser } from '@/lib/supabase-server'
 
 const prisma = new PrismaClient()
 
@@ -25,11 +26,16 @@ export default async function StockDetailPage(props: PageProps) {
   const { ticker } = params
   const decodedTicker = decodeURIComponent(ticker).toUpperCase()
 
-  // 1. Fetch asset + transactions from DB
+  const user = await getUser()
+
+  // 1. Fetch asset + only this user's transactions from DB
   const asset = await prisma.asset.findUnique({
     where: { ticker: decodedTicker },
     include: {
       transactions: {
+        where: user
+          ? { portfolio: { userId: user.id } }
+          : { id: 'none' },
         include: { portfolio: true },
         orderBy: { date: 'desc' },
       },
@@ -185,16 +191,6 @@ export default async function StockDetailPage(props: PageProps) {
         beta: (fin.metric.beta || 0) as number,
         dividendYield: (fin.metric.dividendYieldIndicatedAnnual || 0) as number,
       }
-    } else {
-      // Fallback metrics
-      metrics = {
-        week52High: currentPrice * 1.2,
-        week52Low: currentPrice * 0.8,
-        peRatio: 25.4,
-        eps: 5.2,
-        beta: 1.1,
-        dividendYield: 1.5,
-      }
     }
   } catch (error) {
     console.error('Failed to fetch metrics:', error)
@@ -213,8 +209,8 @@ export default async function StockDetailPage(props: PageProps) {
   if (asset.transactions.length > 0) {
     defaultPortfolioId = asset.transactions[0].portfolioId
     defaultPortfolioName = asset.transactions[0].portfolio.name
-  } else {
-    const portfolio = await prisma.portfolio.findFirst()
+  } else if (user) {
+    const portfolio = await prisma.portfolio.findFirst({ where: { userId: user.id } })
     if (portfolio) {
       defaultPortfolioId = portfolio.id
       defaultPortfolioName = portfolio.name

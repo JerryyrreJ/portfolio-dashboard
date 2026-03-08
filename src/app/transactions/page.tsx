@@ -1,11 +1,12 @@
 import { PrismaClient } from '@prisma/client';
 import { format } from 'date-fns';
 import Link from 'next/link';
-import { 
-  ArrowLeft, Filter, Download, TrendingUp, TrendingDown, 
+import {
+  ArrowLeft, Filter, Download, TrendingUp, TrendingDown,
   Search, ChevronRight, Home, MoreHorizontal, Trash2, Edit2
 } from 'lucide-react';
 import { getCompanyProfile } from '@/lib/finnhub';
+import { getUser } from '@/lib/supabase-server';
 
 const prisma = new PrismaClient();
 
@@ -69,9 +70,10 @@ async function getTransactions(
   return { transactions: transactions as TransactionWithAsset[], total };
 }
 
-async function getPortfolios() {
+async function getPortfolios(userId: string) {
   try {
     return await prisma.portfolio.findMany({
+      where: { userId },
       select: { id: true, name: true },
       orderBy: { id: 'asc' },
     });
@@ -97,17 +99,15 @@ function formatNumber(num: number, decimals: number = 4): string {
   });
 }
 
-import { cookies } from 'next/headers';
-
 export default async function TransactionsPage(props: {
   searchParams: Promise<{ [key: string]: string | undefined }>;
 }) {
-  const cookieStore = await cookies();
-  const isLoggedIn = cookieStore.get('isLoggedIn')?.value === 'true';
+  const user = await getUser();
+  const isLoggedIn = !!user;
 
   const searchParams = await props.searchParams;
-  const portfolios = await getPortfolios();
-  const defaultPortfolioId = portfolios[0]?.id || '1';
+  const portfolios = isLoggedIn ? await getPortfolios(user!.id) : [];
+  const defaultPortfolioId = portfolios[0]?.id || '';
   const portfolioName = portfolios[0]?.name || 'Portfolio';
 
   // 如果未登录，直接返回空数据，不查 DB
@@ -265,7 +265,8 @@ export default async function TransactionsPage(props: {
                 transactions.map((transaction) => {
                   const logo = transaction.asset.logo;
                   return (
-                    <tr key={transaction.id} className="hover:bg-gray-50/80 transition-all group">                      <td className="px-6 py-4 whitespace-nowrap">
+                    <tr key={transaction.id} className="hover:bg-gray-50/80 transition-all group">
+                      <td className="px-6 py-4 whitespace-nowrap">
                         <div className="text-[13px] font-semibold text-black leading-tight">
                           {format(new Date(transaction.date), 'MMM dd, yyyy')}
                         </div>

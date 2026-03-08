@@ -426,31 +426,28 @@ export default function StockDetailClient({ stockData }: { stockData: StockData 
                     <div className="grid grid-cols-2 gap-x-12 gap-y-2">
                       <div className="space-y-1">
                         <h4 className="text-[11px] font-bold text-gray-400 uppercase tracking-widest mb-4">Market Metrics</h4>
-                        <StatRow label="Open" value={`$${dayOpen.toFixed(2)}`} />
-                        <StatRow label="Prev Close" value={`$${prevClose.toFixed(2)}`} />
-                        <StatRow label="Day Range" value={`$${dayLow.toFixed(2)} – $${dayHigh.toFixed(2)}`} />
-                        {metrics && <StatRow label="52W Range" value={`$${metrics.week52Low.toFixed(2)} – $${metrics.week52High.toFixed(2)}`} />}
+                        <StatRow label="Open" value={dayOpen > 0 ? `$${dayOpen.toFixed(2)}` : '--'} />
+                        <StatRow label="Prev Close" value={prevClose > 0 ? `$${prevClose.toFixed(2)}` : '--'} />
+                        <StatRow label="Day Range" value={dayLow > 0 && dayHigh > 0 ? `$${dayLow.toFixed(2)} – $${dayHigh.toFixed(2)}` : '--'} />
+                        <StatRow label="52W Range" value={metrics && metrics.week52Low > 0 && metrics.week52High > 0 ? `$${metrics.week52Low.toFixed(2)} – $${metrics.week52High.toFixed(2)}` : '--'} />
                       </div>
                       <div className="space-y-1">
                         <h4 className="text-[11px] font-bold text-gray-400 uppercase tracking-widest mb-4">Key Statistics</h4>
-                        {metrics && (
-                          <>
-                            <StatRow label="P/E Ratio" value={metrics.peRatio.toFixed(2)} />
-                            <StatRow label="Dividend Yield" value={`${metrics.dividendYield.toFixed(2)}%`} />
-                            <StatRow label="Beta" value={metrics.beta.toFixed(2)} />
-                            {profile?.marketCapitalization && <StatRow label="Market Cap" value={`$${(profile.marketCapitalization / 1000).toFixed(2)}B`} />}
-                          </>
-                        )}
+                        <StatRow label="P/E Ratio" value={metrics && metrics.peRatio > 0 ? metrics.peRatio.toFixed(2) : '--'} />
+                        <StatRow label="EPS (TTM)" value={metrics && metrics.eps !== 0 ? metrics.eps.toFixed(2) : '--'} />
+                        <StatRow label="Dividend Yield" value={metrics && metrics.dividendYield > 0 ? `${metrics.dividendYield.toFixed(2)}%` : '--'} />
+                        <StatRow label="Beta" value={metrics && metrics.beta > 0 ? metrics.beta.toFixed(2) : '--'} />
+                        <StatRow label="Market Cap" value={profile?.marketCapitalization && profile.marketCapitalization > 0 ? `$${(profile.marketCapitalization / 1000).toFixed(2)}B` : '--'} />
                       </div>
                     </div>
                     {profile && (
                       <div className="mt-8 pt-6 border-t border-gray-50">
                         <h4 className="text-[11px] font-bold text-gray-400 uppercase tracking-widest mb-4">Company Profile</h4>
                         <div className="grid grid-cols-2 gap-x-12 gap-y-2">
-                          <StatRow label="Industry" value={profile.finnhubIndustry} />
-                          <StatRow label="Exchange" value={profile.exchange} />
-                          <StatRow label="Country" value={profile.country} />
-                          <StatRow label="IPO Date" value={profile.ipo} />
+                          <StatRow label="Industry" value={profile.finnhubIndustry || '--'} />
+                          <StatRow label="Exchange" value={profile.exchange || '--'} />
+                          <StatRow label="Country" value={profile.country || '--'} />
+                          <StatRow label="IPO Date" value={profile.ipo || '--'} />
                         </div>
                         <div className="mt-4 flex items-center gap-4">
                           {profile.weburl && (

@@ -1,6 +1,7 @@
 'use client';
 
 import React, { useState, useEffect, useRef } from 'react';
+import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { 
   ChevronLeft, 
@@ -32,6 +33,7 @@ export default function SettingsPage() {
   const [activeSection, setActiveSection] = useState('portfolio');
   const [user, setUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
+  const router = useRouter();
   
   const supabase = createClient();
 
@@ -446,7 +448,7 @@ export default function SettingsPage() {
                   </div>
                 </div>
               ) : (
-                <AuthPanel onLogin={() => {}} />
+                <AuthPanel onLogin={() => router.push('/')} />
               )}
             </div>
           </div>

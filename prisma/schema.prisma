@@ -10,6 +10,7 @@ datasource db {
 
 model Portfolio {
   id          String   @id @default(cuid())
+  userId      String?
   name        String
   currency    String   @default("USD")
   createdAt   DateTime @default(now())
