@@ -117,7 +117,7 @@ export async function getPriceOnDate(
 
   try {
     const candle = await getCandles(symbol, from, to, 'D');
-    if (candle.s === 'ok' && candle.c.length > 0) {
+    if (candle && candle.s === 'ok' && candle.c.length > 0) {
       return candle.c[0]; // 返回收盘价
     }
   } catch (error) {
@@ -137,7 +137,7 @@ export async function get12MonthHistory(symbol: string): Promise<{date: string, 
   try {
     // 获取过去一年的周线数据，因为月线 M 在免费版可能受限或数据稀疏，周线更容易获取
     const candle = await getCandles(symbol, from, to, 'W');
-    if (candle.s !== 'ok' || !candle.c || candle.c.length === 0) {
+    if (!candle || candle.s !== 'ok' || !candle.c || candle.c.length === 0) {
       return [];
     }
 

@@ -101,15 +101,26 @@ export default async function TransactionsPage(props: {
 
   const { transactions, total } = await getTransactions(defaultPortfolioId, searchParams);
 
-  // 批量获取 Logo
-  const uniqueTickers = Array.from(new Set(transactions.map(t => t.asset.ticker)));
-  const profiles = await Promise.all(
-    uniqueTickers.map(async (ticker) => {
-      const p = await getCompanyProfile(ticker);
-      return { ticker, logo: p?.logo };
-    })
-  );
-  const logoMap = Object.fromEntries(profiles.map(p => [p.ticker, p.logo]));
+  // 4. 智能 Logo 缓存逻辑 (交易页面)
+  const uniqueAssets = Array.from(new Map(transactions.map(t => [t.asset.ticker, t.asset])).values());
+  
+  for (const asset of uniqueAssets) {
+    if (!asset.logo) {
+      console.log(`Fetching and caching logo for ${asset.ticker} (Transactions Page)`);
+      try {
+        const profile = await getCompanyProfile(asset.ticker);
+        if (profile?.logo) {
+          await prisma.asset.update({
+            where: { id: asset.id },
+            data: { logo: profile.logo }
+          });
+          asset.logo = profile.logo;
+        }
+      } catch (err) {
+        console.error(`Failed to cache logo for ${asset.ticker}:`, err);
+      }
+    }
+  }
 
   const currentPage = parseInt(searchParams.page || '1');
   const limit = parseInt(searchParams.limit || '20');
@@ -229,10 +240,9 @@ export default async function TransactionsPage(props: {
                 </tr>
               ) : (
                 transactions.map((transaction) => {
-                  const logo = logoMap[transaction.asset.ticker];
+                  const logo = transaction.asset.logo;
                   return (
-                    <tr key={transaction.id} className="hover:bg-gray-50/80 transition-all group">
-                      <td className="px-6 py-4 whitespace-nowrap">
+                    <tr key={transaction.id} className="hover:bg-gray-50/80 transition-all group">                      <td className="px-6 py-4 whitespace-nowrap">
                         <div className="text-[13px] font-semibold text-black leading-tight">
                           {format(new Date(transaction.date), 'MMM dd, yyyy')}
                         </div>
@@ -242,10 +252,10 @@ export default async function TransactionsPage(props: {
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap">
                         <Link href={`/stock/${transaction.asset.ticker}`} className="flex items-center gap-3">
-                          <div className="w-9 h-9 rounded-xl bg-white border border-gray-100 shadow-sm flex items-center justify-center overflow-hidden">
+                          <div className="w-9 h-9 rounded-full bg-white border border-gray-100 shadow-sm flex items-center justify-center overflow-hidden">
                             {logo ? (
                               // eslint-disable-next-line @next/next/no-img-element
-                              <img src={logo} alt={transaction.asset.ticker} className="w-6 h-6 object-contain" />
+                              <img src={logo} alt={transaction.asset.ticker} className="w-full h-full object-cover" />
                             ) : (
                               <span className="text-[11px] font-bold text-gray-800">{transaction.asset.ticker.charAt(0)}</span>
                             )}

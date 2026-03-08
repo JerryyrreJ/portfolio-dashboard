@@ -1,154 +1,57 @@
 # Gemini Project Context: Portfolio Dashboard
 
-## Project Overview
+## 🎨 Design Philosophy & UI Principles
+This project adheres to a strict "Restrained Minimalism" aesthetic, heavily inspired by modern Apple design (macOS & iOS). Every AI assistant MUST follow these core principles when modifying the UI:
 
-A Next.js-based stock portfolio management dashboard with real-time stock price tracking, position analysis, and transaction management.
+### 1. Visual Hierarchy & Spacing
+- **Generous White Space**: Use large gaps (`gap-10`, `gap-12`, `py-10`) to create a sense of premium quality and focus.
+- **Physical Centering**: Key content (like the Settings box) should be the absolute physical center of the layout. Navigational elements should sit to the side as "appendages" to the main content, balanced by invisible spacers.
+- **Typography**: Prefer `Inter` or system fonts. Use `tracking-tight` for bold headers and `tabular-nums` for all financial data to ensure alignment.
 
-**Key Technologies:**
-- Next.js 16 (App Router)
-- TypeScript
-- Tailwind CSS
-- SQLite + Prisma ORM
-- Recharts (Charts)
-- Finnhub API (Stock Data)
+### 2. Restraint in Design
+- **Icon Usage**: Avoid unnecessary icons in lists or menus. Text should stand on its own.
+- **Color Palette**: 
+  - Primarily **Black** and **Gray** scale for UI elements.
+  - **Red (`rose-500`)** is reserved EXCLUSIVELY for destructive actions (Logout, Delete, Loss) and branding logos where specified.
+  - **Emerald Green** for positive returns/gains.
+- **Stock Icons**: Use circular containers (`rounded-full`) for company logos. Apply `object-cover` to fill the circle completely, avoiding the "square inside a circle" look.
 
-## Architecture
+### 3. Components & Interaction
+- **Translucency**: Use `backdrop-blur-xl` with semi-transparent backgrounds (`bg-white/70`) for sticky headers and modals to create depth.
+- **Soft Shadows**: Use `shadow-sm` for cards and `shadow-2xl` for deep overlays like dropdowns or modals.
+- **Responsive Logic**: Maintain desktop "Inspector/Modal" styles but ensure layouts are ready for mobile adaptation (vertical stacking or full-screen sheets).
+
+---
+
+## 🏗️ Architecture (System Context)
 
 ### Directory Structure
 ```
 src/
 ├── app/                      # Next.js App Router
 │   ├── api/                 # API Routes
-│   │   ├── assets/         # Asset management APIs (lookup, create)
-│   │   ├── exchange-rates/ # Currency exchange APIs
-│   │   ├── holdings/       # Current holdings calculation APIs
-│   │   ├── stock/          # Finnhub API wrappers (candles, news, quote, search)
-│   │   └── transactions/   # Transaction CRUD APIs
-│   ├── components/         # Reusable components
-│   │   ├── AddTransactionModal.tsx  # Custom Apple-style trade modal
-│   │   └── CurrencySelector.tsx
-│   ├── stock/[ticker]/     # Stock detail page
-│   │   ├── page.tsx        # Server component (data fetching & DB cache)
-│   │   └── StockDetailClient.tsx # Client component (charts & tabs)
-│   ├── transactions/       # Transaction history page
-│   │   └── page.tsx        # History list with Finnhub logos
-│   ├── page.tsx            # Dashboard (Home) Server Component
-│   ├── DashboardClient.tsx # Dashboard Client Component
-│   ├── actions.ts          # Server actions
-│   └── layout.tsx
-├── lib/
-│   └── finnhub.ts          # Finnhub API client (quote, history, news)
-└── hooks/
-    └── useStock.ts         # React hooks for stock data
+│   ├── components/          # UI Components
+│   │   ├── settings/        # Settings specific components
+│   │   └── AddTransactionModal.tsx
+│   ├── stock/[ticker]/      # Stock detail (Server + Client)
+│   ├── settings/            # Dedicated settings layout and pages
+│   ├── transactions/        # Transaction history list
+│   ├── page.tsx             # Home (Dashboard)
+│   └── DashboardClient.tsx  # Main Dashboard logic
+├── lib/                     # Shared utilities (Finnhub client, etc.)
+└── hooks/                   # Custom React hooks
 ```
 
-### Database Schema (Prisma)
+### Important Implementation Details
+- **Data Flow**: Server Components fetch via Prisma -> Props passed to Client Components.
+- **ID Strategy**: All IDs are CUID strings.
+- **Type Safety**: Strictly typed transaction types `"BUY" | "SELL"`.
+- **API Strategy**: Finnhub API calls are centralized in `lib/finnhub.ts` and proxied through server-side routes to protect keys.
 
-```prisma
-model Portfolio {
-  id          String   @id @default(cuid())
-  name        String
-  currency    String   @default("USD")
-  transactions Transaction[]
-}
+---
 
-model Asset {
-  id          String   @id @default(cuid())
-  ticker      String   @unique
-  name        String
-  market      String
-  type        String   @default("STOCK")
-  currency    String   @default("USD")
-  transactions Transaction[]
-}
-
-model Transaction {
-  id          String   @id @default(cuid())
-  portfolioId String
-  assetId     String
-  type        String   // "BUY" | "SELL"
-  date        DateTime
-  quantity    Float
-  price       Float
-  fee         Float    @default(0)
-  portfolio   Portfolio @relation(fields: [portfolioId], references: [id])
-  asset       Asset     @relation(fields: [assetId], references: [id])
-}
-```
-
-## Key Features
-
-### 1. Stock Detail Page (`/stock/[ticker]`)
-- Real-time price display with change indicators
-- Interactive price chart (time range: 1M/3M/6M/1Y/3Y/ALL)
-- Position summary: current value, cost basis, total return, avg buy price
-- Transaction history with delete functionality
-- Uses Finnhub API for real-time and historical data
-
-### 2. Dashboard (`/`)
-- Portfolio overview with market value distribution
-- Holdings grouped by market (NASDAQ/NYSE/OTC)
-- Real-time P&L calculation
-- Interactive area chart showing portfolio value over time
-
-### 3. Transaction Management
-- Add transactions (BUY/SELL) via modal
-- Delete transactions with confirmation
-- Transaction history page with filtering
-- Automatic position recalculation after CRUD operations
-
-## API Endpoints
-
-### Assets
-- `GET /api/assets` - List all assets
-- `POST /api/assets` - Create new asset
-- `GET /api/assets/lookup?ticker=X` - Lookup asset by ticker
-
-### Transactions
-- `GET /api/transactions` - List transactions (optionally filtered by portfolioId)
-- `POST /api/transactions` - Create new transaction
-- `DELETE /api/transactions/[id]` - Delete transaction
-
-## Environment Variables
-
-```env
-DATABASE_URL=file:./prisma/dev.db
-FINNHUB_API_KEY=your_finnhub_api_key
-```
-
-## Important Implementation Details
-
-### Type Safety
-- All IDs are strings (CUID) - not numbers
-- Transaction type is strictly typed as `"BUY" | "SELL"`
-- All API responses are typed
-
-### Data Fetching
-- Server components fetch data directly via Prisma
-- Client components receive data as props
-- Finnhub API is called server-side for real-time prices
-
-### Error Handling
-- API routes return proper error responses
-- UI handles loading and error states
-- Fallback prices used when API fails
-
-### State Management
-- React hooks for local state
-- No global state management (Redux/Zustand) needed
-- Real-time updates via page refresh or server-side revalidation
-
-## Development Commands
-
-```bash
-# Development
-npm run dev
-
-# Build
-npm run build
-
-# Database
-npx prisma migrate dev
-npx prisma db seed
-npx prisma studio
-```
+## 📜 Development Commandments
+- **NEVER** add a global state manager (Redux/Zustand) unless explicitly ordered.
+- **NEVER** use TailwindCSS v4 features if the project is on v3 (and vice versa).
+- **ALWAYS** check for `tabular-nums` when rendering currency or percentages.
+- **ALWAYS** maintain the "Center-aligned White Box" layout for major management interfaces.

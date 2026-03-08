@@ -3,14 +3,15 @@ generator client {
 }
 
 datasource db {
-  provider = "sqlite"
-  url      = env("DATABASE_URL")
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
+  directUrl = env("DIRECT_URL")
 }
 
 model Portfolio {
   id          String   @id @default(cuid())
-  name        String   // e.g., "IBKR Account"
-  currency    String   @default("USD")   // 组合的基础货币（用于显示）
+  name        String
+  currency    String   @default("USD")
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
 
@@ -19,12 +20,13 @@ model Portfolio {
 
 model Asset {
   id          String   @id @default(cuid())
-  ticker      String   @unique // e.g., "AAPL"
-  name        String   // e.g., "Apple Inc."
-  market      String   // e.g., "NASDAQ", "NYSE", "OTC"
-  type        String   @default("STOCK") // e.g., "STOCK", "ETF", "CRYPTO"
+  ticker      String   @unique
+  name        String
+  market      String
+  type        String   @default("STOCK")
   currency    String   @default("USD")
-  priceHistory String? // JSON string: [{date: string, price: number}]
+  logo        String?  // URL to company logo, cached
+  priceHistory String?
   historyLastUpdated DateTime?
   
   transactions Transaction[]
@@ -34,14 +36,14 @@ model Transaction {
   id          String   @id @default(cuid())
   portfolioId String
   assetId     String
-  type        String   // e.g., "BUY", "SELL", "DIVIDEND", "SPLIT"
+  type        String
   date        DateTime
   quantity    Float    @default(0)
-  price       Float    @default(0)       // 交易时的原始价格（交易货币）
-  priceUSD    Float    @default(0)       // 转换为USD的价格（用于统一计算）
-  exchangeRate Float   @default(1)       // 交易时的汇率（相对于USD）
+  price       Float    @default(0)
+  priceUSD    Float    @default(0)
+  exchangeRate Float   @default(1)
   fee         Float    @default(0)
-  currency    String   @default("USD")   // 交易的原始货币
+  currency    String   @default("USD")
 
   portfolio   Portfolio @relation(fields: [portfolioId], references: [id], onDelete: Cascade)
   asset       Asset     @relation(fields: [assetId], references: [id], onDelete: Restrict)
