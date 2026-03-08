@@ -1,6 +1,7 @@
 import { PrismaClient } from '@prisma/client';
 import { format } from 'date-fns';
 import Link from 'next/link';
+import Image from 'next/image';
 import {
   ArrowLeft, Filter, Download, TrendingUp, TrendingDown,
   Search, ChevronRight, Home, MoreHorizontal, Trash2, Edit2
@@ -126,10 +127,10 @@ export default async function TransactionsPage(props: {
 
   // 4. 智能 Logo 缓存逻辑 (交易页面)
   const uniqueAssets = Array.from(new Map(transactions.map(t => [t.asset.ticker, t.asset])).values());
-  
+  const logoMap = new Map<string, string | null>();
+
   for (const asset of uniqueAssets) {
     if (!asset.logo) {
-      console.log(`Fetching and caching logo for ${asset.ticker} (Transactions Page)`);
       try {
         const profile = await getCompanyProfile(asset.ticker);
         if (profile?.logo) {
@@ -137,11 +138,16 @@ export default async function TransactionsPage(props: {
             where: { id: asset.id },
             data: { logo: profile.logo }
           });
-          asset.logo = profile.logo;
+          logoMap.set(asset.ticker, profile.logo);
+        } else {
+          logoMap.set(asset.ticker, null);
         }
       } catch (err) {
         console.error(`Failed to cache logo for ${asset.ticker}:`, err);
+        logoMap.set(asset.ticker, null);
       }
+    } else {
+      logoMap.set(asset.ticker, asset.logo);
     }
   }
 
@@ -263,7 +269,7 @@ export default async function TransactionsPage(props: {
                 </tr>
               ) : (
                 transactions.map((transaction) => {
-                  const logo = transaction.asset.logo;
+                  const logo = logoMap.get(transaction.asset.ticker) ?? null;
                   return (
                     <tr key={transaction.id} className="hover:bg-gray-50/80 transition-all group">
                       <td className="px-6 py-4 whitespace-nowrap">
@@ -276,10 +282,9 @@ export default async function TransactionsPage(props: {
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap">
                         <Link href={`/stock/${transaction.asset.ticker}`} className="flex items-center gap-3">
-                          <div className="w-9 h-9 rounded-full bg-white border border-gray-100 shadow-sm flex items-center justify-center overflow-hidden">
+                          <div className="w-9 h-9 rounded-full bg-gray-100 border border-gray-100 shadow-sm flex items-center justify-center overflow-hidden">
                             {logo ? (
-                              // eslint-disable-next-line @next/next/no-img-element
-                              <img src={logo} alt={transaction.asset.ticker} className="w-full h-full object-cover" />
+                              <Image src={logo} alt={transaction.asset.ticker} width={36} height={36} className="w-full h-full object-cover" />
                             ) : (
                               <span className="text-[11px] font-bold text-gray-800">{transaction.asset.ticker.charAt(0)}</span>
                             )}
