@@ -1,6 +1,7 @@
 import { PrismaClient } from '@prisma/client'
+import { cookies } from 'next/headers'
 import DashboardClient from './DashboardClient'
-import { getCompanyProfile } from '@/lib/finnhub'
+import { getCompanyProfile, get12MonthHistory } from '@/lib/finnhub'
 
 const prisma = new PrismaClient()
 
@@ -66,6 +67,22 @@ async function fetchBatchQuotes(symbols: string[]): Promise<Record<string, numbe
 }
 
 export default async function Page() {
+  const cookieStore = await cookies();
+  const isLoggedIn = cookieStore.get('isLoggedIn')?.value === 'true';
+
+  // 如果未登录，直接返回空状态给客户端组件，完全不查 DB
+  if (!isLoggedIn) {
+    return (
+      <DashboardClient
+        portfolioId="local-portfolio"
+        portfolioName="My Portfolio"
+        holdingsData={[]}
+        chartData={[]}
+        summary={{ totalValue: 0, totalCapGain: 0, totalCapGainPercentage: 0 }}
+      />
+    );
+  }
+
   // 1. 从数据库读取你第一个 Investment Portfolio
   const portfolio = await prisma.portfolio.findFirst({
     include: {
@@ -176,20 +193,92 @@ export default async function Page() {
   const totalCapGainPercentage = totalCostBase > 0 ? (totalCapGain / totalCostBase) * 100 : 0;
 
   // 5. 时间轴走势数据 (给折线图)
-  // 使用实时计算的数据作为 "Today" 点的值
+
+  // 5a. 确保每个 Asset 都有 priceHistory 缓存（没有就拉取并存入 DB）
+  for (const asset of assetsWithLogo) {
+    if (!asset.priceHistory) {
+      try {
+        console.log(`Fetching and caching priceHistory for ${asset.ticker}`);
+        const history = await get12MonthHistory(asset.ticker);
+        if (history.length > 0) {
+          await prisma.asset.update({
+            where: { id: asset.id },
+            data: { priceHistory: JSON.stringify(history), historyLastUpdated: new Date() }
+          });
+          asset.priceHistory = JSON.stringify(history);
+        }
+      } catch (err) {
+        console.error(`Failed to fetch priceHistory for ${asset.ticker}:`, err);
+      }
+    }
+  }
+
+  // 5b. 解析各 Asset 的历史价格
+  const priceHistories: Record<string, { date: string; price: number }[]> = {};
+  for (const asset of assetsWithLogo) {
+    if (asset.priceHistory) {
+      try {
+        priceHistories[asset.ticker] = JSON.parse(asset.priceHistory);
+      } catch { /* ignore */ }
+    }
+  }
+
+  // 5c. 收集所有 Asset 历史中出现过的月份标签，按时间排序
+  const allDateLabels = Array.from(
+    new Set(Object.values(priceHistories).flatMap(h => h.map(p => p.date)))
+  ).sort((a, b) => new Date(a).getTime() - new Date(b).getTime());
+
+  // 5d. 将交易记录按时间排序，用于逐月回放
+  const sortedTransactions = [...portfolio.transactions].sort(
+    (a, b) => new Date(a.date).getTime() - new Date(b.date).getTime()
+  );
+
+  // 5e. 对每个月份标签，回放交易 → 算持仓 → 乘以当月价格 → 得出该月组合市值
+  const historicalChartData = allDateLabels.map(dateLabel => {
+    // "Mar 2025" → 该月月底，确保当月内的所有交易都被计入
+    const labelDate = new Date(dateLabel);
+    const endOfMonth = new Date(labelDate.getFullYear(), labelDate.getMonth() + 1, 0, 23, 59, 59);
+
+    const holdingsAtDate = new Map<string, { qty: number; market: string }>();
+    for (const t of sortedTransactions) {
+      if (new Date(t.date) > endOfMonth) break;
+      const ticker = t.asset.ticker;
+      if (!holdingsAtDate.has(ticker)) {
+        holdingsAtDate.set(ticker, { qty: 0, market: t.asset.market });
+      }
+      const h = holdingsAtDate.get(ticker)!;
+      if (t.type === 'BUY') h.qty += t.quantity;
+      else if (t.type === 'SELL') h.qty -= t.quantity;
+    }
+
+    let nasdaq = 0, nyse = 0, otc = 0;
+    for (const [ticker, holding] of holdingsAtDate) {
+      if (holding.qty <= 0) continue;
+      const assetHistory = priceHistories[ticker] ?? [];
+      const pricePoint = assetHistory.find(p => p.date === dateLabel);
+      if (!pricePoint) continue;
+      const value = holding.qty * pricePoint.price;
+      if (holding.market === 'NASDAQ') nasdaq += value;
+      else if (holding.market === 'NYSE') nyse += value;
+      else if (holding.market === 'OTC') otc += value;
+    }
+
+    return {
+      date: dateLabel,
+      NASDAQ: Math.round(nasdaq),
+      NYSE: Math.round(nyse),
+      OTC: Math.round(otc),
+    };
+  });
+
+  // 5f. 末尾追加 Today 实时数据
   const todayOTC = calculatedHoldings.filter(h=>h.market==='OTC').reduce((s,h)=>s+h.value,0);
   const todayNASDAQ = calculatedHoldings.filter(h=>h.market==='NASDAQ').reduce((s,h)=>s+h.value,0);
   const todayNYSE = calculatedHoldings.filter(h=>h.market==='NYSE').reduce((s,h)=>s+h.value,0);
 
   const chartData = [
-    { date: '18 Oct 25', OTC: 0, NASDAQ: 0, NYSE: 0 },
-    { date: '15 Nov 25', OTC: 0, NASDAQ: 110, NYSE: 0 },
-    { date: '13 Dec 25', OTC: 0, NASDAQ: 105, NYSE: 0 },
-    { date: '10 Jan 26', OTC: 0, NASDAQ: 100, NYSE: 0 },
-    { date: '07 Feb 26', OTC: 0, NASDAQ: 95, NYSE: 0 },
-    { date: '15 Feb 26', OTC: 20, NASDAQ: 150, NYSE: 50 },
-    { date: '25 Feb 26', OTC: 80, NASDAQ: 350, NYSE: 120 },
-    { date: 'Today', OTC: todayOTC, NASDAQ: todayNASDAQ, NYSE: todayNYSE },
+    ...historicalChartData,
+    { date: 'Today', OTC: Math.round(todayOTC), NASDAQ: Math.round(todayNASDAQ), NYSE: Math.round(todayNYSE) },
   ];
 
   const summary = {

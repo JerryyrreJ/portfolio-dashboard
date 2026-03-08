@@ -13,6 +13,7 @@ import {
 } from 'lucide-react';
 import AddTransactionModal from '@/app/components/AddTransactionModal';
 import Link from 'next/link';
+import Image from 'next/image';
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
@@ -281,8 +282,7 @@ export default function StockDetailClient({ stockData }: { stockData: StockData 
           <div className="flex items-center gap-5">
             <div className="w-16 h-16 rounded-full bg-white border border-gray-100 shadow-sm flex items-center justify-center overflow-hidden flex-shrink-0">
               {profile?.logo ? (
-                // eslint-disable-next-line @next/next/no-img-element
-                <img src={profile.logo} alt={ticker} className="w-full h-full object-cover" />
+                <Image src={profile.logo} alt={ticker} width={64} height={64} className="w-full h-full object-cover" />
               ) : (
                 <span className="text-2xl font-bold text-gray-800">{ticker.charAt(0)}</span>
               )}
