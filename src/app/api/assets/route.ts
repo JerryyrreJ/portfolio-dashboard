@@ -1,12 +1,11 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { PrismaClient } from '@prisma/client';
 
 // 使用全局实例避免开发模式下的热重载问题
 const globalForPrisma = globalThis as unknown as {
   prisma: PrismaClient | undefined;
 };
 
-const prisma = globalForPrisma.prisma ?? new PrismaClient();
+import prisma from '@/lib/prisma'
 
 if (process.env.NODE_ENV !== 'production') {
   globalForPrisma.prisma = prisma;

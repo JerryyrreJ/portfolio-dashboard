@@ -9,7 +9,7 @@ import {
 import {
   ArrowLeft, RefreshCw, TrendingUp, TrendingDown, Plus,
   ExternalLink, Newspaper, BarChart2, History, ChevronRight,
-  Home, DollarSign, Wallet, ArrowUpRight, ArrowDownRight, Globe, Search
+  Home, DollarSign, Wallet, ArrowUpRight, ArrowDownRight, Globe, Search, User
 } from 'lucide-react';
 import AddTransactionModal from '@/app/components/AddTransactionModal';
 import Link from 'next/link';
@@ -268,10 +268,15 @@ export default function StockDetailClient({ stockData }: { stockData: StockData 
             <Search className="w-3.5 h-3.5 absolute left-3 top-[10px] text-gray-400" />
             <input type="text" placeholder="Search" className="bg-gray-100 border-none rounded-lg py-1.5 pl-9 pr-4 text-[13px] w-44 focus:w-60 focus:ring-1 focus:ring-black/5 focus:bg-white transition-all duration-300" />
           </div>
-          <div className="flex items-center space-x-2 text-[14px] font-semibold cursor-pointer text-gray-500 hover:text-black">
-            <div className="w-6 h-6 rounded-full bg-gray-200 flex items-center justify-center text-[11px] text-gray-500">JD</div>
-            <span>Account</span>
-          </div>
+          <Link 
+            href="/settings"
+            className="flex items-center space-x-2.5 group transition-all"
+          >
+            <div className="w-7 h-7 rounded-full bg-gray-100 border border-gray-200 flex items-center justify-center text-gray-500 group-hover:border-gray-400 group-hover:text-black transition-colors shadow-sm overflow-hidden">
+              <User className="w-4 h-4" />
+            </div>
+            <span className="text-[13px] font-bold text-gray-500 group-hover:text-black transition-colors hidden sm:block">Account</span>
+          </Link>
         </div>
       </header>
 

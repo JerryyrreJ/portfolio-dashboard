@@ -8,18 +8,18 @@ This project adheres to a strict "Restrained Minimalism" aesthetic, heavily insp
 - **Physical Centering**: Key content (like the Settings box) should be the absolute physical center of the layout. Navigational elements should sit to the side as "appendages" to the main content, balanced by invisible spacers.
 - **Typography**: Prefer `Inter` or system fonts. Use `tracking-tight` for bold headers and `tabular-nums` for all financial data to ensure alignment.
 
-### 2. Restraint in Design
-- **Icon Usage**: Avoid unnecessary icons in lists or menus. Text should stand on its own.
+### 2. Interaction Standards
+- **Expandable Workspace (Accordion)**: For secondary editing tasks (e.g., changing email, updating password), **DO NOT** use modals if the context can be maintained. Instead, use a "smooth drawer" effect that pushes down subsequent content. 
+  - *Implementation Hint*: Use CSS Grid (`grid-rows-[0fr] -> grid-rows-[1fr]`) for fluid height animations.
+- **Translucency**: Use `backdrop-blur-xl` with semi-transparent backgrounds (`bg-white/70`) for sticky headers and high-level overlays to create depth.
 - **Color Palette**: 
   - Primarily **Black** and **Gray** scale for UI elements.
-  - **Red (`rose-500`)** is reserved EXCLUSIVELY for destructive actions (Logout, Delete, Loss) and branding logos where specified.
-  - **Emerald Green** for positive returns/gains.
-- **Stock Icons**: Use circular containers (`rounded-full`) for company logos. Apply `object-cover` to fill the circle completely, avoiding the "square inside a circle" look.
+  - **Red (`rose-500`)** is reserved EXCLUSIVELY for destructive actions (Logout, Delete, Loss).
+  - **Emerald Green** for success states and positive returns.
 
-### 3. Components & Interaction
-- **Translucency**: Use `backdrop-blur-xl` with semi-transparent backgrounds (`bg-white/70`) for sticky headers and modals to create depth.
-- **Soft Shadows**: Use `shadow-sm` for cards and `shadow-2xl` for deep overlays like dropdowns or modals.
-- **Responsive Logic**: Maintain desktop "Inspector/Modal" styles but ensure layouts are ready for mobile adaptation (vertical stacking or full-screen sheets).
+### 3. Consistency & Restraint
+- **Icon Usage**: Avoid unnecessary icons in lists or menus. Text should stand on its own.
+- **Circular Primaries**: Use circular containers (`rounded-full`) for profile photos and company logos. Apply `object-cover` to fill the circle completely.
 
 ---
 
@@ -33,20 +33,17 @@ src/
 │   ├── components/          # UI Components
 │   │   ├── settings/        # Settings specific components
 │   │   └── AddTransactionModal.tsx
-│   ├── stock/[ticker]/      # Stock detail (Server + Client)
-│   ├── settings/            # Dedicated settings layout and pages
+│   ├── settings/            # Dedicated settings layout (Account & Security unified)
 │   ├── transactions/        # Transaction history list
-│   ├── page.tsx             # Home (Dashboard)
-│   └── DashboardClient.tsx  # Main Dashboard logic
-├── lib/                     # Shared utilities (Finnhub client, etc.)
-└── hooks/                   # Custom React hooks
+│   └── page.tsx             # Home (Dashboard)
+├── lib/                     # Shared utilities (Supabase, Finnhub)
+└── hooks/                   # Custom React hooks (useStock, etc.)
 ```
 
 ### Important Implementation Details
+- **Unified Identity**: Account settings and Security/Privacy are merged into a single "Account & Security" domain.
 - **Data Flow**: Server Components fetch via Prisma -> Props passed to Client Components.
-- **ID Strategy**: All IDs are CUID strings.
-- **Type Safety**: Strictly typed transaction types `"BUY" | "SELL"`.
-- **API Strategy**: Finnhub API calls are centralized in `lib/finnhub.ts` and proxied through server-side routes to protect keys.
+- **API Strategy**: External calls are proxied through server-side routes to protect keys.
 
 ---
 

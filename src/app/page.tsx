@@ -1,9 +1,8 @@
-import { PrismaClient } from '@prisma/client'
 import DashboardClient from './DashboardClient'
 import { getCompanyProfile, get12MonthHistory } from '@/lib/finnhub'
 import { getUser } from '@/lib/supabase-server'
 
-const prisma = new PrismaClient()
+import prisma from '@/lib/prisma'
 
 // 降级用的默认价格（当 API 调用失败时使用）
 const FALLBACK_PRICES: Record<string, number> = {
@@ -23,46 +22,67 @@ async function fetchStockQuote(symbol: string): Promise<number | null> {
     }
 
     const url = `https://finnhub.io/api/v1/quote?symbol=${symbol.toUpperCase()}&token=${apiKey}`;
-    const response = await fetch(url, { next: { revalidate: 60 } });
+    
+    // 增加 abort controller 以防止长时间 hang 死
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 3000); // 3 秒超时
+    
+    try {
+      const response = await fetch(url, { 
+        next: { revalidate: 60 },
+        signal: controller.signal
+      });
+      clearTimeout(timeoutId);
 
-    if (!response.ok) {
-      console.warn(`Failed to fetch quote for ${symbol}: ${response.status}`);
+      if (!response.ok) {
+        console.warn(`Failed to fetch quote for ${symbol}: ${response.status}`);
+        return null;
+      }
+
+      const data = await response.json();
+
+      // Finnhub 返回格式: { c: 当前价格, d: 变动, dp: 变动百分比, ... }
+      if (data && data.c && data.c > 0) {
+        return data.c;
+      }
       return null;
+    } catch (fetchError: any) {
+      clearTimeout(timeoutId);
+      console.warn(`Network error fetching quote for ${symbol}:`, fetchError.message);
+      return null; // Return null so it falls back gracefully
     }
-
-    const data = await response.json();
-
-    // Finnhub 返回格式: { c: 当前价格, d: 变动, dp: 变动百分比, ... }
-    if (data.c && data.c > 0) {
-      return data.c;
-    }
-    return null;
   } catch (error) {
-    console.error(`Error fetching quote for ${symbol}:`, error);
+    console.error(`Unexpected error for ${symbol}:`, error);
     return null;
   }
 }
 
-// 批量获取股票实时价格
-async function fetchBatchQuotes(symbols: string[]): Promise<Record<string, number>> {
+// 批量获取股票实时价格（并发，支持数据库降级）
+async function fetchBatchQuotes(assets: any[]): Promise<Record<string, number>> {
   const prices: Record<string, number> = {};
+  
+  // 并发请求所有价格
+  const fetchPromises = assets.map(asset => 
+    fetchStockQuote(asset.ticker).then(async (price) => {
+      if (price) {
+        prices[asset.ticker] = price;
+        // 后台异步更新数据库中的缓存价格
+        try {
+          await prisma.asset.update({
+            where: { id: asset.id },
+            data: { lastPrice: price, lastPriceUpdated: new Date() }
+          });
+        } catch (e) {
+          console.error(`Failed to update lastPrice for ${asset.ticker} silently:`, e);
+        }
+      } else {
+        // 降级：优先使用数据库中的 lastPrice，其次使用硬编码的 FALLBACK_PRICES
+        prices[asset.ticker] = asset.lastPrice || FALLBACK_PRICES[asset.ticker] || 0;
+      }
+    })
+  );
 
-  // 顺序请求以避免 API 限流（Finnhub 免费版 60次/分钟）
-  for (const symbol of symbols) {
-    const price = await fetchStockQuote(symbol);
-    if (price) {
-      prices[symbol] = price;
-    } else {
-      // 使用降级价格
-      prices[symbol] = FALLBACK_PRICES[symbol] || 0;
-    }
-
-    // 添加小延迟避免限流
-    if (symbols.length > 5) {
-      await new Promise(resolve => setTimeout(resolve, 100));
-    }
-  }
-
+  await Promise.allSettled(fetchPromises);
   return prices;
 }
 
@@ -142,39 +162,52 @@ export default async function Page() {
     }
   }
 
-  // 3. 计算当前市值和盈亏 (使用真实 Finnhub API 数据)
+  // 3. 计算当前市值和盈亏 (并发获取实时数据)
   let totalValue = 0;
   let totalCostBase = 0;
 
-  const uniqueTickers = Array.from(new Set(
-    Array.from(holdingsMap.values()).map(h => h.asset.ticker)
-  ));
+  // 获取唯一的 Asset 对象用于批量获取报价
+  const uniqueAssets = Array.from(
+    new Map(Array.from(holdingsMap.values()).map(h => [h.asset.ticker, h.asset])).values()
+  );
 
-  console.log('Fetching real-time prices for:', uniqueTickers);
-  const realTimePrices = await fetchBatchQuotes(uniqueTickers);
+  const realTimePrices = await fetchBatchQuotes(uniqueAssets);
 
-  // 4. 智能 Logo 缓存逻辑
+  // 4. 智能 Logo 和 历史价格 缓存逻辑 (后台异步更新，不阻塞渲染)
   const assetsWithLogo = Array.from(holdingsMap.values()).map(h => h.asset);
   const logoMap: Record<string, string | null> = {};
   
-  for (const asset of assetsWithLogo) {
-    let currentLogo = asset.logo;
-    if (!currentLogo) {
-      console.log(`Fetching and caching logo for ${asset.ticker}`);
+  // 提取需要更新的资源，后台触发，不 await
+  const missingLogos = assetsWithLogo.filter(a => !a.logo);
+  const missingHistories = assetsWithLogo.filter(a => !a.priceHistory);
+
+  if (missingLogos.length > 0 || missingHistories.length > 0) {
+    // 异步闭包，在后台运行
+    (async () => {
       try {
-        const profile = await getCompanyProfile(asset.ticker);
-        if (profile?.logo) {
-          await prisma.asset.update({
-            where: { id: asset.id },
-            data: { logo: profile.logo }
-          });
-          currentLogo = profile.logo;
+        for (const asset of missingLogos) {
+          const profile = await getCompanyProfile(asset.ticker);
+          if (profile?.logo) {
+            await prisma.asset.update({ where: { id: asset.id }, data: { logo: profile.logo } });
+          }
         }
-      } catch (err) {
-        console.error(`Failed to cache logo for ${asset.ticker}:`, err);
+        for (const asset of missingHistories) {
+          const history = await get12MonthHistory(asset.ticker);
+          if (history && history.length > 0) {
+            await prisma.asset.update({
+              where: { id: asset.id },
+              data: { priceHistory: JSON.stringify(history), historyLastUpdated: new Date() }
+            });
+          }
+        }
+      } catch (e) {
+        console.error("Background cache update failed silently:", e);
       }
-    }
-    logoMap[asset.ticker] = currentLogo;
+    })();
+  }
+
+  for (const asset of assetsWithLogo) {
+    logoMap[asset.ticker] = asset.logo; // 只使用当前数据库中已有的
   }
 
   const calculatedHoldings = Array.from(holdingsMap.values()).map(h => {
@@ -212,23 +245,7 @@ export default async function Page() {
   // 5. 时间轴走势数据 (给折线图)
 
   // 5a. 确保每个 Asset 都有 priceHistory 缓存（没有就拉取并存入 DB）
-  for (const asset of assetsWithLogo) {
-    if (!asset.priceHistory) {
-      try {
-        console.log(`Fetching and caching priceHistory for ${asset.ticker}`);
-        const history = await get12MonthHistory(asset.ticker);
-        if (history.length > 0) {
-          await prisma.asset.update({
-            where: { id: asset.id },
-            data: { priceHistory: JSON.stringify(history), historyLastUpdated: new Date() }
-          });
-          asset.priceHistory = JSON.stringify(history);
-        }
-      } catch (err) {
-        console.error(`Failed to fetch priceHistory for ${asset.ticker}:`, err);
-      }
-    }
-  }
+  // 已经移至后台异步更新 (第4步)，不在此处阻塞页面加载
 
   // 5b. 解析各 Asset 的历史价格
   const priceHistories: Record<string, { date: string; price: number }[]> = {};

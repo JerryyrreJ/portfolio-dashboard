@@ -3,6 +3,7 @@
 import React, { useState } from 'react';
 import { Mail, Lock, ArrowRight, AlertCircle } from 'lucide-react';
 import { createClient } from '@/lib/supabase';
+import Notification from '../Notification';
 
 interface AuthPanelProps {
   onLogin: () => void;
@@ -14,6 +15,7 @@ export default function AuthPanel({ onLogin }: AuthPanelProps) {
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [notification, setNotification] = useState<{show: boolean, type: 'success'|'error', title: string, message: string}>({ show: false, type: 'success', title: '', message: '' });
 
   const supabase = createClient();
 
@@ -29,6 +31,7 @@ export default function AuthPanel({ onLogin }: AuthPanelProps) {
           password,
         });
         if (error) throw error;
+        onLogin();
       } else {
         const { error } = await supabase.auth.signUp({
           email,
@@ -38,13 +41,14 @@ export default function AuthPanel({ onLogin }: AuthPanelProps) {
           },
         });
         if (error) throw error;
-        // If sign up is successful, Supabase might require email confirmation 
-        // depending on your project settings.
-        if (mode === 'signup') {
-          alert('Check your email for the confirmation link!');
-        }
+        setNotification({
+          show: true,
+          type: 'success',
+          title: 'Check your email',
+          message: 'We sent you a confirmation link. Please verify your account to continue.'
+        });
+        // We don't call onLogin() immediately for signup because they need to verify
       }
-      onLogin();
     } catch (err: any) {
       setError(err.message || 'An error occurred during authentication');
     } finally {
@@ -54,6 +58,14 @@ export default function AuthPanel({ onLogin }: AuthPanelProps) {
 
   return (
     <div className="space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-700">
+      <Notification 
+        show={notification.show} 
+        type={notification.type} 
+        title={notification.title} 
+        message={notification.message} 
+        onClose={() => setNotification({ ...notification, show: false })} 
+        autoClose={6000}
+      />
       <div className="text-center md:text-left">
         <h3 className="text-[20px] font-bold text-black tracking-tight leading-tight">
           {mode === 'login' ? 'Welcome Back' : 'Create an Account'}

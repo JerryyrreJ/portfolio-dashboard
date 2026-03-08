@@ -27,6 +27,8 @@ model Asset {
   type        String   @default("STOCK")
   currency    String   @default("USD")
   logo        String?  // URL to company logo, cached
+  lastPrice   Float?   // Cached last known real-time price
+  lastPriceUpdated DateTime? // When the lastPrice was last updated
   priceHistory String?
   historyLastUpdated DateTime?
   

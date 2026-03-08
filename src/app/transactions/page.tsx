@@ -1,15 +1,14 @@
-import { PrismaClient } from '@prisma/client';
 import { format } from 'date-fns';
 import Link from 'next/link';
 import Image from 'next/image';
 import {
   ArrowLeft, Filter, Download, TrendingUp, TrendingDown,
-  Search, ChevronRight, Home, MoreHorizontal, Trash2, Edit2
+  Search, ChevronRight, Home, MoreHorizontal, Trash2, Edit2, User
 } from 'lucide-react';
 import { getCompanyProfile } from '@/lib/finnhub';
 import { getUser } from '@/lib/supabase-server';
 
-const prisma = new PrismaClient();
+import prisma from '@/lib/prisma';
 
 interface TransactionWithAsset {
   id: string;
@@ -125,30 +124,35 @@ export default async function TransactionsPage(props: {
     }
   }
 
-  // 4. 智能 Logo 缓存逻辑 (交易页面)
+  // 4. 智能 Logo 缓存逻辑 (交易页面 - 异步非阻塞)
   const uniqueAssets = Array.from(new Map(transactions.map(t => [t.asset.ticker, t.asset])).values());
   const logoMap = new Map<string, string | null>();
 
-  for (const asset of uniqueAssets) {
-    if (!asset.logo) {
-      try {
-        const profile = await getCompanyProfile(asset.ticker);
-        if (profile?.logo) {
-          await prisma.asset.update({
-            where: { id: asset.id },
-            data: { logo: profile.logo }
-          });
-          logoMap.set(asset.ticker, profile.logo);
-        } else {
-          logoMap.set(asset.ticker, null);
+  // 找出缺失 Logo 的资产
+  const missingLogos = uniqueAssets.filter(a => !a.logo);
+  
+  if (missingLogos.length > 0) {
+    // 后台异步更新，不阻塞页面渲染
+    (async () => {
+      for (const asset of missingLogos) {
+        try {
+          const profile = await getCompanyProfile(asset.ticker);
+          if (profile?.logo) {
+            await prisma.asset.update({
+              where: { id: asset.id },
+              data: { logo: profile.logo }
+            });
+          }
+        } catch (err) {
+          console.warn(`Failed to cache logo for ${asset.ticker} in background:`, err);
         }
-      } catch (err) {
-        console.error(`Failed to cache logo for ${asset.ticker}:`, err);
-        logoMap.set(asset.ticker, null);
       }
-    } else {
-      logoMap.set(asset.ticker, asset.logo);
-    }
+    })();
+  }
+
+  // 建立当前页面可用的 Logo 映射
+  for (const asset of uniqueAssets) {
+    logoMap.set(asset.ticker, asset.logo || null);
   }
 
   const currentPage = parseInt(searchParams.page || '1');
@@ -188,10 +192,15 @@ export default async function TransactionsPage(props: {
               className="bg-gray-100 border-none rounded-lg py-1.5 pl-9 pr-4 text-[13px] w-44 focus:w-60 focus:ring-1 focus:ring-black/5 focus:bg-white transition-all duration-300"
             />
           </div>
-          <div className="flex items-center space-x-2 text-[14px] font-semibold cursor-pointer text-gray-500 hover:text-black transition-colors">
-            <div className="w-6 h-6 rounded-full bg-gray-200 flex items-center justify-center text-[11px] text-gray-500">JD</div>
-            <span>Account</span>
-          </div>
+          <Link 
+            href="/settings"
+            className="flex items-center space-x-2.5 group transition-all"
+          >
+            <div className="w-7 h-7 rounded-full bg-gray-100 border border-gray-200 flex items-center justify-center text-gray-500 group-hover:border-gray-400 group-hover:text-black transition-colors shadow-sm overflow-hidden">
+              <User className="w-4 h-4" />
+            </div>
+            <span className="text-[13px] font-bold text-gray-500 group-hover:text-black transition-colors hidden sm:block">Account</span>
+          </Link>
         </div>
       </header>
 

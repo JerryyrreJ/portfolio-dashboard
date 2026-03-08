@@ -1,10 +1,9 @@
-import { PrismaClient } from '@prisma/client'
 import { notFound } from 'next/navigation'
 import StockDetailClient from './StockDetailClient'
 import { getQuote, getCandles, getCompanyProfile, getBasicFinancials, get12MonthHistory } from '@/lib/finnhub'
 import { getUser } from '@/lib/supabase-server'
 
-const prisma = new PrismaClient()
+import prisma from '@/lib/prisma'
 
 // Fallback prices for when Finnhub API is unavailable
 const FALLBACK_PRICES: Record<string, number> = {
@@ -76,7 +75,7 @@ export default async function StockDetailPage(props: PageProps) {
     }
   })
 
-  // 3. Current price & Market data
+  // 3. 并发获取外部数据 (Quote, Profile, Metrics) 以加速渲染
   let currentPrice = 0
   let priceChange = 0
   let priceChangePercent = 0
@@ -88,64 +87,7 @@ export default async function StockDetailPage(props: PageProps) {
   const serverTime = Math.floor(currentTime / 1000)
   let lastUpdated = new Date(serverTime * 1000)
 
-  try {
-    const quote = await getQuote(decodedTicker)
-    if (quote) {
-      currentPrice = quote.c || 0
-      priceChange = quote.d || 0
-      priceChangePercent = quote.dp || 0
-      dayHigh = quote.h || 0
-      dayLow = quote.l || 0
-      dayOpen = quote.o || 0
-      prevClose = quote.pc || 0
-      lastUpdated = new Date((quote.t || serverTime) * 1000)
-    }
-  } catch (error) {
-    console.error('Failed to fetch quote:', error)
-  }
-
-  // 4. Historical price chart (12 months, persistent in DB)
-  let chartData: { date: string; price: number }[] = []
-
-  // 只要数据库里有历史数据，就直接使用，不再重新调用 API
-  if (asset.priceHistory) {
-    try {
-      chartData = JSON.parse(asset.priceHistory)
-      console.log(`Using persistent history cache for ${decodedTicker}`);
-    } catch (e) {
-      console.error('Failed to parse persistent price history:', e)
-    }
-  }
-
-  // 只有在数据库里完全没有数据时，才去获取一次
-  if (chartData.length === 0) {
-    try {
-      console.log(`No history found in DB. Fetching once for ${decodedTicker}`);
-      const history = await get12MonthHistory(decodedTicker)
-      if (history.length > 0) {
-        chartData = history
-        // 将历史数据存入数据库，此后将永远从数据库读取
-        await prisma.asset.update({
-          where: { id: asset.id },
-          data: {
-            priceHistory: JSON.stringify(history),
-            historyLastUpdated: new Date(currentTime)
-          }
-        })
-      }
-    } catch (error) {
-      console.error('Failed to fetch and persist history:', error)
-    }
-  }
-
-  // Final fallback: If data is still missing, keep it empty to inform user
-  if (chartData.length === 0) {
-    console.warn(`No real historical data could be retrieved for ${decodedTicker}`);
-    // Keep chartData as [] to show empty state instead of fake data
-  }
-
-  // 5. Company profile & Logo Caching
-  // Initialize profile with DB data immediately to prevent flickering
+  // Initialize profile with DB data immediately
   let profile: any = {
     name: asset.name,
     ticker: decodedTicker,
@@ -159,41 +101,92 @@ export default async function StockDetailPage(props: PageProps) {
     marketCapitalization: 1000000
   };
 
+  let metrics = null;
+
   try {
-    const p = await getCompanyProfile(decodedTicker)
-    if (p && p.name) {
-      // Merge Finnhub data into our profile, but keep our logo if it's already there
-      profile = { ...profile, ...p };
+    const [quote, p, fin] = await Promise.allSettled([
+      getQuote(decodedTicker),
+      getCompanyProfile(decodedTicker),
+      getBasicFinancials(decodedTicker)
+    ]);
+
+    if (quote.status === 'fulfilled' && quote.value && quote.value.c && quote.value.c > 0) {
+      currentPrice = quote.value.c
+      priceChange = quote.value.d || 0
+      priceChangePercent = quote.value.dp || 0
+      dayHigh = quote.value.h || 0
+      dayLow = quote.value.l || 0
+      dayOpen = quote.value.o || 0
+      prevClose = quote.value.pc || 0
+      lastUpdated = new Date((quote.value.t || serverTime) * 1000)
       
-      // Update logo cache if it's missing or different
-      if (p.logo && p.logo !== asset.logo) {
-        await prisma.asset.update({
+      // Update the database cache asynchronously
+      prisma.asset.update({
+        where: { id: asset.id },
+        data: { lastPrice: currentPrice, lastPriceUpdated: new Date() }
+      }).catch(err => console.error("Failed to update lastPrice cache silently:", err));
+    } else {
+      // Fallback to database cache or hardcoded values
+      currentPrice = asset.lastPrice || FALLBACK_PRICES[decodedTicker] || 0;
+      // Note: other metrics like dayHigh won't be available in fallback mode
+    }
+
+    if (p.status === 'fulfilled' && p.value && p.value.name) {
+      profile = { ...profile, ...p.value };
+      if (p.value.logo && p.value.logo !== asset.logo) {
+        // 后台异步更新，不 await
+        prisma.asset.update({
           where: { id: asset.id },
-          data: { logo: p.logo }
-        }).catch(err => console.error("Failed to update logo cache:", err));
+          data: { logo: p.value.logo }
+        }).catch(err => console.error("Failed to update logo cache silently:", err));
+      }
+    }
+
+    if (fin.status === 'fulfilled' && fin.value && fin.value.metric) {
+      const metric = fin.value.metric;
+      metrics = {
+        week52High: metric['52WeekHigh'] || 0,
+        week52Low: metric['52WeekLow'] || 0,
+        peRatio: (metric.peBasicExclExtraTTM || metric.peNormalizedAnnual || 0) as number,
+        eps: (metric.epsBasicExclExtraItemsTTM || metric.epsTTM || 0) as number,
+        beta: (metric.beta || 0) as number,
+        dividendYield: (metric.dividendYieldIndicatedAnnual || 0) as number,
       }
     }
   } catch (error) {
-    console.error('Failed to fetch company profile from Finnhub:', error)
-    // Profile is already initialized with DB/Fallback data, so we're safe
+    console.error('Failed to fetch concurrent data:', error);
   }
 
-  // 6. Key financial metrics
-  let metrics = null
-  try {
-    const fin = await getBasicFinancials(decodedTicker)
-    if (fin && fin.metric) {
-      metrics = {
-        week52High: fin.metric['52WeekHigh'] || 0,
-        week52Low: fin.metric['52WeekLow'] || 0,
-        peRatio: (fin.metric.peBasicExclExtraTTM || fin.metric.peNormalizedAnnual || 0) as number,
-        eps: (fin.metric.epsBasicExclExtraItemsTTM || fin.metric.epsTTM || 0) as number,
-        beta: (fin.metric.beta || 0) as number,
-        dividendYield: (fin.metric.dividendYieldIndicatedAnnual || 0) as number,
-      }
+  // 4. Historical price chart (12 months, persistent in DB)
+  let chartData: { date: string; price: number }[] = []
+
+  // 只要数据库里有历史数据，就直接使用，不再重新调用 API
+  if (asset.priceHistory) {
+    try {
+      chartData = JSON.parse(asset.priceHistory)
+    } catch (e) {
+      console.error('Failed to parse persistent price history:', e)
     }
-  } catch (error) {
-    console.error('Failed to fetch metrics:', error)
+  }
+
+  // 只有在数据库里完全没有数据时，才去获取一次
+  if (chartData.length === 0) {
+    try {
+      const history = await get12MonthHistory(decodedTicker)
+      if (history && history.length > 0) {
+        chartData = history
+        // 后台异步存入数据库，不阻塞本次渲染
+        prisma.asset.update({
+          where: { id: asset.id },
+          data: {
+            priceHistory: JSON.stringify(history),
+            historyLastUpdated: new Date(currentTime)
+          }
+        }).catch(err => console.error("Failed to persist history silently:", err));
+      }
+    } catch (error) {
+      console.error('Failed to fetch history:', error)
+    }
   }
 
   // 7. Position metrics
