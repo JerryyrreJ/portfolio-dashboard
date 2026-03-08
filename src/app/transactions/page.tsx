@@ -17,9 +17,11 @@ interface TransactionWithAsset {
   fee: number;
   date: Date;
   asset: {
+    id: string;
     ticker: string;
     name: string;
     market: string;
+    logo?: string | null;
   };
 }
 
@@ -68,10 +70,14 @@ async function getTransactions(
 }
 
 async function getPortfolios() {
-  return await prisma.portfolio.findMany({
-    select: { id: true, name: true },
-    orderBy: { id: 'asc' },
-  });
+  try {
+    return await prisma.portfolio.findMany({
+      select: { id: true, name: true },
+      orderBy: { id: 'asc' },
+    });
+  } catch {
+    return [];
+  }
 }
 
 // 格式化金额
@@ -91,15 +97,32 @@ function formatNumber(num: number, decimals: number = 4): string {
   });
 }
 
+import { cookies } from 'next/headers';
+
 export default async function TransactionsPage(props: {
   searchParams: Promise<{ [key: string]: string | undefined }>;
 }) {
+  const cookieStore = await cookies();
+  const isLoggedIn = cookieStore.get('isLoggedIn')?.value === 'true';
+
   const searchParams = await props.searchParams;
   const portfolios = await getPortfolios();
   const defaultPortfolioId = portfolios[0]?.id || '1';
   const portfolioName = portfolios[0]?.name || 'Portfolio';
 
-  const { transactions, total } = await getTransactions(defaultPortfolioId, searchParams);
+  // 如果未登录，直接返回空数据，不查 DB
+  let transactions: TransactionWithAsset[] = [];
+  let total = 0;
+
+  if (isLoggedIn) {
+    try {
+      const data = await getTransactions(defaultPortfolioId, searchParams);
+      transactions = data.transactions;
+      total = data.total;
+    } catch {
+      // DB unreachable — leave transactions empty
+    }
+  }
 
   // 4. 智能 Logo 缓存逻辑 (交易页面)
   const uniqueAssets = Array.from(new Map(transactions.map(t => [t.asset.ticker, t.asset])).values());

@@ -2,6 +2,7 @@
 
 import React, { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
+import Image from 'next/image';
 import {
   AreaChart,
   Area,
@@ -56,7 +57,7 @@ interface Asset {
   capGain: number;
   return: number;
   market: string;
-  logo?: string;
+  logo?: string | null;
 }
 interface HoldingsGroup {
   market: string;
@@ -89,14 +90,103 @@ export default function DashboardClient({ portfolioId, portfolioName, holdingsDa
   const router = useRouter();
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isRefreshing, setIsRefreshing] = useState(false);
+  const [isLoggedIn, setIsLoggedIn] = useState(false);
 
   // 图表时间范围状态
   const [chartTimeRange, setChartTimeRange] = useState<'1M' | '3M' | '6M' | '1Y' | 'All'>('All');
+  
+  // Local state for unauthenticated users
+  const [localHoldings, setLocalHoldings] = useState<HoldingsGroup[]>(holdingsData);
+  const [localSummary, setLocalSummary] = useState<Summary>(summary);
+  const [localChartData, setLocalChartData] = useState<any[]>(chartData);
+  
   const [filteredChartData, setFilteredChartData] = useState(chartData);
+
+  // 初始化和监听本地数据
+  useEffect(() => {
+    // 简单判断是否是本地模拟用户
+    if (portfolioId !== 'local-portfolio') {
+      setIsLoggedIn(true);
+      return;
+    }
+
+    const loadLocalData = () => {
+      const storedTransactions = localStorage.getItem('local_transactions');
+      if (!storedTransactions) return;
+
+      const txs = JSON.parse(storedTransactions);
+      
+      // 简单计算逻辑
+      const holdingsMap = new Map<string, any>();
+      let totalValue = 0;
+      let totalCost = 0;
+
+      for (const t of txs) {
+        const ticker = t.asset.ticker;
+        if (!holdingsMap.has(ticker)) {
+          holdingsMap.set(ticker, { asset: t.asset, qty: 0, cost: 0, price: t.price });
+        }
+        const current = holdingsMap.get(ticker);
+        
+        if (t.type === 'BUY') {
+          current.qty += t.quantity;
+          current.cost += (t.price * t.quantity) + t.fee;
+        } else if (t.type === 'SELL') {
+          current.qty -= Math.abs(t.quantity);
+          current.cost -= (t.price * Math.abs(t.quantity)) - t.fee;
+        }
+      }
+
+      const calculatedHoldings = Array.from(holdingsMap.values())
+        .filter(h => h.qty > 0)
+        .map(h => {
+          const value = h.qty * h.price; // 暂时用买入价替代现价
+          totalValue += value;
+          totalCost += h.cost;
+          const capGain = value - h.cost;
+          return {
+            ticker: h.asset.ticker,
+            name: h.asset.name,
+            market: h.asset.market || 'Unknown',
+            price: h.price,
+            qty: h.qty,
+            value: value,
+            capGain: capGain,
+            return: h.cost > 0 ? (capGain / h.cost) * 100 : 0,
+            logo: null
+          };
+        });
+
+      const totalCapGain = totalValue - totalCost;
+      
+      setLocalSummary({
+        totalValue,
+        totalCapGain,
+        totalCapGainPercentage: totalCost > 0 ? (totalCapGain / totalCost) * 100 : 0
+      });
+
+      const markets = Array.from(new Set(calculatedHoldings.map(h => h.market)));
+      setLocalHoldings(markets.map(m => ({
+        market: m,
+        holdings: calculatedHoldings.filter(h => h.market === m)
+      })));
+
+      // 本地简单模拟一下当天的图表点
+      setLocalChartData([{ date: 'Today', Local: totalValue }]);
+      setFilteredChartData([{ date: 'Today', Local: totalValue }]);
+    };
+
+    loadLocalData();
+
+    // 监听 Modal 提交后的事件
+    const handleLocalUpdate = () => loadLocalData();
+    window.addEventListener('localTransactionsUpdated', handleLocalUpdate);
+    return () => window.removeEventListener('localTransactionsUpdated', handleLocalUpdate);
+  }, [portfolioId]);
 
   useEffect(() => {
     if (chartTimeRange === 'All') {
-      setFilteredChartData(chartData);
+      setFilteredChartData(localChartData);
       return;
     }
     const now = new Date();
@@ -107,21 +197,37 @@ export default function DashboardClient({ portfolioId, portfolioName, holdingsDa
       case '6M': startDate.setMonth(now.getMonth() - 6); break;
       case '1Y': startDate.setFullYear(now.getFullYear() - 1); break;
     }
-    const filtered = chartData.filter(item => new Date(item.date) >= startDate);
+    const filtered = localChartData.filter(item => new Date(item.date) >= startDate);
     setFilteredChartData(filtered);
-  }, [chartTimeRange, chartData]);
+  }, [chartTimeRange, localChartData]);
 
   const handleRefresh = async () => {
     setIsRefreshing(true);
     window.location.reload();
   };
 
-  const isUp = summary.totalCapGain >= 0;
-  const totalHoldingsCount = holdingsData.reduce((sum, g) => sum + g.holdings.length, 0);
+  const isUp = localSummary.totalCapGain >= 0;
+  const totalHoldingsCount = localHoldings.reduce((sum: number, g: HoldingsGroup) => sum + g.holdings.length, 0);
 
   return (
     <div className="min-h-screen bg-[#FBFBFD] text-[#1D1D1F] font-sans antialiased">
       
+      {/* Optional Top utility banner for local storage */}
+      {!isLoggedIn && (
+        <div className="bg-gray-100/80 backdrop-blur text-center py-2 border-b border-gray-200">
+          <p className="text-[12px] font-medium text-gray-500">
+            Your data is saved locally.{' '}
+            <button 
+              onClick={() => setIsLoggedIn(true)} 
+              className="text-black font-semibold hover:underline"
+            >
+              Sign in
+            </button>{' '}
+            to back up and sync across devices.
+          </p>
+        </div>
+      )}
+
       {/* 顶部导航栏 - 更舒适的高度和字体 */}
       <header className="bg-white/70 backdrop-blur-xl border-b border-gray-100 px-6 h-[56px] flex items-center justify-between sticky top-0 z-50">
         <div className="flex items-center space-x-8">
@@ -147,19 +253,28 @@ export default function DashboardClient({ portfolioId, portfolioName, holdingsDa
             />
           </div>
           {/* Account Link - Direct navigation to settings */}
-          <Link 
-            href="/settings"
-            className="flex items-center space-x-2.5 group transition-all"
-          >
-            <div className="w-7 h-7 rounded-full bg-gradient-to-br from-gray-100 to-gray-200 border border-gray-200 flex items-center justify-center text-[10px] font-bold text-gray-600 group-hover:border-gray-400 transition-colors shadow-sm overflow-hidden">
-              JD
-            </div>
-            <span className="text-[13px] font-bold text-gray-500 group-hover:text-black transition-colors hidden sm:block">John Doe</span>
-          </Link>
+          {isLoggedIn ? (
+            <Link 
+              href="/settings"
+              className="flex items-center space-x-2.5 group transition-all"
+            >
+              <div className="w-7 h-7 rounded-full bg-gradient-to-br from-gray-100 to-gray-200 border border-gray-200 flex items-center justify-center text-[10px] font-bold text-gray-600 group-hover:border-gray-400 transition-colors shadow-sm overflow-hidden">
+                JD
+              </div>
+              <span className="text-[13px] font-bold text-gray-500 group-hover:text-black transition-colors hidden sm:block">John Doe</span>
+            </Link>
+          ) : (
+            <button 
+              onClick={() => setIsLoggedIn(true)}
+              className="text-sm font-medium text-gray-500 hover:text-black transition-colors"
+            >
+              Sign in
+            </button>
+          )}
         </div>
       </header>
 
-      {/* 主内容区域 - 减小内边距 */}
+        {/* 主内容区域 */}
       <main className="flex-1 max-w-[1400px] w-full mx-auto px-6 py-6">
         
         {/* 标题 & 操作按钮 - 紧凑布局 */}
@@ -186,8 +301,29 @@ export default function DashboardClient({ portfolioId, portfolioName, holdingsDa
           </div>
         </div>
 
-        {/* 顶部网格：核心指标 + 图表 - 两栏布局以提高密度 */}
-        <div className="grid grid-cols-12 gap-5 mb-5">
+        {totalHoldingsCount === 0 ? (
+          /* 空状态面板 */
+          <div className="flex flex-col items-center justify-center py-20 bg-white rounded-2xl border border-gray-100 shadow-sm relative w-full my-4">
+            <div className="w-16 h-16 bg-gray-50 rounded-full flex items-center justify-center mb-6">
+              <Wallet className="w-8 h-8 text-gray-400" />
+            </div>
+            <h2 className="text-2xl font-bold text-black tracking-tight mb-2">Build your portfolio</h2>
+            <p className="text-sm text-gray-500 mb-8 max-w-[280px] text-center">
+              Add your first trade to start tracking your market performance in real-time.
+            </p>
+            <button
+              onClick={() => setIsModalOpen(true)}
+              className="px-8 py-3 bg-black text-white text-sm font-semibold rounded-full hover:bg-gray-800 transition-all shadow-sm flex items-center space-x-2"
+            >
+              <Plus className="w-4 h-4" />
+              <span>Add your first trade</span>
+            </button>
+            <p className="text-xs text-gray-400 mt-6 font-medium">No account required to start.</p>
+          </div>
+        ) : (
+          <>
+            {/* 顶部网格：核心指标 + 图表 - 两栏布局以提高密度 */}
+            <div className="grid grid-cols-12 gap-5 mb-5">
           
           {/* 左侧：核心指标垂直排列 */}
           <div className="col-span-12 lg:col-span-3 space-y-4">
@@ -195,14 +331,16 @@ export default function DashboardClient({ portfolioId, portfolioName, holdingsDa
               <p className="text-[11px] text-gray-400 font-bold uppercase tracking-wider mb-1">Portfolio Value</p>
               <div className="flex items-baseline space-x-1">
                 <span className="text-[28px] font-bold text-black tracking-tight tabular-nums">
-                  ${summary.totalValue.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                  ${localSummary.totalValue.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                 </span>
               </div>
               <div className="mt-2 flex items-center space-x-2">
                 <span className={`text-[12px] font-bold px-1.5 py-0.5 rounded ${isUp ? 'bg-emerald-50 text-emerald-600' : 'bg-rose-50 text-rose-500'}`}>
-                  {isUp ? '▲' : '▼'} {Math.abs(summary.totalCapGainPercentage).toFixed(2)}%
+                  {isUp ? '+' : ''}{localSummary.totalCapGainPercentage.toFixed(2)}%
                 </span>
-                <span className="text-gray-400 text-[11px] font-medium">All-time</span>
+                <span className="text-[12px] font-medium text-gray-400 tabular-nums">
+                  ({isUp ? '+' : '-'}${Math.abs(localSummary.totalCapGain).toLocaleString('en-US', { minimumFractionDigits: 2 })})
+                </span>
               </div>
             </div>
 
@@ -210,7 +348,7 @@ export default function DashboardClient({ portfolioId, portfolioName, holdingsDa
               <p className="text-[11px] text-gray-400 font-bold uppercase tracking-wider mb-1">Total Gain</p>
               <div className="flex items-baseline">
                 <span className={`text-[22px] font-bold tracking-tight tabular-nums ${isUp ? 'text-emerald-600' : 'text-rose-500'}`}>
-                  {isUp ? '+' : '-'}${Math.abs(summary.totalCapGain).toLocaleString('en-US', { minimumFractionDigits: 2 })}
+                  {isUp ? '+' : '-'}${Math.abs(localSummary.totalCapGain).toLocaleString('en-US', { minimumFractionDigits: 2 })}
                 </span>
               </div>
               <p className="text-gray-400 text-[11px] font-medium mt-1">Net profit/loss</p>
@@ -222,7 +360,7 @@ export default function DashboardClient({ portfolioId, portfolioName, holdingsDa
                 <p className="text-[22px] font-bold text-black tracking-tight">{totalHoldingsCount}</p>
               </div>
               <div className="flex -space-x-1.5">
-                {holdingsData.flatMap(g => g.holdings).slice(0, 3).map((h) => (
+                {localHoldings.flatMap(g => g.holdings).slice(0, 3).map((h) => (
                   <div key={h.ticker} className="w-7 h-7 rounded-full bg-white border border-gray-100 flex items-center justify-center text-[9px] font-bold text-gray-600 shadow-sm">
                     {h.ticker.charAt(0)}
                   </div>
@@ -274,8 +412,8 @@ export default function DashboardClient({ portfolioId, portfolioName, holdingsDa
                       contentStyle={{ borderRadius: '12px', border: 'none', boxShadow: '0 8px 20px -5px rgb(0 0 0 / 0.1)', backgroundColor: 'rgba(255, 255, 255, 0.95)', backdropFilter: 'blur(8px)', padding: '10px' }}
                       itemStyle={{ fontSize: '11px', fontWeight: 'bold', padding: '2px 0' }}
                       labelStyle={{ marginBottom: '4px', color: '#888', fontSize: '10px', fontWeight: '600' }}
-                      formatter={(value: number) => [`$${value.toFixed(2)}`, undefined]}
-                    />                    {Array.from(new Set(holdingsData.map(g => g.market))).map((market) => {
+                      formatter={(value: any) => [`$${Number(value).toFixed(2)}`, undefined as any]}
+                    />                    {Array.from(new Set(localHoldings.map(g => g.market))).map((market) => {
                       const color = MARKET_COLORS[market] || MARKET_COLORS['Other'];
                       return (
                         <Area 
@@ -290,12 +428,16 @@ export default function DashboardClient({ portfolioId, portfolioName, holdingsDa
                         />
                       )
                     })}
+                    {/* 添加本地数据的特殊曲线呈现 */}
+                    {portfolioId === 'local-portfolio' && (
+                        <Area type="monotone" dataKey="Local" stackId="1" stroke="#000" fill="#f3f4f6" fillOpacity={1} strokeWidth={2} />
+                    )}
                   </AreaChart>
                 </ResponsiveContainer>
               </div>
               
               <div className="flex justify-start items-center space-x-4 mt-4">
-                {Array.from(new Set(holdingsData.map(g => g.market))).map((market) => {
+                {Array.from(new Set(localHoldings.map(g => g.market))).map((market) => {
                   const color = MARKET_COLORS[market] || MARKET_COLORS['Other'];
                   return (
                     <div key={market} className="flex items-center space-x-1.5">
@@ -304,6 +446,12 @@ export default function DashboardClient({ portfolioId, portfolioName, holdingsDa
                     </div>
                   )
                 })}
+                {portfolioId === 'local-portfolio' && (
+                    <div className="flex items-center space-x-1.5">
+                      <div className="w-2 h-2 rounded-full bg-gray-300"></div>
+                      <span className="text-[10px] font-bold text-gray-500 uppercase tracking-wide">LOCAL</span>
+                    </div>
+                )}
               </div>
             </div>
           </div>
@@ -327,8 +475,8 @@ export default function DashboardClient({ portfolioId, portfolioName, holdingsDa
                   <th className="px-6 py-3 text-right w-10"></th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-gray-50">
-                {holdingsData.map((group) => (
+              <tbody className="divide-y divide-gray-50 bg-white">
+                {localHoldings.map((group) => (
                   <React.Fragment key={group.market}>
                     {/* 分组标题行 */}
                     <tr className="bg-gray-50/30">
@@ -346,8 +494,7 @@ export default function DashboardClient({ portfolioId, portfolioName, holdingsDa
                           <div className="flex items-center space-x-3">
                             <div className="w-8 h-8 rounded-full bg-white flex items-center justify-center font-bold text-[11px] text-gray-900 border border-gray-100 shadow-sm overflow-hidden">
                               {asset.logo ? (
-                                // eslint-disable-next-line @next/next/no-img-element
-                                <img src={asset.logo} alt={asset.ticker} className="w-full h-full object-cover" />
+                                <Image src={asset.logo} alt={asset.ticker} width={32} height={32} className="w-full h-full object-cover" />
                               ) : (
                                 asset.ticker.charAt(0)
                               )}
@@ -384,9 +531,9 @@ export default function DashboardClient({ portfolioId, portfolioName, holdingsDa
                   <td className="px-6 py-4 text-[13px] text-black">Total Portfolio</td>
                   <td className="px-6 py-4"></td>
                   <td className="px-6 py-4"></td>
-                  <td className="px-6 py-4 text-right text-[15px] text-black tabular-nums">${summary.totalValue.toLocaleString('en-US', { minimumFractionDigits: 2 })}</td>
+                  <td className="px-6 py-4 text-right text-[15px] text-black tabular-nums">${localSummary.totalValue.toLocaleString('en-US', { minimumFractionDigits: 2 })}</td>
                   <td className="px-6 py-4 text-right">
-                    <FormatValue val={summary.totalCapGainPercentage} isPercentage={true} isCurrency={false} />
+                    <FormatValue val={localSummary.totalCapGainPercentage} isPercentage={true} isCurrency={false} />
                   </td>
                   <td className="px-6 py-4"></td>
                 </tr>
@@ -394,20 +541,10 @@ export default function DashboardClient({ portfolioId, portfolioName, holdingsDa
             </table>
           </div>
         </div>
-
-        <div className="mt-6 flex justify-between items-center px-2">
-          <div className="text-[11px] text-gray-400 font-medium">
-            Synced with Finnhub Real-time API
-          </div>
-          <div className="flex items-center space-x-4 text-[11px] text-gray-400 font-medium">
-            <a href="#" className="hover:text-black transition-colors">Privacy</a>
-            <a href="#" className="hover:text-black transition-colors">Legal</a>
-            <a href="#" className="hover:text-black transition-colors">Support</a>
-          </div>
-        </div>
-
+        </>
+        )}
       </main>
-      
+
       <AddTransactionModal
         isOpen={isModalOpen}
         onClose={() => setIsModalOpen(false)}

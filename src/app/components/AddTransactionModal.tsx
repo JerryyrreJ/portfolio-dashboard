@@ -170,6 +170,48 @@ export default function AddTransactionModal({
 
     setSubmitStatus('loading');
     try {
+      // 检查是否登录（通过检查 cookie 或传递的 props，这里简单通过 portfolioId 判断）
+      const isLocal = portfolioId === 'local-portfolio';
+
+      if (isLocal) {
+        // 1. 获取最新价格（可选，仅仅为了记录当时的 market value，这里已经有 price 了）
+        // 2. 构造本地 Transaction 对象
+        const newTx = {
+            id: 'local_' + Date.now(),
+            portfolioId: 'local-portfolio',
+            assetId: 'local_asset_' + selectedStock.symbol,
+            type: transactionType,
+            quantity: transactionType === 'SELL' ? -Math.abs(parseFloat(shares)) : parseFloat(shares),
+            price: parseFloat(price),
+            fee: parseFloat(fees) || 0,
+            date: new Date(purchaseDate).toISOString(),
+            notes: notes || null,
+            asset: {
+                id: 'local_asset_' + selectedStock.symbol,
+                ticker: selectedStock.symbol,
+                name: selectedStock.description,
+                market: 'US', // 假设
+                logo: null
+            }
+        };
+
+        // 3. 读取现有的 localStorage
+        const storedTransactions = localStorage.getItem('local_transactions');
+        let localTxs = storedTransactions ? JSON.parse(storedTransactions) : [];
+        localTxs.push(newTx);
+
+        // 4. 保存回 localStorage
+        localStorage.setItem('local_transactions', JSON.stringify(localTxs));
+
+        // 5. 触发自定义事件，通知 DashboardClient 重新加载本地数据
+        window.dispatchEvent(new Event('localTransactionsUpdated'));
+        
+        setSubmitStatus('success');
+        setTimeout(() => { handleClose(); }, 1000);
+        return;
+      }
+
+      // 以下为已登录状态的网络请求逻辑
       const assetLookupRes = await fetch(`/api/assets/lookup?ticker=${encodeURIComponent(selectedStock.symbol)}`);
       let assetId: string;
 
