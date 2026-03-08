@@ -51,3 +51,5 @@ GEMINI.md
 *.db
 *.db-journal
 prisma/prisma/dev.db
+# Supabase Email Templates
+email/
