@@ -1,7 +1,7 @@
 import { PrismaClient } from '@prisma/client'
-import { cookies } from 'next/headers'
 import DashboardClient from './DashboardClient'
 import { getCompanyProfile, get12MonthHistory } from '@/lib/finnhub'
+import { getUser } from '@/lib/supabase-server'
 
 const prisma = new PrismaClient()
 
@@ -67,11 +67,10 @@ async function fetchBatchQuotes(symbols: string[]): Promise<Record<string, numbe
 }
 
 export default async function Page() {
-  const cookieStore = await cookies();
-  const isLoggedIn = cookieStore.get('isLoggedIn')?.value === 'true';
+  const user = await getUser()
 
-  // 如果未登录，直接返回空状态给客户端组件，完全不查 DB
-  if (!isLoggedIn) {
+  // 未登录：返回空状态，完全不查 DB
+  if (!user) {
     return (
       <DashboardClient
         portfolioId="local-portfolio"
@@ -83,19 +82,37 @@ export default async function Page() {
     );
   }
 
-  // 1. 从数据库读取你第一个 Investment Portfolio
-  const portfolio = await prisma.portfolio.findFirst({
+  // 已登录：查找当前用户的 Portfolio，没有则自动创建
+  let portfolio = await prisma.portfolio.findFirst({
+    where: { userId: user.id },
     include: {
       transactions: {
-        include: {
-          asset: true
-        }
+        include: { asset: true }
       }
     }
-  });
+  })
 
   if (!portfolio) {
-    return <div className="p-8 text-center text-gray-500">No portfolio data found. Please run seed script.</div>
+    portfolio = await prisma.portfolio.create({
+      data: { userId: user.id, name: 'My Portfolio' },
+      include: {
+        transactions: {
+          include: { asset: true }
+        }
+      }
+    })
+  }
+
+  if (portfolio.transactions.length === 0) {
+    return (
+      <DashboardClient
+        portfolioId={portfolio.id}
+        portfolioName={portfolio.name}
+        holdingsData={[]}
+        chartData={[]}
+        summary={{ totalValue: 0, totalCapGain: 0, totalCapGainPercentage: 0 }}
+      />
+    )
   }
 
   // 2. 核心财务逻辑：通过历史交易流水计算实时持仓 (Holdings)

@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 
-const FINNHUB_API_KEY = process.env.FINNHUB_API_KEY;
-const BASE_URL = 'https://finnhub.io/api/v1';
+const TWELVEDATA_API_KEY = process.env.TWELVEDATA_API_KEY;
+const BASE_URL = 'https://api.twelvedata.com';
 
 export async function GET(request: NextRequest) {
   const searchParams = request.nextUrl.searchParams;
@@ -15,51 +15,47 @@ export async function GET(request: NextRequest) {
     );
   }
 
-  if (!FINNHUB_API_KEY) {
+  if (!TWELVEDATA_API_KEY) {
     return NextResponse.json(
-      { error: 'Finnhub API key not configured' },
+      { error: 'Twelve Data API key not configured' },
       { status: 500 }
     );
   }
 
   try {
-    // 解析日期
-    const targetDate = new Date(date);
-    // 设置时间为当天结束，确保获取当天的数据
-    targetDate.setHours(23, 59, 59, 999);
-    const to = Math.floor(targetDate.getTime() / 1000);
+    // 往前取 7 天窗口，确保即使选中周末/节假日也能拿到最近的交易日收盘价
+    const endDate = date;
+    const startDate = new Date(date + 'T00:00:00Z');
+    startDate.setUTCDate(startDate.getUTCDate() - 7);
+    const startDateStr = startDate.toISOString().split('T')[0];
 
-    // 从开始时间（当天开始）
-    const fromDate = new Date(date);
-    fromDate.setHours(0, 0, 0, 0);
-    const from = Math.floor(fromDate.getTime() / 1000);
-
-    const url = `${BASE_URL}/stock/candle?symbol=${symbol.toUpperCase()}&resolution=D&from=${from}&to=${to}&token=${FINNHUB_API_KEY}`;
+    const url = `${BASE_URL}/time_series?symbol=${symbol.toUpperCase()}&interval=1day&start_date=${startDateStr}&end_date=${endDate}&outputsize=10&apikey=${TWELVEDATA_API_KEY}`;
 
     const response = await fetch(url, {
       next: { revalidate: 86400 }, // 缓存 1 天
     });
 
     if (!response.ok) {
-      throw new Error(`Finnhub API error: ${response.status}`);
+      throw new Error(`Twelve Data API error: ${response.status}`);
     }
 
     const data = await response.json();
 
-    // Finnhub 返回格式: { c: [close], h: [high], l: [low], o: [open], t: [timestamp], s: "ok" }
-    if (data.s === 'ok' && data.c && data.c.length > 0) {
+    // Twelve Data 返回: { status: "ok", values: [{ datetime, open, high, low, close, volume }, ...] }
+    // values 按时间倒序排列，第一条是最接近 endDate 的交易日
+    if (data.status === 'ok' && data.values && data.values.length > 0) {
+      const latest = data.values[0];
       return NextResponse.json({
         symbol: symbol.toUpperCase(),
-        date: date,
-        price: data.c[0], // 收盘价
-        open: data.o[0],
-        high: data.h[0],
-        low: data.l[0],
-        timestamp: data.t[0],
+        date: latest.datetime,
+        price: parseFloat(latest.close),
+        open: parseFloat(latest.open),
+        high: parseFloat(latest.high),
+        low: parseFloat(latest.low),
       });
     } else {
       return NextResponse.json(
-        { error: 'No data available for the specified date', raw: data },
+        { error: data.message || 'No data available for the specified date' },
         { status: 404 }
       );
     }
