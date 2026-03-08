@@ -5,11 +5,16 @@ const nextConfig: NextConfig = {
     remotePatterns: [
       {
         protocol: 'https',
-        hostname: 'static2.finnhub.io',
+        hostname: '**.finnhub.io',
       },
       {
         protocol: 'https',
-        hostname: '**.finnhub.io',
+        hostname: '**.twelvedata.com',
+      },
+      {
+        protocol: 'https',
+        // 允许任意 https 来源的 logo（各数据源 CDN 地址不固定）
+        hostname: '**',
       },
     ],
   },
