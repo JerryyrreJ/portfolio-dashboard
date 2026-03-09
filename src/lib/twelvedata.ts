@@ -1,0 +1,180 @@
+/**
+ * Twelve Data API 客户端
+ * 文档: https://twelvedata.com/docs
+ */
+
+const API_KEY = process.env.TWELVEDATA_API_KEY || '';
+const BASE_URL = 'https://api.twelvedata.com';
+
+// Finnhub resolution → Twelve Data interval
+const RESOLUTION_MAP: Record<string, string> = {
+  '1': '1min',
+  '5': '5min',
+  '15': '15min',
+  '30': '30min',
+  '60': '1h',
+  'D': '1day',
+  'W': '1week',
+  'M': '1month',
+};
+
+interface TDValue {
+  datetime: string;
+  open: string;
+  high: string;
+  low: string;
+  close: string;
+  volume: string;
+}
+
+// 与 Finnhub HistoricalCandle 格式兼容
+export interface HistoricalCandle {
+  c: number[]; // 收盘价
+  h: number[]; // 最高价
+  l: number[]; // 最低价
+  o: number[]; // 开盘价
+  t: number[]; // 时间戳（Unix 秒）
+  s: string;   // 状态
+}
+
+async function fetchTwelveData(endpoint: string, params: Record<string, string> = {}) {
+  const url = new URL(`${BASE_URL}${endpoint}`);
+  url.searchParams.append('apikey', API_KEY);
+  Object.entries(params).forEach(([key, value]) => url.searchParams.append(key, value));
+
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), 8000);
+
+  try {
+    const response = await fetch(url.toString(), {
+      next: { revalidate: 60 },
+      signal: controller.signal,
+    });
+    clearTimeout(timeoutId);
+
+    if (!response.ok) {
+      console.warn(`Twelve Data API error: ${response.status} ${response.statusText} for ${endpoint}`);
+      return null;
+    }
+
+    const data = await response.json();
+
+    if (data.status === 'error') {
+      console.warn(`Twelve Data API error: ${data.message} for ${endpoint}`);
+      return null;
+    }
+
+    return data;
+  } catch (error: any) {
+    clearTimeout(timeoutId);
+    console.warn(`Twelve Data fetch exception for ${endpoint}:`, error.message || error);
+    return null;
+  }
+}
+
+/**
+ * 获取 K 线数据，返回与 Finnhub HistoricalCandle 兼容的格式
+ * @param symbol 股票代码
+ * @param from 开始时间戳（Unix 秒）
+ * @param to 结束时间戳（Unix 秒）
+ * @param resolution Finnhub 风格的周期: 1, 5, 15, 30, 60, D, W, M
+ */
+export async function getCandles(
+  symbol: string,
+  from: number,
+  to: number,
+  resolution: string = 'D'
+): Promise<HistoricalCandle | null> {
+  const interval = RESOLUTION_MAP[resolution] || '1day';
+  const startDate = new Date(from * 1000).toISOString().split('T')[0];
+  const endDate = new Date(to * 1000).toISOString().split('T')[0];
+
+  const data = await fetchTwelveData('/time_series', {
+    symbol: symbol.toUpperCase(),
+    interval,
+    start_date: startDate,
+    end_date: endDate,
+    outputsize: '5000',
+  });
+
+  if (!data || !data.values || data.values.length === 0) {
+    return null;
+  }
+
+  // Twelve Data 返回的是倒序（最新在前），反转为正序
+  const values: TDValue[] = [...data.values].reverse();
+
+  return {
+    s: 'ok',
+    c: values.map(v => parseFloat(v.close)),
+    h: values.map(v => parseFloat(v.high)),
+    l: values.map(v => parseFloat(v.low)),
+    o: values.map(v => parseFloat(v.open)),
+    t: values.map(v => Math.floor(new Date(v.datetime).getTime() / 1000)),
+  };
+}
+
+/**
+ * 获取指定日期附近的收盘价
+ * @param symbol 股票代码
+ * @param date 日期字符串或 Date 对象
+ */
+export async function getPriceOnDate(symbol: string, date: string | Date): Promise<number | null> {
+  const targetDate = typeof date === 'string' ? new Date(date + 'T00:00:00Z') : new Date(date);
+  const endDate = targetDate.toISOString().split('T')[0];
+  const startDate = new Date(targetDate);
+  startDate.setUTCDate(startDate.getUTCDate() - 7);
+
+  const data = await fetchTwelveData('/time_series', {
+    symbol: symbol.toUpperCase(),
+    interval: '1day',
+    start_date: startDate.toISOString().split('T')[0],
+    end_date: endDate,
+    outputsize: '10',
+  });
+
+  if (data?.values?.length > 0) {
+    return parseFloat(data.values[0].close); // 最新在前
+  }
+  return null;
+}
+
+/**
+ * 获取过去 12 个月的每月价格历史
+ * @param symbol 股票代码
+ */
+export async function get12MonthHistory(symbol: string): Promise<{ date: string; price: number }[]> {
+  const to = new Date();
+  const from = new Date();
+  from.setFullYear(to.getFullYear() - 1);
+
+  const data = await fetchTwelveData('/time_series', {
+    symbol: symbol.toUpperCase(),
+    interval: '1week',
+    start_date: from.toISOString().split('T')[0],
+    end_date: to.toISOString().split('T')[0],
+    outputsize: '60',
+  });
+
+  if (!data || !data.values || data.values.length === 0) {
+    return [];
+  }
+
+  // values 是倒序（最新在前），按月分组，取每月最后一条（即 values 里最后出现的那条）
+  const monthlyPoints: Record<string, { date: string; price: number }> = {};
+
+  for (const v of data.values) {
+    const dateObj = new Date(v.datetime);
+    const monthKey = `${dateObj.getFullYear()}-${String(dateObj.getMonth() + 1).padStart(2, '0')}`;
+    // 倒序遍历时，后面出现的是更早的数据，所以始终覆盖 → 最终保留的是最早的周数据点
+    monthlyPoints[monthKey] = {
+      date: dateObj.toLocaleDateString('en-US', { month: 'short', year: 'numeric' }),
+      price: parseFloat(v.close),
+    };
+  }
+
+  return Object.entries(monthlyPoints)
+    .sort(([a], [b]) => a.localeCompare(b))
+    .map(([, v]) => v)
+    .slice(-12);
+}

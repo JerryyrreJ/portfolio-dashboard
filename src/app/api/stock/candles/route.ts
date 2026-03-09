@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import { getCandles } from '@/lib/finnhub';
+import { getCandles } from '@/lib/twelvedata';
 
 export async function GET(request: Request) {
   const { searchParams } = new URL(request.url);
@@ -17,7 +17,6 @@ export async function GET(request: Request) {
 
     switch (range) {
       case '1D':
-        // From start of current trading day, hourly candles
         from.setHours(0, 0, 0, 0);
         resolution = '60';
         break;

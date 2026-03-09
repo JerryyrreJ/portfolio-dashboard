@@ -61,15 +61,6 @@ export interface StockSearchResult {
   }>;
 }
 
-export interface HistoricalCandle {
-  c: number[]; // 收盘价
-  h: number[]; // 最高价
-  l: number[]; // 最低价
-  o: number[]; // 开盘价
-  t: number[]; // 时间戳
-  s: string;   // 状态
-}
-
 // API 函数
 
 /**
@@ -86,93 +77,6 @@ export async function getQuote(symbol: string): Promise<StockQuote> {
  */
 export async function searchStock(query: string): Promise<StockSearchResult> {
   return fetchFinnhub('/search', { q: query });
-}
-
-/**
- * 获取历史K线数据
- * @param symbol 股票代码
- * @param from 开始时间戳
- * @param to 结束时间戳
- * @param resolution 时间周期: 1, 5, 15, 30, 60, D, W, M
- */
-export async function getCandles(
-  symbol: string,
-  from: number,
-  to: number,
-  resolution: string = 'D'
-): Promise<HistoricalCandle> {
-  return fetchFinnhub('/stock/candle', {
-    symbol: symbol.toUpperCase(),
-    resolution,
-    from: from.toString(),
-    to: to.toString(),
-  });
-}
-
-/**
- * 获取指定日期的收盘价（辅助函数）
- * @param symbol 股票代码
- * @param date 日期字符串或 Date 对象，如 "2024-01-15"
- */
-export async function getPriceOnDate(
-  symbol: string,
-  date: string | Date
-): Promise<number | null> {
-  const targetDate = new Date(date);
-  const from = Math.floor(targetDate.getTime() / 1000);
-  const to = from + 86400; // 加一天
-
-  try {
-    const candle = await getCandles(symbol, from, to, 'D');
-    if (candle && candle.s === 'ok' && candle.c.length > 0) {
-      return candle.c[0]; // 返回收盘价
-    }
-  } catch (error) {
-    console.error('Failed to get historical price:', error);
-  }
-  return null;
-}
-
-/**
- * 获取过去12个月的每月收盘价
- * @param symbol 股票代码
- */
-export async function get12MonthHistory(symbol: string): Promise<{date: string, price: number}[]> {
-  const to = Math.floor(Date.now() / 1000);
-  const from = to - 365 * 24 * 60 * 60; // 一年前
-
-  try {
-    // 获取过去一年的周线数据，因为月线 M 在免费版可能受限或数据稀疏，周线更容易获取
-    const candle = await getCandles(symbol, from, to, 'W');
-    if (!candle || candle.s !== 'ok' || !candle.c || candle.c.length === 0) {
-      return [];
-    }
-
-    const monthlyPoints: Record<string, {date: string, price: number}> = {};
-
-    // 遍历所有数据点，按 "YYYY-MM" 分组，保留该月最后一个数据点（即月底价格）
-    for (let i = 0; i < candle.t.length; i++) {
-      const dateObj = new Date(candle.t[i] * 1000);
-      const monthKey = `${dateObj.getFullYear()}-${String(dateObj.getMonth() + 1).padStart(2, '0')}`;
-      
-      monthlyPoints[monthKey] = {
-        date: dateObj.toLocaleDateString('en-US', { month: 'short', year: 'numeric' }),
-        price: candle.c[i]
-      };
-    }
-
-    // 将对象转为数组并按时间排序
-    const sortedPoints = Object.values(monthlyPoints).sort((a, b) => {
-      return new Date(a.date).getTime() - new Date(b.date).getTime();
-    });
-
-    // 只取最近的12个月
-    return sortedPoints.slice(-12);
-
-  } catch (error) {
-    console.error(`Failed to get 12 month history for ${symbol}:`, error);
-    return [];
-  }
 }
 
 /**
