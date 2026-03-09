@@ -1,5 +1,6 @@
 import DashboardClient from './DashboardClient'
-import { getCompanyProfile, get12MonthHistory } from '@/lib/finnhub'
+import { getCompanyProfile } from '@/lib/finnhub'
+import { get12MonthHistory } from '@/lib/twelvedata'
 import { getUser } from '@/lib/supabase-server'
 
 import prisma from '@/lib/prisma'

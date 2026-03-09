@@ -50,6 +50,8 @@ export default function SettingsPage() {
   const [showPassword, setShowPassword] = useState(false);
   const [authActionLoading, setAuthActionLoading] = useState(false);
   const [authError, setAuthError] = useState<string | null>(null);
+  const [emailSuccess, setEmailSuccess] = useState(false);
+  const [passwordSuccess, setPasswordSuccess] = useState(false);
 
   const [isEditingPortfolioName, setIsEditingPortfolioName] = useState(false);
   const [isEditingBaseCurrency, setIsEditingBaseCurrency] = useState(false);

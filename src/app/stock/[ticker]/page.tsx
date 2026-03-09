@@ -1,6 +1,7 @@
 import { notFound } from 'next/navigation'
 import StockDetailClient from './StockDetailClient'
-import { getQuote, getCandles, getCompanyProfile, getBasicFinancials, get12MonthHistory } from '@/lib/finnhub'
+import { getQuote, getCompanyProfile, getBasicFinancials } from '@/lib/finnhub'
+import { get12MonthHistory } from '@/lib/twelvedata'
 import { getUser } from '@/lib/supabase-server'
 
 import prisma from '@/lib/prisma'
