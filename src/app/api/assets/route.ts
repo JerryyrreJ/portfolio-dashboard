@@ -1,15 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-
-// 使用全局实例避免开发模式下的热重载问题
-const globalForPrisma = globalThis as unknown as {
-  prisma: PrismaClient | undefined;
-};
-
-import prisma from '@/lib/prisma'
-
-if (process.env.NODE_ENV !== 'production') {
-  globalForPrisma.prisma = prisma;
-}
+import prisma from '@/lib/prisma';
 
 // 获取所有资产列表
 export async function GET(request: NextRequest) {
