@@ -20,7 +20,7 @@ export default function DashboardLoading() {
           </nav>
         </div>
         <div className="flex items-center space-x-5">
-          <div className="relative">
+          <div className="relative hidden sm:block">
             <Search className="w-3.5 h-3.5 absolute left-3 top-[10px] text-gray-400" />
             <div className="bg-gray-100 rounded-lg h-8 w-44"></div>
           </div>
@@ -39,12 +39,12 @@ export default function DashboardLoading() {
         {/* Title & Buttons */}
         <div className="flex justify-between items-center mb-6">
           <div className="flex items-baseline space-x-3">
-            <div className="h-8 w-48 bg-gray-200 rounded-lg"></div>
-            <div className="h-5 w-16 bg-gray-200 rounded-md"></div>
+            <div className="h-8 w-32 sm:w-48 bg-gray-200 rounded-lg"></div>
+            <div className="hidden sm:inline-block h-5 w-16 bg-gray-200 rounded-md"></div>
           </div>
           <div className="flex items-center space-x-2">
             <div className="w-8 h-8 bg-gray-200 rounded-lg"></div>
-            <div className="w-24 h-8 bg-gray-200 rounded-lg"></div>
+            <div className="w-20 sm:w-24 h-8 bg-gray-200 rounded-lg"></div>
           </div>
         </div>
 
@@ -84,14 +84,14 @@ export default function DashboardLoading() {
           {/* Right Chart */}
           <div className="col-span-12 lg:col-span-9">
             <div className="bg-white rounded-2xl p-6 border border-gray-100 shadow-sm h-full flex flex-col">
-              <div className="flex justify-between items-center mb-6">
+              <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 sm:gap-0 mb-6">
                 <div>
                   <div className="h-4 w-32 bg-gray-200 rounded mb-2"></div>
                   <div className="h-3 w-40 bg-gray-200 rounded"></div>
                 </div>
-                <div className="flex space-x-1">
+                <div className="flex space-x-1 w-full sm:w-auto">
                   {[1, 2, 3, 4, 5].map((i) => (
-                    <div key={i} className="w-8 h-6 bg-gray-200 rounded-md"></div>
+                    <div key={i} className="flex-1 sm:flex-none w-auto sm:w-8 h-6 sm:h-7 bg-gray-200 rounded-md"></div>
                   ))}
                 </div>
               </div>
@@ -119,8 +119,8 @@ export default function DashboardLoading() {
               <thead>
                 <tr className="bg-gray-50/50 border-b border-gray-100">
                   <th className="px-6 py-3"><div className="h-3 w-12 bg-gray-200 rounded"></div></th>
-                  <th className="px-6 py-3"><div className="h-3 w-20 bg-gray-200 rounded ml-auto"></div></th>
-                  <th className="px-6 py-3"><div className="h-3 w-16 bg-gray-200 rounded ml-auto"></div></th>
+                  <th className="px-6 py-3 hidden md:table-cell"><div className="h-3 w-20 bg-gray-200 rounded ml-auto"></div></th>
+                  <th className="px-6 py-3 hidden sm:table-cell"><div className="h-3 w-16 bg-gray-200 rounded ml-auto"></div></th>
                   <th className="px-6 py-3"><div className="h-3 w-12 bg-gray-200 rounded ml-auto"></div></th>
                   <th className="px-6 py-3"><div className="h-3 w-20 bg-gray-200 rounded ml-auto"></div></th>
                   <th className="px-6 py-3 w-10"></th>
@@ -133,13 +133,13 @@ export default function DashboardLoading() {
                       <div className="flex items-center space-x-3">
                         <div className="w-8 h-8 rounded-full bg-gray-200"></div>
                         <div>
-                          <div className="h-4 w-16 bg-gray-200 rounded mb-1"></div>
-                          <div className="h-3 w-24 bg-gray-200 rounded"></div>
+                          <div className="h-4 w-12 sm:w-16 bg-gray-200 rounded mb-1"></div>
+                          <div className="h-3 w-20 sm:w-24 bg-gray-200 rounded"></div>
                         </div>
                       </div>
                     </td>
-                    <td className="px-6 py-4"><div className="h-4 w-16 bg-gray-200 rounded ml-auto"></div></td>
-                    <td className="px-6 py-4">
+                    <td className="px-6 py-4 hidden md:table-cell"><div className="h-4 w-16 bg-gray-200 rounded ml-auto"></div></td>
+                    <td className="px-6 py-4 hidden sm:table-cell">
                       <div className="flex flex-col items-end">
                         <div className="h-4 w-12 bg-gray-200 rounded mb-1"></div>
                         <div className="h-3 w-10 bg-gray-200 rounded"></div>

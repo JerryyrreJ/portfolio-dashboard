@@ -52,55 +52,67 @@ export async function POST(
 
     // Parse Quote (Finnhub) - ONLY IF VALID
     // Check if current price is a positive number
-    if (quoteResult.status === 'fulfilled' && quoteResult.value && quoteResult.value.c > 0) {
-      const q = quoteResult.value;
-      updateData.lastPrice = q.c;
-      updateData.priceChange = q.d;
-      updateData.priceChangePercent = q.dp;
-      updateData.dayHigh = q.h;
-      updateData.dayLow = q.l;
-      updateData.dayOpen = q.o;
-      updateData.prevClose = q.pc;
-      updateData.lastPriceUpdated = currentTime;
-    } else if (quoteResult.status === 'fulfilled' && (!quoteResult.value || !quoteResult.value.c)) {
-      console.warn(`Finnhub quote returned null/zero for ${decodedTicker}, preserving old price.`);
+    if (quoteResult.status === 'fulfilled' && quoteResult.value) {
+      const q = quoteResult.value as any;
+      if (q.c > 0) {
+        updateData.lastPrice = q.c;
+        updateData.priceChange = q.d;
+        updateData.priceChangePercent = q.dp;
+        updateData.dayHigh = q.h;
+        updateData.dayLow = q.l;
+        updateData.dayOpen = q.o;
+        updateData.prevClose = q.pc;
+        updateData.lastPriceUpdated = currentTime;
+      } else if (!q.c) {
+        console.warn(`Finnhub quote returned null/zero for ${decodedTicker}, preserving old price.`);
+      }
     }
 
     // Parse Profile (Finnhub) - ONLY IF VALID
-    if (profileResult.status === 'fulfilled' && profileResult.value && profileResult.value.name) {
-      const p = profileResult.value;
-      updateData.logo = p.logo || asset.logo;
-      updateData.profile = JSON.stringify({
-        finnhubIndustry: p.finnhubIndustry,
-        country: p.country,
-        currency: p.currency,
-        weburl: p.weburl,
-        ipo: p.ipo,
-        marketCapitalization: p.marketCapitalization,
-        name: p.name,
-        exchange: p.exchange
-      });
+    if (profileResult.status === 'fulfilled' && profileResult.value) {
+      const p = profileResult.value as any;
+      if (p.name) {
+        updateData.logo = p.logo || asset.logo;
+        updateData.profile = JSON.stringify({
+          finnhubIndustry: p.finnhubIndustry,
+          country: p.country,
+          currency: p.currency,
+          weburl: p.weburl,
+          ipo: p.ipo,
+          marketCapitalization: p.marketCapitalization,
+          name: p.name,
+          exchange: p.exchange
+        });
+      }
     }
 
     // Parse Financials (Finnhub) - ONLY IF VALID
-    if (financialsResult.status === 'fulfilled' && financialsResult.value && financialsResult.value.metric) {
-      const m = financialsResult.value.metric;
-      updateData.metrics = JSON.stringify({
-        week52High: m['52WeekHigh'] || 0,
-        week52Low: m['52WeekLow'] || 0,
-        peRatio: m.peBasicExclExtraTTM || m.peNormalizedAnnual || 0,
-        eps: m.epsBasicExclExtraItemsTTM || m.epsTTM || 0,
-        beta: m.beta || 0,
-        dividendYield: m.dividendYieldIndicatedAnnual || 0,
-      });
+    if (financialsResult.status === 'fulfilled' && financialsResult.value) {
+      const fr = financialsResult.value as any;
+      if (fr.metric) {
+        const m = fr.metric;
+        updateData.metrics = JSON.stringify({
+          week52High: m['52WeekHigh'] || 0,
+          week52Low: m['52WeekLow'] || 0,
+          peRatio: m.peBasicExclExtraTTM || m.peNormalizedAnnual || 0,
+          eps: m.epsBasicExclExtraItemsTTM || m.epsTTM || 0,
+          beta: m.beta || 0,
+          dividendYield: m.dividendYieldIndicatedAnnual || 0,
+        });
+      }
     }
 
     // Parse History (Twelve Data) - ONLY IF FETCHED AND VALID
     // Defensive check: only update if we got a non-empty array
-    if (historyResult.status === 'fulfilled' && historyResult.value && Array.isArray(historyResult.value) && historyResult.value.length > 0) {
-      updateData.priceHistory = JSON.stringify(historyResult.value);
-      updateData.historyLastUpdated = currentTime;
-    } else if (historyResult.status === 'fulfilled' && (!historyResult.value || historyResult.value.length === 0)) {
+    if (historyResult.status === 'fulfilled' && historyResult.value) {
+      const hv = historyResult.value as any;
+      if (Array.isArray(hv) && hv.length > 0) {
+        updateData.priceHistory = JSON.stringify(hv);
+        updateData.historyLastUpdated = currentTime;
+      } else if (!hv || hv.length === 0) {
+        console.warn(`History sync returned empty for ${decodedTicker}`);
+      }
+    } else if (historyResult.status === 'fulfilled' && (!historyResult.value || (historyResult.value as any).length === 0)) {
       // If we got an empty result or error from API, we DO NOT update priceHistory
       // This preserves the old valid data in the database
       console.warn(`Twelve Data returned empty/error for ${decodedTicker}, preserving old cache.`);

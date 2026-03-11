@@ -373,21 +373,21 @@ export default function AddTransactionModal({
   if (!isOpen) return null;
 
   return (
-    <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/40 backdrop-blur-md transition-all">
-      <div className="relative w-full max-w-[500px] bg-white rounded-[32px] shadow-[0_20px_70px_-10px_rgba(0,0,0,0.15)] border border-gray-100 overflow-hidden flex flex-col animate-in fade-in zoom-in duration-200">
+    <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/40 backdrop-blur-md transition-all p-4">
+      <div className="relative w-full max-w-[500px] bg-white rounded-[28px] sm:rounded-[32px] shadow-[0_20px_70px_-10px_rgba(0,0,0,0.15)] border border-gray-100 overflow-y-auto max-h-[90vh] flex flex-col animate-in fade-in zoom-in duration-200">
         
         {/* Header - Apple Style */}
-        <div className="px-8 pt-8 pb-4 flex items-center justify-between">
+        <div className="px-6 pt-6 sm:px-8 sm:pt-8 pb-4 flex items-center justify-between sticky top-0 bg-white/90 backdrop-blur-sm z-20">
           <div>
-            <h2 className="text-[24px] font-bold text-black tracking-tight leading-none">Record Trade</h2>
-            <p className="text-[13px] text-gray-400 font-medium mt-2">Portfolio: <span className="text-black font-semibold">{portfolioName}</span></p>
+            <h2 className="text-[20px] sm:text-[24px] font-bold text-black tracking-tight leading-none">Record Trade</h2>
+            <p className="text-[12px] sm:text-[13px] text-gray-400 font-medium mt-1.5 sm:mt-2">Portfolio: <span className="text-black font-semibold">{portfolioName}</span></p>
           </div>
-          <button onClick={handleClose} className="p-2 text-gray-300 hover:text-black transition-colors rounded-full hover:bg-gray-50">
+          <button onClick={handleClose} className="p-2 text-gray-300 hover:text-black transition-colors rounded-full hover:bg-gray-50 bg-gray-50/50 sm:bg-transparent">
             <X className="w-5 h-5" />
           </button>
         </div>
 
-        <form onSubmit={handleSubmit} className="p-8 pt-2 space-y-6">
+        <form onSubmit={handleSubmit} className="p-6 pt-2 sm:p-8 sm:pt-2 space-y-5 sm:space-y-6">
           
           {/* Side Switch - Full Width Colorful Toggle */}
           <div className="bg-gray-100 p-1.5 rounded-2xl flex relative h-12">
@@ -487,30 +487,53 @@ export default function AddTransactionModal({
           </div>
 
           {/* Inputs Grid: Shares & Unit Price */}
-          <div className="grid grid-cols-2 gap-6">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-5 sm:gap-6">
             <div className="space-y-2">
               <label className="text-[11px] font-bold text-gray-400 uppercase tracking-widest px-1">Shares</label>
               <div className="relative">
                 <Hash className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-300" />
-                <input type="number" step="0.0001" value={shares} onChange={(e) => setShares(e.target.value)} placeholder="0.00" className="w-full pl-11 pr-4 py-3.5 bg-gray-50 border-none rounded-[18px] text-[15px] font-bold tabular-nums outline-none focus:ring-2 focus:ring-black/5" />
+                <input 
+                  type="number" 
+                  step="0.0001" 
+                  value={shares} 
+                  onChange={(e) => setShares(e.target.value)} 
+                  onWheel={(e) => (e.target as HTMLInputElement).blur()}
+                  placeholder="0.00" 
+                  className="w-full pl-11 pr-4 py-3.5 bg-gray-50 border-none rounded-[18px] text-[15px] font-bold tabular-nums outline-none focus:ring-2 focus:ring-black/5 [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none" 
+                />
               </div>
             </div>
             <div className="space-y-2">
               <label className="text-[11px] font-bold text-gray-400 uppercase tracking-widest px-1">Unit Price</label>
               <div className="relative">
                 <DollarSign className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-300" />
-                <input type="number" step="0.01" value={price} onChange={(e) => { setPrice(e.target.value); setPriceSource('manual'); }} placeholder="0.00" className={`w-full pl-11 pr-4 py-3.5 border-none rounded-[18px] text-[15px] font-bold tabular-nums outline-none focus:ring-2 focus:ring-black/5 transition-colors ${priceSource === 'api' ? 'bg-blue-50/50 text-blue-900 ring-1 ring-blue-100' : 'bg-gray-50 text-black'}`} />
+                <input 
+                  type="number" 
+                  step="0.01" 
+                  value={price} 
+                  onChange={(e) => { setPrice(e.target.value); setPriceSource('manual'); }} 
+                  onWheel={(e) => (e.target as HTMLInputElement).blur()}
+                  placeholder="0.00" 
+                  className={`w-full pl-11 pr-4 py-3.5 border-none rounded-[18px] text-[15px] font-bold tabular-nums outline-none focus:ring-2 focus:ring-black/5 transition-colors [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none ${priceSource === 'api' ? 'bg-blue-50/50 text-blue-900 ring-1 ring-blue-100' : 'bg-gray-50 text-black'}`} 
+                />
               </div>
             </div>
           </div>
 
           {/* Fee & Optional Notes Grid */}
-          <div className="grid grid-cols-2 gap-6">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-5 sm:gap-6">
             <div className="space-y-2">
               <label className="text-[11px] font-bold text-gray-400 uppercase tracking-widest px-1">Fee (Optional)</label>
               <div className="relative">
                 <DollarSign className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-300" />
-                <input type="number" step="0.01" value={fees} onChange={(e) => setFees(e.target.value)} className="w-full pl-11 pr-4 py-3.5 bg-gray-50 border-none rounded-[18px] text-[15px] font-bold outline-none focus:ring-2 focus:ring-black/5" />
+                <input 
+                  type="number" 
+                  step="0.01" 
+                  value={fees} 
+                  onChange={(e) => setFees(e.target.value)} 
+                  onWheel={(e) => (e.target as HTMLInputElement).blur()}
+                  className="w-full pl-11 pr-4 py-3.5 bg-gray-50 border-none rounded-[18px] text-[15px] font-bold outline-none focus:ring-2 focus:ring-black/5 [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none" 
+                />
               </div>
             </div>
             <div className="space-y-2">

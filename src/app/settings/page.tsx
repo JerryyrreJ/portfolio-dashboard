@@ -261,7 +261,7 @@ export default function SettingsPage() {
         onClose={() => setNotification({ ...notification, show: false })} 
       />
       {/* Header */}
-      <header className="bg-white/80 backdrop-blur-xl border-b border-gray-100 px-6 h-[56px] flex items-center sticky top-0 z-50 transition-all">
+      <header className="bg-white/80 backdrop-blur-xl border-b border-gray-100 px-4 sm:px-6 h-[56px] flex items-center sticky top-0 z-50 transition-all">
         <Link href="/" className="flex items-center space-x-2 text-[14px] font-semibold text-gray-500 hover:text-black transition-colors group">
           <div className="w-6 h-6 rounded-full bg-gray-100 flex items-center justify-center group-hover:bg-gray-200 transition-colors">
             <ChevronLeft className="w-3.5 h-3.5 text-gray-600 group-hover:text-black" />
@@ -271,19 +271,19 @@ export default function SettingsPage() {
       </header>
 
       {/* Main Content Area */}
-      <main className="flex-1 w-full py-12 flex flex-col md:flex-row justify-center items-start px-6 gap-12 relative">
+      <main className="flex-1 w-full py-6 md:py-12 flex flex-col md:flex-row justify-center items-start px-4 sm:px-6 gap-8 md:gap-12 relative">
         
         {/* Sidebar Navigation */}
         <aside className="w-full md:w-64 flex-shrink-0 md:sticky md:top-28">
-          <h1 className="text-[28px] font-bold text-black tracking-tight mb-8 pl-4">Settings</h1>
-          <nav className="flex flex-col space-y-1.5 relative">
+          <h1 className="text-[24px] md:text-[28px] font-bold text-black tracking-tight mb-6 md:mb-8 pl-1 md:pl-4">Settings</h1>
+          <nav className="flex flex-row md:flex-col overflow-x-auto md:overflow-visible pb-2 md:pb-0 space-x-2 md:space-x-0 md:space-y-1.5 relative no-scrollbar">
             {navItems.map((item) => {
               const isActive = activeSection === item.id;
               return (
                 <button 
                   key={item.id}
                   onClick={() => scrollToSection(item.id, item.ref)}
-                  className={`flex items-center space-x-3 px-4 py-3.5 rounded-[14px] text-[14px] font-semibold transition-all group w-full text-left ${
+                  className={`flex items-center space-x-3 px-4 py-2.5 md:py-3.5 rounded-xl md:rounded-[14px] text-[13px] md:text-[14px] font-semibold transition-all group whitespace-nowrap md:w-full text-left ${
                     isActive 
                       ? 'bg-white shadow-sm text-black border border-gray-100/50' 
                       : 'text-gray-500 hover:bg-gray-100/50 hover:text-gray-900 border border-transparent'
@@ -303,20 +303,20 @@ export default function SettingsPage() {
         <div className="w-full max-w-[720px] pb-32">
           
           {/* SECTION: PORTFOLIO */}
-          <div id="portfolio" ref={portfolioRef} className="scroll-mt-32">
+          <div id="portfolio" ref={portfolioRef} className="scroll-mt-24 md:scroll-mt-32">
             <div className="mb-6">
-              <h2 className="text-[20px] font-bold text-black tracking-tight">Portfolio Settings</h2>
+              <h2 className="text-[18px] md:text-[20px] font-bold text-black tracking-tight">Portfolio Settings</h2>
               <p className="text-[13px] text-gray-400 font-medium mt-1">Manage your core portfolio configuration and data.</p>
             </div>
             
-            <div className="space-y-6 bg-white rounded-[32px] p-8 shadow-sm border border-gray-100 mb-16">
+            <div className="space-y-6 bg-white rounded-2xl md:rounded-[32px] p-5 md:p-8 shadow-sm border border-gray-100 mb-12 md:mb-16">
               {/* General Group */}
               <div className="space-y-4">
                 <h3 className="text-[11px] font-bold text-gray-400 uppercase tracking-[0.1em] pl-1">General</h3>
                 <div className="bg-gray-50/50 rounded-2xl border border-gray-100 overflow-hidden transition-all duration-300">
                   <div className="border-b border-gray-100 bg-white sm:bg-transparent">
-                    <div className="px-5 py-4 flex items-center justify-between">
-                      <div className="flex items-center space-x-4">
+                    <div className="px-4 md:px-5 py-4 flex items-center justify-between">
+                      <div className="flex items-center space-x-3 md:space-x-4">
                         <div className="w-8 h-8 rounded-lg bg-white border border-gray-100 shadow-sm flex items-center justify-center"><Wallet className="w-4 h-4 text-gray-400" /></div>
                         <div>
                           <div className="text-[14px] font-bold text-black leading-tight">Portfolio Name</div>
@@ -329,7 +329,7 @@ export default function SettingsPage() {
                           setIsEditingBaseCurrency(false);
                           setPortfolioError(null);
                         }}
-                        className={`text-[13px] font-bold px-3 py-1.5 rounded-lg transition-colors shadow-sm active:scale-95 border ${
+                        className={`text-[12px] md:text-[13px] font-bold px-3 py-1.5 rounded-lg transition-colors shadow-sm active:scale-95 border ${
                           isEditingPortfolioName 
                             ? 'bg-gray-100 border-gray-200 text-gray-700' 
                             : 'bg-white border-gray-100 text-black hover:bg-gray-100'
@@ -470,37 +470,37 @@ export default function SettingsPage() {
           </div>
 
           {/* SECTION: PREFERENCES */}
-          <div id="preferences" ref={preferencesRef} className="scroll-mt-32">
+          <div id="preferences" ref={preferencesRef} className="scroll-mt-24 md:scroll-mt-32">
             <div className="mb-6 flex items-center gap-3">
-              <h2 className="text-[20px] font-bold text-black tracking-tight">Preferences</h2>
+              <h2 className="text-[18px] md:text-[20px] font-bold text-black tracking-tight">Preferences</h2>
             </div>
             
-            <div className="space-y-6 bg-white rounded-[32px] p-8 shadow-sm border border-gray-100 mb-16">
+            <div className="space-y-6 bg-white rounded-2xl md:rounded-[32px] p-5 md:p-8 shadow-sm border border-gray-100 mb-12 md:mb-16">
               <div className="space-y-4">
                 <h3 className="text-[11px] font-bold text-gray-400 uppercase tracking-[0.1em] pl-1">Appearance</h3>
                 <div className="bg-gray-50/50 rounded-2xl border border-gray-100 overflow-hidden">
-                  <div className="px-5 py-4 flex items-center justify-between border-b border-gray-100">
-                    <div className="flex items-center space-x-4">
+                  <div className="px-4 md:px-5 py-4 flex items-center justify-between border-b border-gray-100">
+                    <div className="flex items-center space-x-3 md:space-x-4">
                       <div className="w-8 h-8 rounded-lg bg-white border border-gray-100 shadow-sm flex items-center justify-center"><Monitor className="w-4 h-4 text-gray-400" /></div>
                       <div>
                         <div className="text-[14px] font-bold text-black leading-tight">Theme</div>
                         <div className="text-[13px] text-gray-500 font-medium mt-0.5">Follow System</div>
                       </div>
                     </div>
-                    <button className="text-[13px] font-bold text-black border border-gray-100 bg-white hover:bg-gray-100 px-3 py-1.5 rounded-lg transition-colors shadow-sm active:scale-95">Select</button>
+                    <button className="text-[12px] md:text-[13px] font-bold text-black border border-gray-100 bg-white hover:bg-gray-100 px-3 py-1.5 rounded-lg transition-colors shadow-sm active:scale-95">Select</button>
                   </div>
-                  <div className="px-5 py-4 flex items-center justify-between border-b border-gray-100">
-                    <div className="flex items-center space-x-4">
+                  <div className="px-4 md:px-5 py-4 flex items-center justify-between border-b border-gray-100">
+                    <div className="flex items-center space-x-3 md:space-x-4">
                       <div className="w-8 h-8 rounded-lg bg-white border border-gray-100 shadow-sm flex items-center justify-center"><BarChart2 className="w-4 h-4 text-gray-400" /></div>
                       <div>
                         <div className="text-[14px] font-bold text-black leading-tight">Default Chart Type</div>
                         <div className="text-[13px] text-gray-500 font-medium mt-0.5">Area Chart</div>
                       </div>
                     </div>
-                    <button className="text-[13px] font-bold text-black border border-gray-100 bg-white hover:bg-gray-100 px-3 py-1.5 rounded-lg transition-colors shadow-sm active:scale-95">Switch</button>
+                    <button className="text-[12px] md:text-[13px] font-bold text-black border border-gray-100 bg-white hover:bg-gray-100 px-3 py-1.5 rounded-lg transition-colors shadow-sm active:scale-95">Switch</button>
                   </div>
-                  <div className="px-5 py-4 flex items-center justify-between">
-                    <div className="flex items-center space-x-4">
+                  <div className="px-4 md:px-5 py-4 flex items-center justify-between">
+                    <div className="flex items-center space-x-3 md:space-x-4">
                       <div className="w-8 h-8 rounded-lg bg-white border border-gray-100 shadow-sm flex items-center justify-center"><EyeOff className="w-4 h-4 text-gray-400" /></div>
                       <div>
                         <div className="text-[14px] font-bold text-black leading-tight">Hide Small Balances</div>
@@ -514,12 +514,12 @@ export default function SettingsPage() {
               <div className="space-y-4">
                 <h3 className="text-[11px] font-bold text-gray-400 uppercase tracking-[0.1em] pl-1">Performance</h3>
                 <div className="bg-gray-50/50 rounded-2xl border border-gray-100 overflow-hidden">
-                  <div className="px-5 py-4 flex items-center justify-between">
-                    <div className="flex items-center space-x-4">
+                  <div className="px-4 md:px-5 py-4 flex items-center justify-between">
+                    <div className="flex items-center space-x-3 md:space-x-4">
                       <div className="w-8 h-8 rounded-lg bg-white border border-gray-100 shadow-sm flex items-center justify-center"><Zap className="w-4 h-4 text-gray-400" /></div>
                       <div>
                         <div className="text-[14px] font-bold text-black leading-tight">Real-time Sync</div>
-                        <div className="text-[12px] text-gray-400 font-medium mt-0.5">Faster updates (uses more battery)</div>
+                        <div className="text-[12px] text-gray-400 font-medium mt-0.5">Faster updates</div>
                       </div>
                     </div>
                     {renderToggle(true)}
@@ -530,21 +530,21 @@ export default function SettingsPage() {
           </div>
 
           {/* SECTION: NOTIFICATIONS */}
-          <div id="notifications" ref={notificationsRef} className="scroll-mt-32">
+          <div id="notifications" ref={notificationsRef} className="scroll-mt-24 md:scroll-mt-32">
             <div className="mb-6 flex items-center gap-3">
-              <h2 className="text-[20px] font-bold text-black tracking-tight">Notifications</h2>
+              <h2 className="text-[18px] md:text-[20px] font-bold text-black tracking-tight">Notifications</h2>
             </div>
             
-            <div className="space-y-6 bg-white rounded-[32px] p-8 shadow-sm border border-gray-100 mb-16">
+            <div className="space-y-6 bg-white rounded-2xl md:rounded-[32px] p-5 md:p-8 shadow-sm border border-gray-100 mb-12 md:mb-16">
               <div className="space-y-4">
                 <h3 className="text-[11px] font-bold text-gray-400 uppercase tracking-[0.1em] pl-1">Market Alerts</h3>
                 <div className="bg-gray-50/50 rounded-2xl border border-gray-100 overflow-hidden">
-                  <div className="px-5 py-4 flex items-center justify-between">
-                    <div className="flex items-center space-x-4">
+                  <div className="px-4 md:px-5 py-4 flex items-center justify-between">
+                    <div className="flex items-center space-x-3 md:space-x-4">
                       <div className="w-8 h-8 rounded-lg bg-white border border-gray-100 shadow-sm flex items-center justify-center"><TrendingUp className="w-4 h-4 text-gray-400" /></div>
                       <div>
                         <div className="text-[14px] font-bold text-black leading-tight">Price Volatility</div>
-                        <div className="text-[12px] text-gray-400 font-medium mt-0.5">Alert on &gt;5% daily moves</div>
+                        <div className="text-[12px] text-gray-400 font-medium mt-0.5">Alert on &gt;5% moves</div>
                       </div>
                     </div>
                     {renderToggle(true)}
@@ -554,8 +554,8 @@ export default function SettingsPage() {
               <div className="space-y-4">
                 <h3 className="text-[11px] font-bold text-gray-400 uppercase tracking-[0.1em] pl-1">Reporting</h3>
                 <div className="bg-gray-50/50 rounded-2xl border border-gray-100 overflow-hidden">
-                  <div className="px-5 py-4 flex items-center justify-between border-b border-gray-100">
-                    <div className="flex items-center space-x-4">
+                  <div className="px-4 md:px-5 py-4 flex items-center justify-between border-b border-gray-100">
+                    <div className="flex items-center space-x-3 md:space-x-4">
                       <div className="w-8 h-8 rounded-lg bg-white border border-gray-100 shadow-sm flex items-center justify-center"><FileText className="w-4 h-4 text-gray-400" /></div>
                       <div>
                         <div className="text-[14px] font-bold text-black leading-tight">Daily Digest</div>
@@ -564,8 +564,8 @@ export default function SettingsPage() {
                     </div>
                     {renderToggle(false)}
                   </div>
-                  <div className="px-5 py-4 flex items-center justify-between">
-                    <div className="flex items-center space-x-4">
+                  <div className="px-4 md:px-5 py-4 flex items-center justify-between">
+                    <div className="flex items-center space-x-3 md:space-x-4">
                       <div className="w-8 h-8 rounded-lg bg-white border border-gray-100 shadow-sm flex items-center justify-center"><Mail className="w-4 h-4 text-gray-400" /></div>
                       <div>
                         <div className="text-[14px] font-bold text-black leading-tight">Weekly Newsletter</div>
@@ -580,9 +580,9 @@ export default function SettingsPage() {
           </div>
 
           {/* SECTION: ACCOUNT & SECURITY */}
-          <div id="account" ref={accountRef} className="scroll-mt-32">
+          <div id="account" ref={accountRef} className="scroll-mt-24 md:scroll-mt-32">
             <div className="mb-6">
-              <h2 className="text-[20px] font-bold text-black tracking-tight">Account & Security</h2>
+              <h2 className="text-[18px] md:text-[20px] font-bold text-black tracking-tight">Account & Security</h2>
               <p className="text-[13px] text-gray-400 font-medium mt-1">
                 {isLoggedIn 
                   ? 'Manage your account profile, authentication, and security preferences.' 
@@ -590,32 +590,32 @@ export default function SettingsPage() {
               </p>
             </div>
             
-            <div className="bg-white rounded-[32px] p-8 shadow-sm border border-gray-100">
+            <div className="bg-white rounded-2xl md:rounded-[32px] p-5 md:p-8 shadow-sm border border-gray-100">
               {isLoggedIn ? (
                 <div className="space-y-8">
                   {/* Profile Block */}
                   <div className="space-y-4">
                     <h3 className="text-[11px] font-bold text-gray-400 uppercase tracking-[0.1em] pl-1">Profile</h3>
                     <div className="space-y-4">
-                      <div className="flex items-center justify-between p-4 bg-gray-50/50 rounded-2xl border border-gray-100">
-                        <div className="flex items-center space-x-4">
-                          <div className="w-12 h-12 rounded-full bg-black text-white flex items-center justify-center font-bold text-lg">
+                      <div className="flex flex-col sm:flex-row sm:items-center justify-between p-4 bg-gray-50/50 rounded-2xl border border-gray-100 gap-4 sm:gap-0">
+                        <div className="flex items-center space-x-3 md:space-x-4">
+                          <div className="w-10 h-10 md:w-12 md:h-12 rounded-full bg-black text-white flex items-center justify-center font-bold text-base md:text-lg shrink-0">
                             {user?.email?.[0].toUpperCase()}
                           </div>
-                          <div>
-                            <div className="text-[15px] font-bold text-black">{user?.email?.split('@')[0]}</div>
-                            <div className="text-[13px] text-gray-500 font-medium">{user?.email}</div>
+                          <div className="min-w-0">
+                            <div className="text-[14px] md:text-[15px] font-bold text-black truncate">{user?.email?.split('@')[0]}</div>
+                            <div className="text-[12px] md:text-[13px] text-gray-500 font-medium truncate">{user?.email}</div>
                           </div>
                         </div>
                         <button 
                           onClick={handleSignOut}
-                          className="text-[13px] font-bold text-rose-500 border border-rose-100 bg-white hover:bg-rose-50 px-4 py-2 rounded-xl transition-all shadow-sm active:scale-95"
+                          className="w-full sm:w-auto text-[13px] font-bold text-rose-500 border border-rose-100 bg-white hover:bg-rose-50 px-4 py-2 rounded-xl transition-all shadow-sm active:scale-95"
                         >
                           Sign Out
                         </button>
                       </div>
                       <div className="p-4 bg-emerald-50/30 rounded-2xl border border-emerald-100 flex items-start space-x-3">
-                        <ShieldCheck className="w-5 h-5 text-emerald-500 mt-0.5" />
+                        <ShieldCheck className="w-5 h-5 text-emerald-500 mt-0.5 shrink-0" />
                         <div>
                           <div className="text-[13px] font-bold text-emerald-700">Account Verified</div>
                           <div className="text-[12px] text-emerald-600/80 font-medium mt-0.5">Your data is securely synchronized with Supabase Cloud.</div>
@@ -631,12 +631,12 @@ export default function SettingsPage() {
                       
                       {/* Email Row */}
                       <div className="border-b border-gray-100 bg-white sm:bg-transparent">
-                        <div className="px-5 py-4 flex items-center justify-between">
-                          <div className="flex items-center space-x-4">
-                            <div className="w-8 h-8 rounded-lg bg-white border border-gray-100 shadow-sm flex items-center justify-center"><Mail className="w-4 h-4 text-gray-400" /></div>
-                            <div>
+                        <div className="px-4 md:px-5 py-4 flex items-center justify-between">
+                          <div className="flex items-center space-x-3 md:space-x-4 min-w-0 mr-3">
+                            <div className="w-8 h-8 rounded-lg bg-white border border-gray-100 shadow-sm flex items-center justify-center shrink-0"><Mail className="w-4 h-4 text-gray-400" /></div>
+                            <div className="min-w-0">
                               <div className="text-[14px] font-bold text-black leading-tight">Email Address</div>
-                              <div className="text-[13px] text-gray-500 font-medium mt-0.5">{user?.email}</div>
+                              <div className="text-[12px] md:text-[13px] text-gray-500 font-medium mt-0.5 truncate">{user?.email}</div>
                             </div>
                           </div>
                           <button 
@@ -647,7 +647,7 @@ export default function SettingsPage() {
                               setEmailSuccess(false);
                               setNewEmail('');
                             }}
-                            className={`text-[13px] font-bold px-3 py-1.5 rounded-lg transition-colors shadow-sm active:scale-95 border ${
+                            className={`shrink-0 text-[12px] md:text-[13px] font-bold px-3 py-1.5 rounded-lg transition-colors shadow-sm active:scale-95 border ${
                               isEditingEmail 
                                 ? 'bg-gray-100 border-gray-200 text-gray-700' 
                                 : 'bg-white border-gray-100 text-black hover:bg-gray-100'
@@ -660,7 +660,7 @@ export default function SettingsPage() {
                         {/* Expandable Email Editor */}
                         <div className={`grid transition-all duration-300 ease-in-out ${isEditingEmail ? 'grid-rows-[1fr] opacity-100' : 'grid-rows-[0fr] opacity-0'}`}>
                           <div className="overflow-hidden">
-                            <div className="p-5 bg-white border-t border-gray-100/60 space-y-4">
+                            <div className="p-4 md:p-5 bg-white border-t border-gray-100/60 space-y-4">
                               <form onSubmit={handleUpdateEmail} className="space-y-4">
                                 <div>
                                   <label className="block text-[11px] font-bold text-gray-400 uppercase tracking-wider mb-2">New Email Address</label>
@@ -695,9 +695,9 @@ export default function SettingsPage() {
 
                       {/* Password Row */}
                       <div className="bg-white sm:bg-transparent">
-                        <div className="px-5 py-4 flex items-center justify-between">
-                          <div className="flex items-center space-x-4">
-                            <div className="w-8 h-8 rounded-lg bg-white border border-gray-100 shadow-sm flex items-center justify-center"><Lock className="w-4 h-4 text-gray-400" /></div>
+                        <div className="px-4 md:px-5 py-4 flex items-center justify-between">
+                          <div className="flex items-center space-x-3 md:space-x-4">
+                            <div className="w-8 h-8 rounded-lg bg-white border border-gray-100 shadow-sm flex items-center justify-center shrink-0"><Lock className="w-4 h-4 text-gray-400" /></div>
                             <div>
                               <div className="text-[14px] font-bold text-black leading-tight">Password</div>
                               <div className="text-[13px] text-gray-500 font-medium mt-0.5 tracking-widest mt-1">••••••••</div>
@@ -712,7 +712,7 @@ export default function SettingsPage() {
                               setNewPassword('');
                               setConfirmPassword('');
                             }}
-                            className={`text-[13px] font-bold px-3 py-1.5 rounded-lg transition-colors shadow-sm active:scale-95 border ${
+                            className={`text-[12px] md:text-[13px] font-bold px-3 py-1.5 rounded-lg transition-colors shadow-sm active:scale-95 border ${
                               isEditingPassword 
                                 ? 'bg-gray-100 border-gray-200 text-gray-700' 
                                 : 'bg-white border-gray-100 text-black hover:bg-gray-100'
@@ -725,7 +725,7 @@ export default function SettingsPage() {
                         {/* Expandable Password Editor */}
                         <div className={`grid transition-all duration-300 ease-in-out ${isEditingPassword ? 'grid-rows-[1fr] opacity-100' : 'grid-rows-[0fr] opacity-0'}`}>
                           <div className="overflow-hidden">
-                            <div className="p-5 bg-white border-t border-gray-100/60 space-y-4">
+                            <div className="p-4 md:p-5 bg-white border-t border-gray-100/60 space-y-4">
                               <form onSubmit={handleUpdatePassword} className="space-y-4">
                                 <div>
                                   <label className="block text-[11px] font-bold text-gray-400 uppercase tracking-wider mb-2">New Password</label>
@@ -785,25 +785,25 @@ export default function SettingsPage() {
                   <div className="space-y-4">
                     <h3 className="text-[11px] font-bold text-gray-400 uppercase tracking-[0.1em] pl-1">Access Control</h3>
                     <div className="bg-gray-50/50 rounded-2xl border border-gray-100 overflow-hidden">
-                      <div className="px-5 py-4 flex items-center justify-between border-b border-gray-100">
-                        <div className="flex items-center space-x-4">
+                      <div className="px-4 md:px-5 py-4 flex items-center justify-between border-b border-gray-100">
+                        <div className="flex items-center space-x-3 md:space-x-4">
                           <div className="w-8 h-8 rounded-lg bg-white border border-gray-100 shadow-sm flex items-center justify-center"><ShieldCheck className="w-4 h-4 text-gray-400" /></div>
                           <div>
                             <div className="text-[14px] font-bold text-black leading-tight">Two-Factor Auth</div>
                             <div className="text-[13px] text-gray-500 font-medium mt-0.5">Disabled</div>
                           </div>
                         </div>
-                        <button className="text-[13px] font-bold text-black border border-gray-100 bg-white hover:bg-gray-100 px-3 py-1.5 rounded-lg transition-colors shadow-sm active:scale-95">Enable</button>
+                        <button className="text-[12px] md:text-[13px] font-bold text-black border border-gray-100 bg-white hover:bg-gray-100 px-3 py-1.5 rounded-lg transition-colors shadow-sm active:scale-95">Enable</button>
                       </div>
-                      <div className="px-5 py-4 flex items-center justify-between">
-                        <div className="flex items-center space-x-4">
+                      <div className="px-4 md:px-5 py-4 flex items-center justify-between">
+                        <div className="flex items-center space-x-3 md:space-x-4">
                           <div className="w-8 h-8 rounded-lg bg-white border border-gray-100 shadow-sm flex items-center justify-center"><Fingerprint className="w-4 h-4 text-gray-400" /></div>
                           <div>
                             <div className="text-[14px] font-bold text-black leading-tight">Passkeys</div>
                             <div className="text-[12px] text-gray-400 font-medium mt-0.5">FaceID / TouchID</div>
                           </div>
                         </div>
-                        <button className="text-[13px] font-bold text-black border border-gray-100 bg-white hover:bg-gray-100 px-3 py-1.5 rounded-lg transition-colors shadow-sm active:scale-95">Setup</button>
+                        <button className="text-[12px] md:text-[13px] font-bold text-black border border-gray-100 bg-white hover:bg-gray-100 px-3 py-1.5 rounded-lg transition-colors shadow-sm active:scale-95">Setup</button>
                       </div>
                     </div>
                   </div>
@@ -812,15 +812,15 @@ export default function SettingsPage() {
                   <div className="space-y-4">
                     <h3 className="text-[11px] font-bold text-gray-400 uppercase tracking-[0.1em] pl-1">API Management</h3>
                     <div className="bg-gray-50/50 rounded-2xl border border-gray-100 overflow-hidden">
-                      <div className="px-5 py-4 flex items-center justify-between">
-                        <div className="flex items-center space-x-4">
-                          <div className="w-8 h-8 rounded-lg bg-white border border-gray-100 shadow-sm flex items-center justify-center"><Key className="w-4 h-4 text-gray-400" /></div>
-                          <div>
+                      <div className="px-4 md:px-5 py-4 flex items-center justify-between">
+                        <div className="flex items-center space-x-3 md:space-x-4 min-w-0 mr-3">
+                          <div className="w-8 h-8 rounded-lg bg-white border border-gray-100 shadow-sm flex items-center justify-center shrink-0"><Key className="w-4 h-4 text-gray-400" /></div>
+                          <div className="min-w-0">
                             <div className="text-[14px] font-bold text-black leading-tight">Finnhub API Key</div>
-                            <div className="text-[13px] text-gray-500 font-medium mt-0.5 tracking-widest mt-1">••••••••••••</div>
+                            <div className="text-[13px] text-gray-500 font-medium mt-0.5 tracking-widest mt-1 truncate">••••••••••••</div>
                           </div>
                         </div>
-                        <button className="text-[13px] font-bold text-black border border-gray-100 bg-white hover:bg-gray-100 px-3 py-1.5 rounded-lg transition-colors shadow-sm active:scale-95">Manage</button>
+                        <button className="text-[12px] md:text-[13px] font-bold text-black border border-gray-100 bg-white hover:bg-gray-100 px-3 py-1.5 rounded-lg transition-colors shadow-sm active:scale-95 shrink-0">Manage</button>
                       </div>
                     </div>
                   </div>

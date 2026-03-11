@@ -174,7 +174,7 @@ export default async function TransactionsPage(props: {
               <div className="bg-black text-white p-1 rounded-md">
                 <TrendingUp className="w-4 h-4" />
               </div>
-              <span>PortfolioUI</span>
+              <span>Folio</span>
             </Link>
           </div>
           <nav className="hidden md:flex space-x-7 text-[14px] font-semibold text-gray-400">
