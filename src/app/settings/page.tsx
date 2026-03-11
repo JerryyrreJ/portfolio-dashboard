@@ -121,8 +121,8 @@ export default function SettingsPage() {
     { id: 'portfolio', name: 'Portfolio', icon: <Wallet className="w-4 h-4" />, ref: portfolioRef },
     { id: 'preferences', name: 'Preferences', icon: <Settings className="w-4 h-4" />, ref: preferencesRef },
     { id: 'notifications', name: 'Notifications', icon: <Bell className="w-4 h-4" />, ref: notificationsRef },
-    { id: 'account', name: isLoggedIn ? 'Account & Security' : 'Account', icon: <UserCircle className="w-4 h-4" />, ref: accountRef },
-  ], [isLoggedIn]);
+    { id: 'account', name: 'Account & Security', icon: <UserCircle className="w-4 h-4" />, ref: accountRef },
+  ], []);
 
   const handleSignOut = async () => {
     await supabase.auth.signOut();
@@ -582,7 +582,7 @@ export default function SettingsPage() {
           {/* SECTION: ACCOUNT & SECURITY */}
           <div id="account" ref={accountRef} className="scroll-mt-32">
             <div className="mb-6">
-              <h2 className="text-[20px] font-bold text-black tracking-tight">{isLoggedIn ? 'Account & Security' : 'Account'}</h2>
+              <h2 className="text-[20px] font-bold text-black tracking-tight">Account & Security</h2>
               <p className="text-[13px] text-gray-400 font-medium mt-1">
                 {isLoggedIn 
                   ? 'Manage your account profile, authentication, and security preferences.' 

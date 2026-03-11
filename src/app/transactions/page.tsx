@@ -8,7 +8,7 @@ import {
 import { getCompanyProfile } from '@/lib/finnhub';
 import { getUser } from '@/lib/supabase-server';
 
-import prisma from '@/lib/prisma';
+import prisma, { withRetry } from '@/lib/prisma';
 
 interface TransactionWithAsset {
   id: string;
@@ -52,7 +52,7 @@ async function getTransactions(
     where.type = type;
   }
 
-  const [transactions, total] = await Promise.all([
+  const [transactions, total] = await withRetry(() => Promise.all([
     prisma.transaction.findMany({
       where,
       include: {
@@ -65,18 +65,18 @@ async function getTransactions(
       take: limit,
     }),
     prisma.transaction.count({ where }),
-  ]);
+  ]));
 
   return { transactions: transactions as TransactionWithAsset[], total };
 }
 
 async function getPortfolios(userId: string) {
   try {
-    return await prisma.portfolio.findMany({
+    return await withRetry(() => prisma.portfolio.findMany({
       where: { userId },
       select: { id: true, name: true },
       orderBy: { id: 'asc' },
-    });
+    }));
   } catch {
     return [];
   }

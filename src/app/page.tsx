@@ -2,8 +2,7 @@ import DashboardClient from './DashboardClient'
 import { getCompanyProfile } from '@/lib/finnhub'
 import { get12MonthHistory } from '@/lib/twelvedata'
 import { getUser } from '@/lib/supabase-server'
-
-import prisma from '@/lib/prisma'
+import prisma, { withRetry } from '@/lib/prisma'
 
 // 降级用的默认价格（当 API 调用失败时使用）
 const FALLBACK_PRICES: Record<string, number> = {
@@ -104,24 +103,24 @@ export default async function Page() {
   }
 
   // 已登录：查找当前用户的 Portfolio，没有则自动创建
-  let portfolio = await prisma.portfolio.findFirst({
+  let portfolio = await withRetry(() => prisma.portfolio.findFirst({
     where: { userId: user.id },
     include: {
       transactions: {
         include: { asset: true }
       }
     }
-  })
+  }))
 
   if (!portfolio) {
-    portfolio = await prisma.portfolio.create({
+    portfolio = await withRetry(() => prisma.portfolio.create({
       data: { userId: user.id, name: 'My Portfolio' },
       include: {
         transactions: {
           include: { asset: true }
         }
       }
-    })
+    }))
   }
 
   if (portfolio.transactions.length === 0) {
@@ -154,11 +153,12 @@ export default async function Page() {
       current.totalQty += t.quantity;
       current.totalCost += (t.price * t.quantity) + t.fee;
     } else if (t.type === 'SELL') {
-      if (current.totalQty > 0) {
-         const avgCost = current.totalCost / (current.totalQty - t.quantity);
-         current.totalCost += (avgCost * t.quantity); 
-      } else {
-         current.totalCost = 0;
+      const avgCost = current.totalQty > 0 ? current.totalCost / current.totalQty : 0;
+      current.totalQty -= t.quantity;
+      current.totalCost -= avgCost * t.quantity;
+      if (current.totalQty <= 0) {
+        current.totalQty = 0;
+        current.totalCost = 0;
       }
     }
   }

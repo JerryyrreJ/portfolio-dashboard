@@ -91,6 +91,7 @@ export default function DashboardClient({ portfolioId, portfolioName, holdingsDa
   const router = useRouter();
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isRefreshing, setIsRefreshing] = useState(false);
+  const [returnDisplayMode, setReturnDisplayMode] = useState<'percentage' | 'currency'>('percentage');
 
   // 图表时间范围状态
   const [chartTimeRange, setChartTimeRange] = useState<'1M' | '3M' | '6M' | '1Y' | 'All'>('All');
@@ -335,8 +336,12 @@ export default function DashboardClient({ portfolioId, portfolioName, holdingsDa
               </div>
               <div className="flex -space-x-1.5">
                 {localHoldings.flatMap(g => g.holdings).slice(0, 3).map((h) => (
-                  <div key={h.ticker} className="w-7 h-7 rounded-full bg-white border border-gray-100 flex items-center justify-center text-[9px] font-bold text-gray-600 shadow-sm">
-                    {h.ticker.charAt(0)}
+                  <div key={h.ticker} className="w-7 h-7 rounded-full bg-white border border-gray-100 flex items-center justify-center text-[9px] font-bold text-gray-600 shadow-sm overflow-hidden z-10">
+                    {h.logo ? (
+                      <Image src={h.logo} alt={h.ticker} width={28} height={28} className="w-full h-full object-cover" />
+                    ) : (
+                      h.ticker.charAt(0)
+                    )}
                   </div>
                 ))}
               </div>
@@ -435,7 +440,23 @@ export default function DashboardClient({ portfolioId, portfolioName, holdingsDa
         <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
           <div className="px-6 py-4 border-b border-gray-50 flex justify-between items-center">
             <h2 className="text-[15px] font-bold text-black tracking-tight">Investment Holdings</h2>
-            <div className="text-[11px] text-gray-400 font-medium">Sorted by Market</div>
+            <div className="flex items-center space-x-4">
+              <div className="flex items-center bg-gray-100 rounded-lg p-0.5">
+                <button
+                  onClick={() => setReturnDisplayMode('percentage')}
+                  className={`px-3 py-1 rounded-md text-[11px] font-bold transition-all ${returnDisplayMode === 'percentage' ? 'bg-white text-black shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}
+                >
+                  %
+                </button>
+                <button
+                  onClick={() => setReturnDisplayMode('currency')}
+                  className={`px-3 py-1 rounded-md text-[11px] font-bold transition-all ${returnDisplayMode === 'currency' ? 'bg-white text-black shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}
+                >
+                  $
+                </button>
+              </div>
+              <div className="text-[11px] text-gray-400 font-medium hidden sm:block">Sorted by Market</div>
+            </div>
           </div>
           <div className="overflow-x-auto">
             <table className="w-full text-left border-collapse">
@@ -489,7 +510,11 @@ export default function DashboardClient({ portfolioId, portfolioName, holdingsDa
                           <div className="text-[10px] text-gray-400 font-medium">Market Value</div>
                         </td>
                         <td className="px-6 py-3 text-right">
-                          <FormatValue val={asset.return} isPercentage={true} isCurrency={false} />
+                          <FormatValue 
+                            val={returnDisplayMode === 'percentage' ? asset.return : asset.capGain} 
+                            isPercentage={returnDisplayMode === 'percentage'} 
+                            isCurrency={returnDisplayMode === 'currency'} 
+                          />
                           <div className="text-[10px] text-gray-400 font-medium">Since purchase</div>
                         </td>
                         <td className="px-6 py-3 text-right">
@@ -507,7 +532,11 @@ export default function DashboardClient({ portfolioId, portfolioName, holdingsDa
                   <td className="px-6 py-4"></td>
                   <td className="px-6 py-4 text-right text-[15px] text-black tabular-nums">${localSummary.totalValue.toLocaleString('en-US', { minimumFractionDigits: 2 })}</td>
                   <td className="px-6 py-4 text-right">
-                    <FormatValue val={localSummary.totalCapGainPercentage} isPercentage={true} isCurrency={false} />
+                    <FormatValue 
+                      val={returnDisplayMode === 'percentage' ? localSummary.totalCapGainPercentage : localSummary.totalCapGain} 
+                      isPercentage={returnDisplayMode === 'percentage'} 
+                      isCurrency={returnDisplayMode === 'currency'} 
+                    />
                   </td>
                   <td className="px-6 py-4"></td>
                 </tr>
