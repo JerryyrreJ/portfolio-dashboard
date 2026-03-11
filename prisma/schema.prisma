@@ -27,10 +27,24 @@ model Asset {
   type        String   @default("STOCK")
   currency    String   @default("USD")
   logo        String?  // URL to company logo, cached
-  lastPrice   Float?   // Cached last known real-time price
-  lastPriceUpdated DateTime? // When the lastPrice was last updated
-  priceHistory String?
+  
+  // Real-time quote cache
+  lastPrice          Float?   
+  priceChange        Float?
+  priceChangePercent Float?
+  dayHigh            Float?
+  dayLow             Float?
+  dayOpen            Float?
+  prevClose          Float?
+  lastPriceUpdated   DateTime? 
+
+  // Historical data cache
+  priceHistory       String?  // JSON string
   historyLastUpdated DateTime?
+
+  // Profile & Financials cache
+  profile            String?  // JSON string (industry, country, website, etc)
+  metrics            String?  // JSON string (52w high/low, PE, EPS, Beta, etc)
   
   transactions Transaction[]
 }

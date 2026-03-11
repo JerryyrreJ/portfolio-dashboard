@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import {
   XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
@@ -176,6 +176,7 @@ export default function StockDetailClient({ stockData }: { stockData: StockData 
   const [news, setNews] = useState<NewsArticle[]>([]);
   const [isNewsLoading, setIsNewsLoading] = useState(false);
   const [newsLoaded, setNewsLoaded] = useState(false);
+  const hasSynced = useRef(false);
 
   const {
     ticker, name, market,
@@ -186,6 +187,8 @@ export default function StockDetailClient({ stockData }: { stockData: StockData 
     transactions, portfolioId, portfolioName,
     profile, metrics,
   } = stockData;
+
+  const lastUpdatedMs = lastUpdated instanceof Date ? lastUpdated.getTime() : Number(lastUpdated);
 
   const isUp = priceChange >= 0;
   const isProfit = totalReturn >= 0;
@@ -235,10 +238,43 @@ export default function StockDetailClient({ stockData }: { stockData: StockData 
 
   useEffect(() => { if (activeTab === 'news') fetchNews(); }, [activeTab, fetchNews]);
 
-  const handleRefresh = () => {
+  // Background Sync Effect (Stale-While-Revalidate)
+  useEffect(() => {
+    if (hasSynced.current) return;
+
+    const checkAndSyncData = async () => {
+      if (!lastUpdatedMs) return;
+
+      const diffMinutes = (Date.now() - lastUpdatedMs) / (1000 * 60);
+
+      // If data is older than 60 minutes, sync silently
+      if (diffMinutes > 60) {
+        hasSynced.current = true;
+        try {
+          console.log('Data is stale. Syncing silently in background...');
+          const res = await fetch(`/api/assets/${ticker}/sync`, { method: 'POST' });
+          if (res.ok) {
+            router.refresh();
+          }
+        } catch (error) {
+          hasSynced.current = false;
+          console.error('Background sync failed:', error);
+        }
+      }
+    };
+
+    checkAndSyncData();
+  }, [lastUpdatedMs, ticker, router]);
+
+  const handleRefresh = async () => {
     setIsRefreshing(true);
-    router.refresh();
-    setTimeout(() => setIsRefreshing(false), 1000);
+    try {
+      await fetch(`/api/assets/${ticker}/sync`, { method: 'POST' });
+      router.refresh();
+    } catch (e) {
+      console.error(e);
+    }
+    setTimeout(() => setIsRefreshing(false), 500);
   };
 
   const prices = chartData.map((d) => d.price);
