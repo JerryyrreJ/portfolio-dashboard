@@ -66,17 +66,13 @@ async function fetchBatchQuotes(assets: any[]): Promise<Record<string, number>> 
     fetchStockQuote(asset.ticker).then(async (price) => {
       if (price) {
         prices[asset.ticker] = price;
-        // 后台异步更新数据库中的缓存价格
-        try {
-          await prisma.asset.update({
-            where: { id: asset.id },
-            data: { lastPrice: price, lastPriceUpdated: new Date() }
-          });
-        } catch (e) {
-          console.error(`Failed to update lastPrice for ${asset.ticker} silently:`, e);
-        }
+        // 核心修复：后台异步更新，不 await，不影响主流程
+        prisma.asset.update({
+          where: { id: asset.id },
+          data: { lastPrice: price, lastPriceUpdated: new Date() }
+        }).catch(e => console.error(`Silent background update failed for ${asset.ticker}:`, e.message));
       } else {
-        // 降级：优先使用数据库中的 lastPrice，其次使用硬编码的 FALLBACK_PRICES
+        // 降级：优先使用数据库中的 lastPrice
         prices[asset.ticker] = asset.lastPrice || FALLBACK_PRICES[asset.ticker] || 0;
       }
     })

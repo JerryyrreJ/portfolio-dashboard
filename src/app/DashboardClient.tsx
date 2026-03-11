@@ -228,7 +228,7 @@ export default function DashboardClient({ portfolioId, portfolioName, holdingsDa
           </nav>
         </div>
         <div className="flex items-center space-x-5">
-          <div className="relative">
+          <div className="relative hidden sm:block">
             <Search className="w-3.5 h-3.5 absolute left-3 top-[10px] text-gray-400" />
             <input 
               type="text" 
@@ -256,7 +256,7 @@ export default function DashboardClient({ portfolioId, portfolioName, holdingsDa
         <div className="flex justify-between items-center mb-6">
           <div className="flex items-baseline space-x-3">
             <h1 className="text-[28px] font-bold text-black tracking-tight leading-none">{portfolioName}</h1>
-            <span className="text-[13px] text-gray-400 font-medium bg-gray-100 px-2 py-0.5 rounded-md">Real-time</span>
+            <span className="hidden sm:inline-block text-[13px] text-gray-400 font-medium bg-gray-100 px-2 py-0.5 rounded-md">Real-time</span>
           </div>
           <div className="flex items-center space-x-2">
             <button
@@ -351,17 +351,17 @@ export default function DashboardClient({ portfolioId, portfolioName, holdingsDa
           {/* 右侧：图表占据大块空间 */}
           <div className="col-span-12 lg:col-span-9">
             <div className="bg-white rounded-2xl p-6 border border-gray-100 shadow-sm h-full">
-              <div className="flex justify-between items-center mb-6">
+              <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 sm:gap-0 mb-6">
                 <div>
                   <h2 className="text-[15px] font-bold text-black tracking-tight leading-none">Performance History</h2>
                   <p className="text-[12px] text-gray-400 font-medium mt-1">Value stacked by market</p>
                 </div>
-                <div className="flex bg-gray-50 rounded-lg p-0.5 border border-gray-100">
+                <div className="flex bg-gray-50 rounded-lg p-0.5 border border-gray-100 w-full sm:w-auto overflow-x-auto no-scrollbar">
                   {(['1M', '3M', '6M', '1Y', 'All'] as const).map((range) => (
                     <button
                       key={range}
                       onClick={() => setChartTimeRange(range)}
-                      className={`px-3 py-1 text-[11px] font-bold rounded-md transition-all ${
+                      className={`flex-1 sm:flex-none px-3 py-1.5 sm:py-1 text-[11px] font-bold rounded-md transition-all whitespace-nowrap ${
                         chartTimeRange === range
                           ? 'bg-white text-black shadow-sm'
                           : 'text-gray-400 hover:text-black'
@@ -458,16 +458,16 @@ export default function DashboardClient({ portfolioId, portfolioName, holdingsDa
               <div className="text-[11px] text-gray-400 font-medium hidden sm:block">Sorted by Market</div>
             </div>
           </div>
-          <div className="overflow-x-auto">
+          <div className="overflow-x-auto no-scrollbar">
             <table className="w-full text-left border-collapse">
               <thead>
                 <tr className="bg-gray-50/50 text-[10px] font-bold text-gray-400 uppercase tracking-widest border-b border-gray-100">
-                  <th className="px-6 py-3">Asset</th>
-                  <th className="px-6 py-3 text-right">Market Price</th>
-                  <th className="px-6 py-3 text-right">Position</th>
-                  <th className="px-6 py-3 text-right">Value</th>
-                  <th className="px-6 py-3 text-right">Total Return</th>
-                  <th className="px-6 py-3 text-right w-10"></th>
+                  <th className="px-4 sm:px-6 py-3">Asset</th>
+                  <th className="px-4 sm:px-6 py-3 text-right hidden md:table-cell">Market Price</th>
+                  <th className="px-4 sm:px-6 py-3 text-right hidden sm:table-cell">Position</th>
+                  <th className="px-4 sm:px-6 py-3 text-right">Value</th>
+                  <th className="px-4 sm:px-6 py-3 text-right">Return</th>
+                  <th className="px-4 sm:px-6 py-3 text-right w-10 hidden sm:table-cell"></th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-50 bg-white">
@@ -475,7 +475,7 @@ export default function DashboardClient({ portfolioId, portfolioName, holdingsDa
                   <React.Fragment key={group.market}>
                     {/* 分组标题行 */}
                     <tr className="bg-gray-50/30">
-                      <td colSpan={6} className="px-6 py-2 text-[10px] font-bold text-gray-400 bg-gray-50/20">
+                      <td colSpan={6} className="px-4 sm:px-6 py-2 text-[10px] font-bold text-gray-400 bg-gray-50/20">
                         {group.market}
                       </td>
                     </tr>
@@ -485,39 +485,40 @@ export default function DashboardClient({ portfolioId, portfolioName, holdingsDa
                         className="hover:bg-gray-50/80 transition-all cursor-pointer group" 
                         onClick={() => router.push(`/stock/${asset.ticker}`)}
                       >
-                        <td className="px-6 py-3">
+                        <td className="px-4 sm:px-6 py-3">
                           <div className="flex items-center space-x-3">
-                            <div className="w-8 h-8 rounded-full bg-white flex items-center justify-center font-bold text-[11px] text-gray-900 border border-gray-100 shadow-sm overflow-hidden">
+                            <div className="w-8 h-8 rounded-full bg-white flex items-center justify-center font-bold text-[11px] text-gray-900 border border-gray-100 shadow-sm overflow-hidden shrink-0">
                               {asset.logo ? (
                                 <Image src={asset.logo} alt={asset.ticker} width={32} height={32} className="w-full h-full object-cover" />
                               ) : (
                                 asset.ticker.charAt(0)
                               )}
                             </div>
-                            <div>
+                            <div className="min-w-0">
                               <div className="font-bold text-black text-[14px] leading-tight group-hover:underline underline-offset-2">{asset.ticker}</div>
-                              <div className="text-[11px] text-gray-400 font-medium truncate max-w-[200px]">{asset.name}</div>
+                              <div className="text-[11px] text-gray-400 font-medium truncate max-w-[90px] sm:max-w-[200px]">{asset.name}</div>
                             </div>
                           </div>
                         </td>
-                        <td className="px-6 py-3 text-right text-[13px] font-semibold tabular-nums text-gray-900">${asset.price.toFixed(2)}</td>
-                        <td className="px-6 py-3 text-right">
+                        <td className="px-4 sm:px-6 py-3 text-right text-[13px] font-semibold tabular-nums text-gray-900 hidden md:table-cell">${asset.price.toFixed(2)}</td>
+                        <td className="px-4 sm:px-6 py-3 text-right hidden sm:table-cell">
                           <div className="text-[13px] font-semibold text-gray-900 tabular-nums">{asset.qty.toLocaleString()}</div>
                           <div className="text-[10px] text-gray-400 font-medium">Shares</div>
                         </td>
-                        <td className="px-6 py-3 text-right">
-                          <div className="text-[13px] font-bold text-black tabular-nums">${asset.value.toLocaleString('en-US', { minimumFractionDigits: 2 })}</div>
-                          <div className="text-[10px] text-gray-400 font-medium">Market Value</div>
+                        <td className="px-4 sm:px-6 py-3 text-right">
+                          <div className="text-[13px] font-bold text-black tabular-nums">${asset.value.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</div>
+                          <div className="text-[10px] text-gray-400 font-medium sm:hidden">Value</div>
+                          <div className="text-[10px] text-gray-400 font-medium hidden sm:block">Market Value</div>
                         </td>
-                        <td className="px-6 py-3 text-right">
+                        <td className="px-4 sm:px-6 py-3 text-right">
                           <FormatValue 
                             val={returnDisplayMode === 'percentage' ? asset.return : asset.capGain} 
                             isPercentage={returnDisplayMode === 'percentage'} 
                             isCurrency={returnDisplayMode === 'currency'} 
                           />
-                          <div className="text-[10px] text-gray-400 font-medium">Since purchase</div>
+                          <div className="text-[10px] text-gray-400 font-medium hidden sm:block">Since purchase</div>
                         </td>
-                        <td className="px-6 py-3 text-right">
+                        <td className="px-4 sm:px-6 py-3 text-right hidden sm:table-cell">
                           <ChevronRight className="w-4 h-4 text-gray-300 group-hover:text-black transition-colors" />
                         </td>
                       </tr>
@@ -527,18 +528,18 @@ export default function DashboardClient({ portfolioId, portfolioName, holdingsDa
               </tbody>
               <tfoot>
                 <tr className="bg-black/[0.02] font-bold border-t border-gray-100">
-                  <td className="px-6 py-4 text-[13px] text-black">Total Portfolio</td>
-                  <td className="px-6 py-4"></td>
-                  <td className="px-6 py-4"></td>
-                  <td className="px-6 py-4 text-right text-[15px] text-black tabular-nums">${localSummary.totalValue.toLocaleString('en-US', { minimumFractionDigits: 2 })}</td>
-                  <td className="px-6 py-4 text-right">
+                  <td className="px-4 sm:px-6 py-4 text-[13px] text-black">Total</td>
+                  <td className="px-4 sm:px-6 py-4 hidden md:table-cell"></td>
+                  <td className="px-4 sm:px-6 py-4 hidden sm:table-cell"></td>
+                  <td className="px-4 sm:px-6 py-4 text-right text-[14px] sm:text-[15px] text-black tabular-nums">${localSummary.totalValue.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
+                  <td className="px-4 sm:px-6 py-4 text-right">
                     <FormatValue 
                       val={returnDisplayMode === 'percentage' ? localSummary.totalCapGainPercentage : localSummary.totalCapGain} 
                       isPercentage={returnDisplayMode === 'percentage'} 
                       isCurrency={returnDisplayMode === 'currency'} 
                     />
                   </td>
-                  <td className="px-6 py-4"></td>
+                  <td className="px-4 sm:px-6 py-4 hidden sm:table-cell"></td>
                 </tr>
               </tfoot>
             </table>
