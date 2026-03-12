@@ -55,8 +55,9 @@ export default function SettingsPage() {
 
   const [isEditingPortfolioName, setIsEditingPortfolioName] = useState(false);
   const [isEditingBaseCurrency, setIsEditingBaseCurrency] = useState(false);
-  const [portfolioName, setPortfolioName] = useState('Main Account');
+  const [portfolioName, setPortfolioName] = useState('');
   const [baseCurrency, setBaseCurrency] = useState('USD');
+  const [portfolioLoading, setPortfolioLoading] = useState(true);
   const [portfolioActionLoading, setPortfolioActionLoading] = useState(false);
   const [portfolioError, setPortfolioError] = useState<string | null>(null);
 
@@ -78,21 +79,83 @@ export default function SettingsPage() {
   };
 
   useEffect(() => {
+    // Local-first: immediately show cached values from localStorage
+    const cachedName = localStorage.getItem('portfolio_name');
+    const cachedCurrency = localStorage.getItem('base_currency');
+    if (cachedName !== null) {
+      setPortfolioName(cachedName);
+      setPortfolioLoading(false);
+    }
+    if (cachedCurrency !== null) {
+      setBaseCurrency(cachedCurrency);
+    }
+
     const fetchUserAndPortfolio = async () => {
       const { data: { user } } = await supabase.auth.getUser();
       setUser(user);
-      
+
       if (user) {
         try {
           const res = await fetch('/api/portfolio');
           if (res.ok) {
             const data = await res.json();
-            setPortfolioName(data.portfolio.name || 'Main Account');
-            setBaseCurrency(data.portfolio.currency || 'USD');
+            const cloudName: string = data.portfolio.name || '';
+            const cloudNameUpdatedAt: string | null = data.portfolio.nameUpdatedAt ?? null;
+            const localNameUpdatedAt = localStorage.getItem('portfolio_name_updated_at');
+
+            const cloudCurrency: string = data.portfolio.currency || 'USD';
+            const cloudCurrencyUpdatedAt: string | null = data.portfolio.currencyUpdatedAt ?? null;
+            const localCurrencyUpdatedAt = localStorage.getItem('base_currency_updated_at');
+
+            // Sync name
+            if (cachedName === null) {
+              setPortfolioName(cloudName);
+              localStorage.setItem('portfolio_name', cloudName);
+              if (cloudNameUpdatedAt) localStorage.setItem('portfolio_name_updated_at', cloudNameUpdatedAt);
+            } else {
+              const cloudMs = cloudNameUpdatedAt ? new Date(cloudNameUpdatedAt).getTime() : 0;
+              const localMs = localNameUpdatedAt ? new Date(localNameUpdatedAt).getTime() : 0;
+              if (cloudMs > localMs) {
+                setPortfolioName(cloudName);
+                localStorage.setItem('portfolio_name', cloudName);
+                if (cloudNameUpdatedAt) localStorage.setItem('portfolio_name_updated_at', cloudNameUpdatedAt);
+              } else if (localMs > cloudMs) {
+                fetch('/api/portfolio', {
+                  method: 'PATCH',
+                  headers: { 'Content-Type': 'application/json' },
+                  body: JSON.stringify({ name: cachedName }),
+                }).catch(() => {});
+              }
+            }
+
+            // Sync currency
+            if (cachedCurrency === null) {
+              setBaseCurrency(cloudCurrency);
+              localStorage.setItem('base_currency', cloudCurrency);
+              if (cloudCurrencyUpdatedAt) localStorage.setItem('base_currency_updated_at', cloudCurrencyUpdatedAt);
+            } else {
+              const cloudMs = cloudCurrencyUpdatedAt ? new Date(cloudCurrencyUpdatedAt).getTime() : 0;
+              const localMs = localCurrencyUpdatedAt ? new Date(localCurrencyUpdatedAt).getTime() : 0;
+              if (cloudMs > localMs) {
+                setBaseCurrency(cloudCurrency);
+                localStorage.setItem('base_currency', cloudCurrency);
+                if (cloudCurrencyUpdatedAt) localStorage.setItem('base_currency_updated_at', cloudCurrencyUpdatedAt);
+              } else if (localMs > cloudMs) {
+                fetch('/api/portfolio', {
+                  method: 'PATCH',
+                  headers: { 'Content-Type': 'application/json' },
+                  body: JSON.stringify({ currency: cachedCurrency }),
+                }).catch(() => {});
+              }
+            }
           }
         } catch (e) {
           console.error("Failed to fetch portfolio settings", e);
+        } finally {
+          setPortfolioLoading(false);
         }
+      } else {
+        setPortfolioLoading(false);
       }
     };
 
@@ -101,7 +164,11 @@ export default function SettingsPage() {
     const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
       setUser(session?.user ?? null);
       if (!session?.user) {
-        setPortfolioName('Main Account');
+        localStorage.removeItem('portfolio_name');
+        localStorage.removeItem('portfolio_name_updated_at');
+        localStorage.removeItem('base_currency');
+        localStorage.removeItem('base_currency_updated_at');
+        setPortfolioName('');
         setBaseCurrency('USD');
       }
     });
@@ -130,7 +197,21 @@ export default function SettingsPage() {
 
   const handleUpdatePortfolio = async (e: React.FormEvent, field: 'name' | 'currency') => {
     e.preventDefault();
-    if (!isLoggedIn) return;
+    if (!isLoggedIn) {
+      const now = new Date().toISOString();
+      if (field === 'name') {
+        localStorage.setItem('portfolio_name', portfolioName);
+        localStorage.setItem('portfolio_name_updated_at', now);
+        showNotification('success', 'Name Saved', 'Portfolio name saved locally.');
+        setIsEditingPortfolioName(false);
+      } else if (field === 'currency') {
+        localStorage.setItem('base_currency', baseCurrency);
+        localStorage.setItem('base_currency_updated_at', now);
+        showNotification('success', 'Currency Saved', 'Base currency saved locally.');
+        setIsEditingBaseCurrency(false);
+      }
+      return;
+    }
 
     setPortfolioActionLoading(true);
     setPortfolioError(null);
@@ -149,10 +230,16 @@ export default function SettingsPage() {
       }
 
       showNotification('success', 'Settings Saved', 'Your portfolio configuration has been updated successfully.');
-      
+
       if (field === 'name') {
+        const now = new Date().toISOString();
+        localStorage.setItem('portfolio_name', portfolioName);
+        localStorage.setItem('portfolio_name_updated_at', now);
         setIsEditingPortfolioName(false);
       } else {
+        const now = new Date().toISOString();
+        localStorage.setItem('base_currency', baseCurrency);
+        localStorage.setItem('base_currency_updated_at', now);
         setIsEditingBaseCurrency(false);
       }
     } catch (err: any) {
@@ -320,7 +407,9 @@ export default function SettingsPage() {
                         <div className="w-8 h-8 rounded-lg bg-white border border-gray-100 shadow-sm flex items-center justify-center"><Wallet className="w-4 h-4 text-gray-400" /></div>
                         <div>
                           <div className="text-[14px] font-bold text-black leading-tight">Portfolio Name</div>
-                          <div className="text-[13px] text-gray-500 font-medium mt-0.5">{portfolioName}</div>
+                          <div className="text-[13px] text-gray-500 font-medium mt-0.5">
+                            {portfolioLoading ? <span className="inline-block w-24 h-3.5 bg-gray-200 rounded animate-pulse" /> : portfolioName}
+                          </div>
                         </div>
                       </div>
                       <button 

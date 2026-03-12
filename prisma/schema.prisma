@@ -11,10 +11,12 @@ datasource db {
 model Portfolio {
   id          String   @id @default(cuid())
   userId      String?
-  name        String
-  currency    String   @default("USD")
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
+  name          String
+  nameUpdatedAt DateTime? // UTC timestamp of last name update, for local-first sync
+  currency          String   @default("USD")
+  currencyUpdatedAt DateTime? // UTC timestamp of last currency update, for local-first sync
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
 
   transactions Transaction[]
 }

@@ -14,6 +14,7 @@ import {
 import AddTransactionModal from '@/app/components/AddTransactionModal';
 import Link from 'next/link';
 import Image from 'next/image';
+import { useCurrency } from '@/lib/useCurrency';
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
@@ -145,16 +146,18 @@ function NewsCard({ article }: { article: NewsArticle }) {
   );
 }
 
-const ChartTooltip = ({ active, payload, label }: {
+const ChartTooltip = ({ active, payload, label, fmt }: {
   active?: boolean;
   payload?: Array<{ value: number }>;
   label?: string;
+  fmt?: (n: number) => string;
 }) => {
   if (!active || !payload || !payload.length) return null;
+  const display = fmt ? fmt(Number(payload[0].value)) : `$${Number(payload[0].value).toFixed(2)}`;
   return (
     <div className="bg-black/90 backdrop-blur-md border border-white/10 rounded-xl shadow-2xl px-3 py-2 text-sm">
       <p className="text-gray-400 text-[10px] font-bold uppercase tracking-wider mb-0.5">{label}</p>
-      <p className="font-bold text-white text-[15px] tracking-tight tabular-nums">${Number(payload[0].value).toFixed(2)}</p>
+      <p className="font-bold text-white text-[15px] tracking-tight tabular-nums">{display}</p>
     </div>
   );
 };
@@ -167,6 +170,7 @@ const TIME_RANGES = ['1D', '1W', '1M', '3M', '1Y', 'All'];
 
 export default function StockDetailClient({ stockData }: { stockData: StockData }) {
   const router = useRouter();
+  const { fmt, symbol, convert } = useCurrency();
   const [activeTab, setActiveTab] = useState('summary');
   const [timeRange, setTimeRange] = useState('1Y');
   const [isRefreshing, setIsRefreshing] = useState(false);
@@ -323,7 +327,14 @@ export default function StockDetailClient({ stockData }: { stockData: StockData 
           <div className="flex items-start sm:items-center gap-4 sm:gap-5">
             <div className="w-12 h-12 sm:w-16 sm:h-16 rounded-full bg-white border border-gray-100 shadow-sm flex items-center justify-center overflow-hidden flex-shrink-0 mt-1 sm:mt-0">
               {profile?.logo ? (
-                <Image src={profile.logo} alt={ticker} width={64} height={64} className="w-full h-full object-cover" />
+                <Image 
+                  src={profile.logo} 
+                  alt={ticker} 
+                  width={64} 
+                  height={64} 
+                  className="w-full h-full object-cover"
+                  unoptimized={true}
+                />
               ) : (
                 <span className="text-xl sm:text-2xl font-bold text-gray-800">{ticker.charAt(0)}</span>
               )}
@@ -345,14 +356,14 @@ export default function StockDetailClient({ stockData }: { stockData: StockData 
           <div className="flex items-center justify-between sm:justify-end gap-4 sm:gap-8 w-full sm:w-auto bg-white sm:bg-transparent p-4 sm:p-0 rounded-2xl sm:rounded-none border sm:border-none border-gray-100 shadow-sm sm:shadow-none">
             <div className="text-left sm:text-right">
               <div className="flex items-center justify-start sm:justify-end gap-2 sm:gap-3">
-                <span className="text-[28px] sm:text-[36px] font-bold text-black tracking-tighter tabular-nums leading-none">${currentPrice.toFixed(2)}</span>
+                <span className="text-[28px] sm:text-[36px] font-bold text-black tracking-tighter tabular-nums leading-none">{fmt(currentPrice)}</span>
                 <button onClick={handleRefresh} className="p-1 sm:p-1.5 text-gray-400 hover:text-black transition-colors rounded-lg border border-gray-100 hover:border-gray-200">
                   <RefreshCw className={`w-3.5 h-3.5 sm:w-4 sm:h-4 ${isRefreshing ? 'animate-spin' : ''}`} />
                 </button>
               </div>
               <div className={`flex items-center justify-start sm:justify-end gap-1.5 mt-1 font-bold ${isUp ? 'text-emerald-600' : 'text-rose-500'}`}>
                 {isUp ? <ArrowUpRight className="w-3.5 h-3.5 sm:w-4 sm:h-4" /> : <ArrowDownRight className="w-3.5 h-3.5 sm:w-4 sm:h-4" />}
-                <span className="text-[15px] sm:text-[17px] tracking-tight tabular-nums">{Math.abs(priceChange).toFixed(2)} ({priceChangePercent.toFixed(2)}%)</span>
+                <span className="text-[15px] sm:text-[17px] tracking-tight tabular-nums">{fmt(Math.abs(priceChange))} ({priceChangePercent.toFixed(2)}%)</span>
               </div>
             </div>
             <div className="h-10 w-px bg-gray-100 hidden sm:block"></div>
@@ -411,9 +422,9 @@ export default function StockDetailClient({ stockData }: { stockData: StockData 
                       hide={true}
                       domain={[chartMin * 0.98, chartMax * 1.02]} 
                     />
-                    <Tooltip 
-                      content={<ChartTooltip />} 
-                      cursor={{ stroke: '#f1f1f1', strokeWidth: 1.5 }} 
+                    <Tooltip
+                      content={<ChartTooltip fmt={fmt} />}
+                      cursor={{ stroke: '#f1f1f1', strokeWidth: 1.5 }}
                     />
                     <Area 
                       type="monotone" 
@@ -433,7 +444,7 @@ export default function StockDetailClient({ stockData }: { stockData: StockData 
                         strokeWidth={1} 
                         strokeOpacity={0.15}
                         label={{ 
-                          value: `AVG $${avgBuyPrice.toFixed(2)}`, 
+                          value: `AVG ${fmt(avgBuyPrice)}`,
                           fill: '#94a3b8', 
                           fontSize: 9, 
                           fontWeight: 700, 
@@ -467,10 +478,10 @@ export default function StockDetailClient({ stockData }: { stockData: StockData 
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-12 gap-y-6 sm:gap-y-2">
                       <div className="space-y-1">
                         <h4 className="text-[11px] font-bold text-gray-400 uppercase tracking-widest mb-4">Market Metrics</h4>
-                        <StatRow label="Open" value={dayOpen > 0 ? `$${dayOpen.toFixed(2)}` : '--'} />
-                        <StatRow label="Prev Close" value={prevClose > 0 ? `$${prevClose.toFixed(2)}` : '--'} />
-                        <StatRow label="Day Range" value={dayLow > 0 && dayHigh > 0 ? `$${dayLow.toFixed(2)} – $${dayHigh.toFixed(2)}` : '--'} />
-                        <StatRow label="52W Range" value={metrics && metrics.week52Low > 0 && metrics.week52High > 0 ? `$${metrics.week52Low.toFixed(2)} – $${metrics.week52High.toFixed(2)}` : '--'} />
+                        <StatRow label="Open" value={dayOpen > 0 ? fmt(dayOpen) : '--'} />
+                        <StatRow label="Prev Close" value={prevClose > 0 ? fmt(prevClose) : '--'} />
+                        <StatRow label="Day Range" value={dayLow > 0 && dayHigh > 0 ? `${fmt(dayLow)} – ${fmt(dayHigh)}` : '--'} />
+                        <StatRow label="52W Range" value={metrics && metrics.week52Low > 0 && metrics.week52High > 0 ? `${fmt(metrics.week52Low)} – ${fmt(metrics.week52High)}` : '--'} />
                       </div>
                       <div className="space-y-1">
                         <h4 className="text-[11px] font-bold text-gray-400 uppercase tracking-widest mb-4">Key Statistics</h4>
@@ -478,7 +489,7 @@ export default function StockDetailClient({ stockData }: { stockData: StockData 
                         <StatRow label="EPS (TTM)" value={metrics && metrics.eps !== 0 ? metrics.eps.toFixed(2) : '--'} />
                         <StatRow label="Dividend Yield" value={metrics && metrics.dividendYield > 0 ? `${metrics.dividendYield.toFixed(2)}%` : '--'} />
                         <StatRow label="Beta" value={metrics && metrics.beta > 0 ? metrics.beta.toFixed(2) : '--'} />
-                        <StatRow label="Market Cap" value={profile?.marketCapitalization && profile.marketCapitalization > 0 ? `$${(profile.marketCapitalization / 1000).toFixed(2)}B` : '--'} />
+                        <StatRow label="Market Cap" value={profile?.marketCapitalization && profile.marketCapitalization > 0 ? `${symbol}${(convert(profile.marketCapitalization) / 1000).toFixed(2)}B` : '--'} />
                       </div>
                     </div>
                     {profile && (
@@ -528,8 +539,8 @@ export default function StockDetailClient({ stockData }: { stockData: StockData 
                               <span className={`px-1.5 py-0.5 rounded text-[10px] font-bold uppercase ${tx.type === 'BUY' ? 'bg-emerald-50 text-emerald-700' : 'bg-rose-50 text-rose-700'}`}>{tx.type}</span>
                             </td>
                             <td className="px-4 sm:px-6 py-4 text-right font-medium tabular-nums">{tx.quantity.toLocaleString()}</td>
-                            <td className="px-4 sm:px-6 py-4 text-right font-medium tabular-nums">${tx.price.toFixed(2)}</td>
-                            <td className="px-4 sm:px-6 py-4 text-right font-bold tabular-nums">${(tx.price * tx.quantity).toLocaleString(undefined, { minimumFractionDigits: 2 })}</td>
+                            <td className="px-4 sm:px-6 py-4 text-right font-medium tabular-nums">{fmt(tx.price)}</td>
+                            <td className="px-4 sm:px-6 py-4 text-right font-bold tabular-nums">{fmt(tx.price * tx.quantity)}</td>
                           </tr>
                         ))}
                       </tbody>
@@ -550,7 +561,7 @@ export default function StockDetailClient({ stockData }: { stockData: StockData 
               </div>
               <p className="text-[11px] font-bold text-gray-400 uppercase tracking-widest mb-1">Your Position</p>
               <div className="text-[32px] font-bold tracking-tight mb-5 tabular-nums text-black">
-                ${currentValue.toLocaleString(undefined, { minimumFractionDigits: 2 })}
+                {fmt(currentValue)}
               </div>
               
               <div className="space-y-3">
@@ -560,7 +571,7 @@ export default function StockDetailClient({ stockData }: { stockData: StockData 
                 </div>
                 <div className="flex justify-between items-center text-[13px] bg-gray-50/80 p-2.5 rounded-lg border border-gray-100/50">
                   <span className="text-gray-500 font-semibold">Avg. Cost</span>
-                  <span className="font-bold text-black tabular-nums">${avgBuyPrice.toFixed(2)}</span>
+                  <span className="font-bold text-black tabular-nums">{fmt(avgBuyPrice)}</span>
                 </div>
                 
                 <div className={`mt-2 p-3 rounded-xl border ${isProfit ? 'bg-emerald-50/50 border-emerald-100/50' : 'bg-rose-50/50 border-rose-100/50'}`}>
@@ -570,7 +581,7 @@ export default function StockDetailClient({ stockData }: { stockData: StockData 
                     </span>
                     <div className="text-right">
                       <div className={`text-[16px] font-bold tracking-tight tabular-nums ${isProfit ? 'text-emerald-600' : 'text-rose-600'}`}>
-                        {isProfit ? '+' : '-'}${Math.abs(totalReturn).toFixed(2)}
+                        {isProfit ? '+' : '-'}{fmt(Math.abs(totalReturn))}
                       </div>
                       <div className={`text-[11px] font-bold ${isProfit ? 'text-emerald-500' : 'text-rose-500'}`}>
                         {isProfit ? '+' : ''}{totalReturnPercent.toFixed(2)}%
@@ -584,8 +595,8 @@ export default function StockDetailClient({ stockData }: { stockData: StockData 
             {/* Secondary Stats */}
             <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-6 space-y-4">
               <h4 className="text-[11px] font-bold text-gray-400 uppercase tracking-widest">Investment Details</h4>
-              <StatRow label="Cost Basis" value={`$${costBasis.toFixed(2)}`} />
-              <StatRow label="Brokerage" value={`$${totalFees.toFixed(2)}`} />
+              <StatRow label="Cost Basis" value={fmt(costBasis)} />
+              <StatRow label="Brokerage" value={fmt(totalFees)} />
               {metrics && <StatRow label="Dividend Yield" value={`${metrics.dividendYield.toFixed(2)}%`} />}
             </div>
 

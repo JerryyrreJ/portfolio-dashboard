@@ -22,25 +22,30 @@ import {
   Wallet,
   ArrowUpRight,
   ArrowDownRight,
-  User
+  User,
+  History as HistoryIcon
 } from 'lucide-react';
 import AddTransactionModal from './components/AddTransactionModal';
 import Link from 'next/link';
+import { useCurrency } from '@/lib/useCurrency';
 
 // --- 辅助格式化组件 ---
 interface FormatValueProps {
   val: number;
   isPercentage?: boolean;
   isCurrency?: boolean;
+  symbol?: string;
+  convert?: (n: number) => number;
 }
 
-const FormatValue: React.FC<FormatValueProps> = ({ val, isPercentage = false, isCurrency = true }) => {
-  if (val === 0) return <span className="text-gray-400">{isCurrency ? '$' : ''}0.00{isPercentage ? '%' : ''}</span>;
-  const isPositive = val > 0;
+const FormatValue: React.FC<FormatValueProps> = ({ val, isPercentage = false, isCurrency = true, symbol = '$', convert = (n) => n }) => {
+  const converted = isCurrency ? convert(val) : val;
+  if (converted === 0) return <span className="text-gray-400">{isCurrency ? symbol : ''}0.00{isPercentage ? '%' : ''}</span>;
+  const isPositive = converted > 0;
   const color = isPositive ? 'text-emerald-600' : 'text-rose-500';
-  const prefix = isCurrency ? (val < 0 ? '-$' : '$') : '';
-  const displayVal = Math.abs(val).toFixed(2);
-  
+  const prefix = isCurrency ? (converted < 0 ? `-${symbol}` : symbol) : '';
+  const displayVal = Math.abs(converted).toFixed(2);
+
   return (
     <span className={`font-semibold ${color} tabular-nums flex items-center justify-end gap-0.5`}>
       {isPositive ? <ArrowUpRight className="w-3 h-3" /> : <ArrowDownRight className="w-3 h-3" />}
@@ -89,6 +94,7 @@ const MARKET_COLORS: Record<string, { stroke: string; fill: string; dot: string 
 
 export default function DashboardClient({ portfolioId, portfolioName, holdingsData, chartData, summary }: DashboardClientProps) {
   const router = useRouter();
+  const { symbol, convert, fmt } = useCurrency();
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [returnDisplayMode, setReturnDisplayMode] = useState<'percentage' | 'currency'>('percentage');
@@ -102,6 +108,70 @@ export default function DashboardClient({ portfolioId, portfolioName, holdingsDa
   const [localChartData, setLocalChartData] = useState<any[]>(chartData);
   
   const [filteredChartData, setFilteredChartData] = useState(chartData);
+
+  // --- 客户端异步获取实时价格 ---
+  useEffect(() => {
+    // 收集所有需要获取价格的 ticker
+    const tickers = new Set<string>();
+    localHoldings.forEach(group => {
+      group.holdings.forEach(h => tickers.add(h.ticker));
+    });
+
+    if (tickers.size === 0) return;
+
+    const fetchLivePrices = async () => {
+      try {
+        const symbolParam = Array.from(tickers).join(',');
+        const res = await fetch(`/api/stock/batch-quote?symbols=${symbolParam}`);
+        if (!res.ok) return;
+
+        const livePrices: Record<string, number> = await res.json();
+        
+        if (Object.keys(livePrices).length > 0) {
+          // 重新计算 holdings 和 summary
+          let newTotalValue = 0;
+          let newTotalCost = 0;
+
+          const updatedHoldings = localHoldings.map(group => ({
+            ...group,
+            holdings: group.holdings.map(h => {
+              const livePrice = livePrices[h.ticker];
+              if (livePrice && livePrice > 0) {
+                // 如果后端价格大于0说明有成本
+                const costBasis = h.price > 0 && h.qty > 0 ? (h.value - h.capGain) : 0; 
+                // 由于我们没有把原始 cost 直接传过来，只能反推： cost = value - capGain
+                
+                const newValue = livePrice * h.qty;
+                const newCapGain = costBasis > 0 ? newValue - costBasis : newValue;
+                const newReturnPct = costBasis > 0 ? (newCapGain / costBasis) * 100 : 0;
+                
+                newTotalValue += newValue;
+                newTotalCost += costBasis;
+
+                return { ...h, price: livePrice, value: newValue, capGain: newCapGain, return: newReturnPct };
+              }
+              // 如果没有获取到新价格，保持原样
+              newTotalValue += h.value;
+              // 反推成本
+              newTotalCost += (h.value - h.capGain);
+              return h;
+            })
+          }));
+
+          setLocalHoldings(updatedHoldings);
+          setLocalSummary({
+            totalValue: newTotalValue,
+            totalCapGain: newTotalValue - newTotalCost,
+            totalCapGainPercentage: newTotalCost > 0 ? ((newTotalValue - newTotalCost) / newTotalCost) * 100 : 0
+          });
+        }
+      } catch (err) {
+        console.error("Failed to fetch live prices silently:", err);
+      }
+    };
+
+    fetchLivePrices();
+  }, []); // 仅在组件挂载后执行一次
 
   // 初始化和监听本地数据
   useEffect(() => {
@@ -236,16 +306,27 @@ export default function DashboardClient({ portfolioId, portfolioName, holdingsDa
               className="bg-gray-100 border-none rounded-lg py-1.5 pl-9 pr-4 text-[13px] w-44 focus:w-60 focus:ring-1 focus:ring-black/5 focus:bg-white transition-all duration-300"
             />
           </div>
-          {/* Account Link - Direct navigation to settings */}
-          <Link 
-            href="/settings"
-            className="flex items-center space-x-2.5 group transition-all"
-          >
-            <div className="w-7 h-7 rounded-full bg-gray-100 border border-gray-200 flex items-center justify-center text-gray-500 group-hover:border-gray-400 group-hover:text-black transition-colors shadow-sm overflow-hidden">
-              <User className="w-4 h-4" />
-            </div>
-            <span className="text-[13px] font-bold text-gray-500 group-hover:text-black transition-colors hidden sm:block">Account</span>
-          </Link>
+          <div className="flex items-center space-x-2.5">
+            {/* Mobile Transactions Link */}
+            <Link 
+              href="/transactions"
+              className="md:hidden w-7 h-7 rounded-full bg-gray-100 border border-gray-200 flex items-center justify-center text-gray-500 active:bg-gray-200 transition-colors shadow-sm"
+              title="Transactions"
+            >
+              <HistoryIcon className="w-3.5 h-3.5" />
+            </Link>
+
+            {/* Account Link - Direct navigation to settings */}
+            <Link 
+              href="/settings"
+              className="flex items-center space-x-2.5 group transition-all"
+            >
+              <div className="w-7 h-7 rounded-full bg-gray-100 border border-gray-200 flex items-center justify-center text-gray-500 group-hover:border-gray-400 group-hover:text-black transition-colors shadow-sm overflow-hidden">
+                <User className="w-4 h-4" />
+              </div>
+              <span className="text-[13px] font-bold text-gray-500 group-hover:text-black transition-colors hidden sm:block">Account</span>
+            </Link>
+          </div>
         </div>
       </header>
 
@@ -306,7 +387,7 @@ export default function DashboardClient({ portfolioId, portfolioName, holdingsDa
               <p className="text-[11px] text-gray-400 font-bold uppercase tracking-wider mb-1">Portfolio Value</p>
               <div className="flex items-baseline space-x-1">
                 <span className="text-[28px] font-bold text-black tracking-tight tabular-nums">
-                  ${localSummary.totalValue.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                  {fmt(localSummary.totalValue)}
                 </span>
               </div>
               <div className="mt-2 flex items-center space-x-2">
@@ -314,7 +395,7 @@ export default function DashboardClient({ portfolioId, portfolioName, holdingsDa
                   {isUp ? '+' : ''}{localSummary.totalCapGainPercentage.toFixed(2)}%
                 </span>
                 <span className="text-[12px] font-medium text-gray-400 tabular-nums">
-                  ({isUp ? '+' : '-'}${Math.abs(localSummary.totalCapGain).toLocaleString('en-US', { minimumFractionDigits: 2 })})
+                  ({isUp ? '+' : '-'}{fmt(Math.abs(localSummary.totalCapGain))})
                 </span>
               </div>
             </div>
@@ -323,7 +404,7 @@ export default function DashboardClient({ portfolioId, portfolioName, holdingsDa
               <p className="text-[11px] text-gray-400 font-bold uppercase tracking-wider mb-1">Total Gain</p>
               <div className="flex items-baseline">
                 <span className={`text-[22px] font-bold tracking-tight tabular-nums ${isUp ? 'text-emerald-600' : 'text-rose-500'}`}>
-                  {isUp ? '+' : '-'}${Math.abs(localSummary.totalCapGain).toLocaleString('en-US', { minimumFractionDigits: 2 })}
+                  {isUp ? '+' : '-'}{fmt(Math.abs(localSummary.totalCapGain))}
                 </span>
               </div>
               <p className="text-gray-400 text-[11px] font-medium mt-1">Net profit/loss</p>
@@ -338,7 +419,14 @@ export default function DashboardClient({ portfolioId, portfolioName, holdingsDa
                 {localHoldings.flatMap(g => g.holdings).slice(0, 3).map((h) => (
                   <div key={h.ticker} className="w-7 h-7 rounded-full bg-white border border-gray-100 flex items-center justify-center text-[9px] font-bold text-gray-600 shadow-sm overflow-hidden z-10">
                     {h.logo ? (
-                      <Image src={h.logo} alt={h.ticker} width={28} height={28} className="w-full h-full object-cover" />
+                      <Image 
+                        src={h.logo} 
+                        alt={h.ticker} 
+                        width={28} 
+                        height={28} 
+                        className="w-full h-full object-cover"
+                        unoptimized={true}
+                      />
                     ) : (
                       h.ticker.charAt(0)
                     )}
@@ -373,7 +461,7 @@ export default function DashboardClient({ portfolioId, portfolioName, holdingsDa
                 </div>
               </div>
 
-              <div className="h-[200px] w-full">
+              <div className="h-[200px] min-h-[200px] w-full">
                 <ResponsiveContainer width="100%" height="100%">
                   <AreaChart data={filteredChartData} margin={{ top: 5, right: 0, left: -25, bottom: 0 }}>
                     <defs>
@@ -391,7 +479,7 @@ export default function DashboardClient({ portfolioId, portfolioName, holdingsDa
                       contentStyle={{ borderRadius: '12px', border: 'none', boxShadow: '0 8px 20px -5px rgb(0 0 0 / 0.1)', backgroundColor: 'rgba(255, 255, 255, 0.95)', backdropFilter: 'blur(8px)', padding: '10px' }}
                       itemStyle={{ fontSize: '11px', fontWeight: 'bold', padding: '2px 0' }}
                       labelStyle={{ marginBottom: '4px', color: '#888', fontSize: '10px', fontWeight: '600' }}
-                      formatter={(value: any) => [`$${Number(value).toFixed(2)}`, undefined as any]}
+                      formatter={(value: any) => [`${fmt(Number(value))}`, undefined as any]}
                     />                    {Array.from(new Set(localHoldings.map(g => g.market))).map((market) => {
                       const color = MARKET_COLORS[market] || MARKET_COLORS['Other'];
                       return (
@@ -489,7 +577,14 @@ export default function DashboardClient({ portfolioId, portfolioName, holdingsDa
                           <div className="flex items-center space-x-3">
                             <div className="w-8 h-8 rounded-full bg-white flex items-center justify-center font-bold text-[11px] text-gray-900 border border-gray-100 shadow-sm overflow-hidden shrink-0">
                               {asset.logo ? (
-                                <Image src={asset.logo} alt={asset.ticker} width={32} height={32} className="w-full h-full object-cover" />
+                                <Image 
+                                  src={asset.logo} 
+                                  alt={asset.ticker} 
+                                  width={32} 
+                                  height={32} 
+                                  className="w-full h-full object-cover"
+                                  unoptimized={true} // Bypasses Next.js image optimization which fails on some local proxy setups
+                                />
                               ) : (
                                 asset.ticker.charAt(0)
                               )}
@@ -500,22 +595,24 @@ export default function DashboardClient({ portfolioId, portfolioName, holdingsDa
                             </div>
                           </div>
                         </td>
-                        <td className="px-4 sm:px-6 py-3 text-right text-[13px] font-semibold tabular-nums text-gray-900 hidden md:table-cell">${asset.price.toFixed(2)}</td>
+                        <td className="px-4 sm:px-6 py-3 text-right text-[13px] font-semibold tabular-nums text-gray-900 hidden md:table-cell">{asset.price > 0 ? fmt(asset.price) : '--'}</td>
                         <td className="px-4 sm:px-6 py-3 text-right hidden sm:table-cell">
                           <div className="text-[13px] font-semibold text-gray-900 tabular-nums">{asset.qty.toLocaleString()}</div>
                           <div className="text-[10px] text-gray-400 font-medium">Shares</div>
                         </td>
                         <td className="px-4 sm:px-6 py-3 text-right">
-                          <div className="text-[13px] font-bold text-black tabular-nums">${asset.value.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</div>
+                          <div className="text-[13px] font-bold text-black tabular-nums">{asset.price > 0 ? fmt(asset.value) : '--'}</div>
                           <div className="text-[10px] text-gray-400 font-medium sm:hidden">Value</div>
                           <div className="text-[10px] text-gray-400 font-medium hidden sm:block">Market Value</div>
                         </td>
                         <td className="px-4 sm:px-6 py-3 text-right">
-                          <FormatValue 
-                            val={returnDisplayMode === 'percentage' ? asset.return : asset.capGain} 
-                            isPercentage={returnDisplayMode === 'percentage'} 
-                            isCurrency={returnDisplayMode === 'currency'} 
-                          />
+                          {asset.price > 0 ? <FormatValue
+                            val={returnDisplayMode === 'percentage' ? asset.return : asset.capGain}
+                            isPercentage={returnDisplayMode === 'percentage'}
+                            isCurrency={returnDisplayMode === 'currency'}
+                            symbol={symbol}
+                            convert={convert}
+                          /> : <span className="text-gray-400 text-[13px]">--</span>}
                           <div className="text-[10px] text-gray-400 font-medium hidden sm:block">Since purchase</div>
                         </td>
                         <td className="px-4 sm:px-6 py-3 text-right hidden sm:table-cell">
@@ -531,12 +628,14 @@ export default function DashboardClient({ portfolioId, portfolioName, holdingsDa
                   <td className="px-4 sm:px-6 py-4 text-[13px] text-black">Total</td>
                   <td className="px-4 sm:px-6 py-4 hidden md:table-cell"></td>
                   <td className="px-4 sm:px-6 py-4 hidden sm:table-cell"></td>
-                  <td className="px-4 sm:px-6 py-4 text-right text-[14px] sm:text-[15px] text-black tabular-nums">${localSummary.totalValue.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
+                  <td className="px-4 sm:px-6 py-4 text-right text-[14px] sm:text-[15px] text-black tabular-nums">{fmt(localSummary.totalValue)}</td>
                   <td className="px-4 sm:px-6 py-4 text-right">
-                    <FormatValue 
-                      val={returnDisplayMode === 'percentage' ? localSummary.totalCapGainPercentage : localSummary.totalCapGain} 
-                      isPercentage={returnDisplayMode === 'percentage'} 
-                      isCurrency={returnDisplayMode === 'currency'} 
+                    <FormatValue
+                      val={returnDisplayMode === 'percentage' ? localSummary.totalCapGainPercentage : localSummary.totalCapGain}
+                      isPercentage={returnDisplayMode === 'percentage'}
+                      isCurrency={returnDisplayMode === 'currency'}
+                      symbol={symbol}
+                      convert={convert}
                     />
                   </td>
                   <td className="px-4 sm:px-6 py-4 hidden sm:table-cell"></td>
