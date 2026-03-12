@@ -127,6 +127,11 @@ export async function POST(
       });
     }
 
+    await prisma.asset.update({
+      where: { ticker: decodedTicker },
+      data: updateData,
+    });
+
     return NextResponse.json({
       success: true,
       ticker: decodedTicker,

@@ -4,13 +4,6 @@ import { get12MonthHistory } from '@/lib/twelvedata'
 import { getUser } from '@/lib/supabase-server'
 import prisma, { withRetry } from '@/lib/prisma'
 
-// 降级用的默认价格（当 API 调用失败时使用）
-const FALLBACK_PRICES: Record<string, number> = {
-  'AMD': 200.21,
-  'GOOG': 311.43,
-  'EWY': 151.37,
-  'XIACY': 22.06
-}
 
 // 服务端获取实时股价（内部调用 Finnhub）
 async function fetchStockQuote(symbol: string): Promise<number | null> {
@@ -73,7 +66,7 @@ async function fetchBatchQuotes(assets: any[]): Promise<Record<string, number>> 
         }).catch(e => console.error(`Silent background update failed for ${asset.ticker}:`, e.message));
       } else {
         // 降级：优先使用数据库中的 lastPrice
-        prices[asset.ticker] = asset.lastPrice || FALLBACK_PRICES[asset.ticker] || 0;
+        prices[asset.ticker] = asset.lastPrice || 0;
       }
     })
   );
@@ -163,16 +156,15 @@ export default async function Page() {
   let totalValue = 0;
   let totalCostBase = 0;
 
-  // 获取唯一的 Asset 对象用于批量获取报价
+  // 获取唯一的 Asset 对象用于后续可能的需求
   const uniqueAssets = Array.from(
     new Map(Array.from(holdingsMap.values()).map(h => [h.asset.ticker, h.asset])).values()
   );
 
-  const realTimePrices = await fetchBatchQuotes(uniqueAssets);
-
-  // 4. 智能 Logo 和 历史价格 缓存逻辑 (后台异步更新，不阻塞渲染)
-  const assetsWithLogo = Array.from(holdingsMap.values()).map(h => h.asset);
+  // --- 核心改动：不再在此处 await fetchBatchQuotes ---
+  // 我们直接使用数据库中缓存的价格进行首屏渲染
   const logoMap: Record<string, string | null> = {};
+  const assetsWithLogo = Array.from(holdingsMap.values()).map(h => h.asset);
   
   // 提取需要更新的资源，后台触发，不 await
   const missingLogos = assetsWithLogo.filter(a => !a.logo);
@@ -204,11 +196,12 @@ export default async function Page() {
   }
 
   for (const asset of assetsWithLogo) {
-    logoMap[asset.ticker] = asset.logo; // 只使用当前数据库中已有的
+    logoMap[asset.ticker] = asset.logo;
   }
 
   const calculatedHoldings = Array.from(holdingsMap.values()).map(h => {
-    const currentPrice = realTimePrices[h.asset.ticker] ?? FALLBACK_PRICES[h.asset.ticker] ?? 0;
+    // 使用数据库缓存的价格，如果没有则用 fallback
+    const currentPrice = h.asset.lastPrice || 0;
     const value = currentPrice * h.totalQty;
     const capGain = value - h.totalCost;
     const returnPct = h.totalCost > 0 ? (capGain / h.totalCost) * 100 : 0;
@@ -225,7 +218,7 @@ export default async function Page() {
       value: value,
       capGain: capGain,
       return: returnPct,
-      logo: logoMap[h.asset.ticker], // 使用最新获取的 Logo
+      logo: logoMap[h.asset.ticker],
     }
   });
 

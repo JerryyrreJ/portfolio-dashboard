@@ -1,10 +1,10 @@
 import React from 'react';
-import { Search, User, TrendingUp } from 'lucide-react';
+import { Search, User, TrendingUp, ChevronRight } from 'lucide-react';
 
 export default function TransactionsLoading() {
   return (
     <div className="min-h-screen bg-[#FBFBFD] text-[#1D1D1F] font-sans antialiased">
-      {/* Skeleton Header (Matches exactly) */}
+      {/* Header - Matches exactly */}
       <header className="bg-white/70 backdrop-blur-xl border-b border-gray-100 px-6 h-[56px] flex items-center justify-between sticky top-0 z-50">
         <div className="flex items-center space-x-8">
             <div className="flex items-center space-x-2 text-black font-bold text-[17px] tracking-tight opacity-50">
@@ -13,7 +13,7 @@ export default function TransactionsLoading() {
               </div>
               <span>Folio</span>
             </div>
-          <nav className="hidden md:flex space-x-7 text-[14px] font-semibold text-gray-400">
+          <nav className="hidden md:flex space-x-7 text-[14px] font-semibold text-gray-300">
             <div className="py-[16px]">Investments</div>
             <div className="text-black border-b-2 border-black py-[16px]">Transactions</div>
             <div className="py-[16px]">History</div>
@@ -34,22 +34,33 @@ export default function TransactionsLoading() {
       </header>
 
       {/* Main Skeleton Content */}
-      <main className="flex-1 max-w-[1000px] w-full mx-auto px-6 py-8 animate-pulse">
+      <main className="max-w-[1400px] w-full mx-auto px-4 sm:px-6 py-6 sm:py-8 animate-pulse">
         
-        {/* Title Area */}
-        <div className="flex justify-between items-end mb-8">
-          <div>
-            <div className="h-8 w-48 bg-gray-200 rounded-lg mb-2"></div>
-            <div className="h-4 w-64 bg-gray-200 rounded"></div>
+        {/* Breadcrumbs & Title Area */}
+        <div className="flex flex-col sm:flex-row justify-between items-start sm:items-end gap-4 mb-6 sm:mb-8">
+          <div className="w-full sm:w-auto">
+            <div className="flex items-center gap-2 mb-2">
+              <div className="h-3 w-16 bg-gray-200 rounded"></div>
+              <ChevronRight className="w-3 h-3 text-gray-200" />
+              <div className="h-3 w-20 bg-gray-200 rounded"></div>
+            </div>
+            <div className="h-9 w-64 bg-gray-200 rounded-lg mb-2"></div>
+            <div className="h-4 w-48 bg-gray-100 rounded"></div>
           </div>
-          <div className="h-10 w-24 bg-gray-200 rounded-lg"></div>
+          <div className="flex items-center gap-3 w-full sm:w-auto">
+            <div className="h-9 flex-1 sm:w-24 bg-gray-200 rounded-full"></div>
+            <div className="h-9 flex-1 sm:w-24 bg-gray-200 rounded-full"></div>
+          </div>
         </div>
 
-        {/* Filters */}
-        <div className="flex space-x-3 mb-6">
-          <div className="h-9 w-24 bg-gray-200 rounded-lg"></div>
-          <div className="h-9 w-24 bg-gray-200 rounded-lg"></div>
-          <div className="h-9 w-32 bg-gray-200 rounded-lg"></div>
+        {/* Statistics Cards Skeleton */}
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-5 mb-6 sm:mb-8">
+          {[1, 2, 3, 4].map((i) => (
+            <div key={i} className="bg-white p-4 sm:p-5 rounded-2xl border border-gray-100 shadow-sm flex flex-col items-center">
+              <div className="h-3 w-20 bg-gray-100 rounded mb-2"></div>
+              <div className="h-6 w-24 bg-gray-200 rounded"></div>
+            </div>
+          ))}
         </div>
 
         {/* Transactions Table Skeleton */}
@@ -58,52 +69,50 @@ export default function TransactionsLoading() {
             <table className="w-full text-left border-collapse">
               <thead>
                 <tr className="bg-gray-50/50 border-b border-gray-100">
-                  <th className="px-6 py-4"><div className="h-3 w-12 bg-gray-200 rounded"></div></th>
-                  <th className="px-6 py-4"><div className="h-3 w-20 bg-gray-200 rounded"></div></th>
-                  <th className="px-6 py-4"><div className="h-3 w-16 bg-gray-200 rounded"></div></th>
-                  <th className="px-6 py-4"><div className="h-3 w-16 bg-gray-200 rounded ml-auto"></div></th>
+                  <th className="px-6 py-4"><div className="h-3 w-24 bg-gray-200 rounded"></div></th>
+                  <th className="px-6 py-4"><div className="h-3 w-32 bg-gray-200 rounded"></div></th>
+                  <th className="px-6 py-4 text-center"><div className="h-3 w-12 bg-gray-200 rounded mx-auto"></div></th>
                   <th className="px-6 py-4"><div className="h-3 w-16 bg-gray-200 rounded ml-auto"></div></th>
                   <th className="px-6 py-4"><div className="h-3 w-20 bg-gray-200 rounded ml-auto"></div></th>
-                  <th className="px-6 py-4 w-10"></th>
+                  <th className="px-6 py-4"><div className="h-3 w-24 bg-gray-200 rounded ml-auto"></div></th>
+                  <th className="px-6 py-4 w-24"></th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-50 bg-white">
                 {[1, 2, 3, 4, 5, 6, 7, 8].map((row) => (
                   <tr key={row}>
                     <td className="px-6 py-4">
-                      <div className="h-4 w-20 bg-gray-200 rounded"></div>
+                      <div className="h-4 w-24 bg-gray-200 rounded mb-1.5"></div>
+                      <div className="h-3 w-12 bg-gray-100 rounded"></div>
                     </td>
                     <td className="px-6 py-4">
                       <div className="flex items-center space-x-3">
-                        <div className="w-8 h-8 rounded-full bg-gray-200"></div>
+                        <div className="w-9 h-9 rounded-full bg-gray-100"></div>
                         <div>
-                          <div className="h-4 w-16 bg-gray-200 rounded mb-1"></div>
-                          <div className="h-3 w-24 bg-gray-200 rounded"></div>
+                          <div className="h-4 w-12 bg-gray-200 rounded mb-1.5"></div>
+                          <div className="h-3 w-24 bg-gray-100 rounded"></div>
                         </div>
                       </div>
                     </td>
                     <td className="px-6 py-4">
-                      <div className="h-6 w-16 bg-gray-200 rounded-md"></div>
+                      <div className="h-5 w-12 bg-gray-100 rounded mx-auto"></div>
                     </td>
                     <td className="px-6 py-4">
-                      <div className="flex flex-col items-end">
-                        <div className="h-4 w-16 bg-gray-200 rounded mb-1"></div>
-                        <div className="h-3 w-12 bg-gray-200 rounded"></div>
-                      </div>
+                      <div className="h-4 w-16 bg-gray-200 rounded ml-auto"></div>
                     </td>
                     <td className="px-6 py-4">
-                      <div className="flex flex-col items-end">
-                        <div className="h-4 w-16 bg-gray-200 rounded mb-1"></div>
-                        <div className="h-3 w-12 bg-gray-200 rounded"></div>
-                      </div>
+                      <div className="h-4 w-20 bg-gray-100 rounded ml-auto"></div>
                     </td>
                     <td className="px-6 py-4">
-                      <div className="flex flex-col items-end">
-                        <div className="h-4 w-20 bg-gray-200 rounded mb-1"></div>
-                        <div className="h-3 w-16 bg-gray-200 rounded"></div>
+                      <div className="h-4 w-24 bg-gray-200 rounded ml-auto mb-1.5"></div>
+                      <div className="h-3 w-16 bg-gray-100 rounded ml-auto"></div>
+                    </td>
+                    <td className="px-6 py-4">
+                      <div className="flex justify-center gap-2">
+                        <div className="w-7 h-7 bg-gray-50 rounded-md"></div>
+                        <div className="w-7 h-7 bg-gray-50 rounded-md"></div>
                       </div>
                     </td>
-                    <td className="px-6 py-4"><div className="w-4 h-4 bg-gray-200 rounded ml-auto"></div></td>
                   </tr>
                 ))}
               </tbody>
