@@ -21,6 +21,14 @@ This project adheres to a strict "Restrained Minimalism" aesthetic, heavily insp
 - **Icon Usage**: Avoid unnecessary icons in lists or menus. Text should stand on its own.
 - **Circular Primaries**: Use circular containers (`rounded-full`) for profile photos and company logos. Apply `object-cover` to fill the circle completely.
 
+### 4. Micro-Interaction Standards
+- **Active Icon Effect**: When a setting item is in "edit mode" or "active", its icon container MUST:
+  - Scale slightly (`scale-110`).
+  - Add a soft halo (`ring-4 ring-black/5`).
+  - Transition icon color from `gray-400` to `black`.
+  - Use `duration-300 ease-in-out` for all transitions to ensure a "premium" feel.
+- **Destructive Actions**: Use `bg-rose-50/30` with `text-rose-500` for sign-out or delete buttons, adding a subtle icon translation (e.g., `group-hover:-translate-x-0.5`) on hover.
+
 ---
 
 ## 🏗️ Architecture (System Context)

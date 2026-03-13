@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState } from 'react';
-import { Mail, Lock, ArrowRight, AlertCircle } from 'lucide-react';
+import { Mail, Lock, ArrowRight, AlertCircle, Shield } from 'lucide-react';
 import { createClient } from '@/lib/supabase';
 import Notification from '../Notification';
 
@@ -13,14 +13,45 @@ export default function AuthPanel({ onLogin }: AuthPanelProps) {
   const [mode, setMode] = useState<'login' | 'signup'>('login');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [confirmPassword, setConfirmPassword] = useState('');
+  const [rememberMe, setRememberMe] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [notification, setNotification] = useState<{show: boolean, type: 'success'|'error', title: string, message: string}>({ show: false, type: 'success', title: '', message: '' });
 
   const supabase = createClient();
 
+  // Password strength calculation
+  const getPasswordStrength = (pass: string) => {
+    if (!pass) return 0;
+    let strength = 0;
+    if (pass.length >= 6) strength += 1;
+    if (pass.length >= 10) strength += 1;
+    if (/[A-Z]/.test(pass) && /[0-9]/.test(pass)) strength += 1;
+    if (/[^A-Za-z0-9]/.test(pass)) strength += 1;
+    return strength;
+  };
+
+  const strength = getPasswordStrength(password);
+  const strengthColors = ['bg-gray-100', 'bg-rose-400', 'bg-amber-400', 'bg-emerald-400', 'bg-emerald-600'];
+
+  // Load remembered email on mount
+  React.useEffect(() => {
+    const savedEmail = localStorage.getItem('folio_remember_email');
+    if (savedEmail) {
+      setEmail(savedEmail);
+      setRememberMe(true);
+    }
+  }, []);
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    
+    if (mode === 'signup' && password !== confirmPassword) {
+      setError("Passwords do not match");
+      return;
+    }
+
     setLoading(true);
     setError(null);
 
@@ -31,6 +62,13 @@ export default function AuthPanel({ onLogin }: AuthPanelProps) {
           password,
         });
         if (error) throw error;
+        
+        if (rememberMe) {
+          localStorage.setItem('folio_remember_email', email);
+        } else {
+          localStorage.removeItem('folio_remember_email');
+        }
+        
         onLogin();
       } else {
         const { error } = await supabase.auth.signUp({
@@ -47,10 +85,39 @@ export default function AuthPanel({ onLogin }: AuthPanelProps) {
           title: 'Check your email',
           message: 'We sent you a confirmation link. Please verify your account to continue.'
         });
-        // We don't call onLogin() immediately for signup because they need to verify
       }
     } catch (err: any) {
       setError(err.message || 'An error occurred during authentication');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleForgotPassword = async (e: React.MouseEvent) => {
+    e.preventDefault();
+    if (!email) {
+      setError("Please enter your email address first.");
+      return;
+    }
+    
+    setLoading(true);
+    setError(null);
+    
+    try {
+      const { error } = await supabase.auth.resetPasswordForEmail(email, {
+        redirectTo: `${window.location.origin}/settings/update-password`,
+      });
+      
+      if (error) throw error;
+      
+      setNotification({
+        show: true,
+        type: 'success',
+        title: 'Reset Link Sent',
+        message: 'Check your email for the password reset link.'
+      });
+    } catch (err: any) {
+      setError(err.message || 'Failed to send reset email');
     } finally {
       setLoading(false);
     }
@@ -91,7 +158,10 @@ export default function AuthPanel({ onLogin }: AuthPanelProps) {
               <Mail className="w-4 h-4" />
             </div>
             <input
+              id="folio-email"
+              name="folio-email"
               type="email"
+              autoComplete="username"
               placeholder="Email Address"
               value={email}
               onChange={(e) => setEmail(e.target.value)}
@@ -99,13 +169,16 @@ export default function AuthPanel({ onLogin }: AuthPanelProps) {
               className="w-full bg-gray-50 border border-gray-100 rounded-2xl py-3.5 pl-11 pr-4 text-[14px] font-medium focus:bg-white focus:ring-1 focus:ring-black/5 transition-all outline-none"
             />
           </div>
-          
+
           <div className="relative group">
             <div className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400 group-focus-within:text-black transition-colors">
               <Lock className="w-4 h-4" />
             </div>
             <input
+              id="folio-password"
+              name="folio-password"
               type="password"
+              autoComplete={mode === 'login' ? "current-password" : "new-password"}
               placeholder="Password"
               value={password}
               onChange={(e) => setPassword(e.target.value)}
@@ -113,7 +186,75 @@ export default function AuthPanel({ onLogin }: AuthPanelProps) {
               className="w-full bg-gray-50 border border-gray-100 rounded-2xl py-3.5 pl-11 pr-4 text-[14px] font-medium focus:bg-white focus:ring-1 focus:ring-black/5 transition-all outline-none"
             />
           </div>
+
+          {mode === 'signup' && password && (
+            <div className="px-1 mt-1 animate-in fade-in duration-500">
+              <div className="flex space-x-1 h-1 w-full">
+                {[1, 2, 3, 4].map((step) => (
+                  <div 
+                    key={step} 
+                    className={`h-full flex-1 rounded-full transition-all duration-500 ${
+                      step <= strength ? strengthColors[strength] : 'bg-gray-100'
+                    }`}
+                  />
+                ))}
+              </div>
+              <p className="text-[10px] font-bold text-gray-400 mt-1.5 uppercase tracking-wider">
+                {strength === 1 && 'Weak'}
+                {strength === 2 && 'Fair'}
+                {strength === 3 && 'Good'}
+                {strength >= 4 && 'Strong'}
+              </p>
+            </div>
+          )}
+
+          {mode === 'signup' && (
+            <div className="relative group animate-in fade-in slide-in-from-top-2 duration-300">
+              <div className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400 group-focus-within:text-black transition-colors">
+                <Shield className="w-4 h-4" />
+              </div>
+              <input
+                id="folio-confirm-password"
+                name="folio-confirm-password"
+                type="password"
+                autoComplete="new-password"
+                placeholder="Confirm Password"
+                value={confirmPassword}
+                onChange={(e) => setConfirmPassword(e.target.value)}
+                required
+                className="w-full bg-gray-50 border border-gray-100 rounded-2xl py-3.5 pl-11 pr-4 text-[14px] font-medium focus:bg-white focus:ring-1 focus:ring-black/5 transition-all outline-none"
+              />
+            </div>
+          )}
         </div>
+
+        {mode === 'login' && (
+          <div className="flex items-center justify-between px-1 py-1">
+            <label className="flex items-center space-x-2 cursor-pointer group">
+              <div className="relative flex items-center">
+                <input
+                  type="checkbox"
+                  checked={rememberMe}
+                  onChange={(e) => setRememberMe(e.target.checked)}
+                  className="peer sr-only"
+                />
+                <div className="w-4 h-4 border border-gray-200 rounded-md bg-gray-50 peer-checked:bg-black peer-checked:border-black transition-all duration-200"></div>
+                <svg className="absolute w-2.5 h-2.5 text-white opacity-0 peer-checked:opacity-100 left-[3px] pointer-events-none transition-opacity duration-200" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="4">
+                  <path d="M5 13l4 4L19 7" />
+                </svg>
+              </div>
+              <span className="text-[12px] font-medium text-gray-400 group-hover:text-black transition-colors">Remember me</span>
+            </label>
+            
+            <button 
+              type="button"
+              onClick={handleForgotPassword}
+              className="text-[12px] font-medium text-gray-400 hover:text-black transition-colors"
+            >
+              Forgot password?
+            </button>
+          </div>
+        )}
 
         <button
           type="submit"
@@ -148,4 +289,3 @@ export default function AuthPanel({ onLogin }: AuthPanelProps) {
     </div>
   );
 }
-
