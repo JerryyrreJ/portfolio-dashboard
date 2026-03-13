@@ -27,7 +27,8 @@ import {
   AlertCircle,
   CheckCircle2,
   Loader2,
-  Eye
+  Eye,
+  LogOut
 } from 'lucide-react';
 import AuthPanel from '@/app/components/settings/AuthPanel';
 import { createClient } from '@/lib/supabase';
@@ -57,9 +58,32 @@ export default function SettingsPage() {
   const [isEditingBaseCurrency, setIsEditingBaseCurrency] = useState(false);
   const [portfolioName, setPortfolioName] = useState('');
   const [baseCurrency, setBaseCurrency] = useState('USD');
-  const [portfolioLoading, setPortfolioLoading] = useState(true);
+  const [portfolioLoading, setPortfolioLoading] = useState(false);
   const [portfolioActionLoading, setPortfolioActionLoading] = useState(false);
   const [portfolioError, setPortfolioError] = useState<string | null>(null);
+
+  // Preference States
+  const [theme, setTheme] = useState('System');
+  const [chartType, setChartType] = useState('Area Chart');
+  const [colorScheme, setColorScheme] = useState('Emerald');
+  const [hideSmallBalances, setHideSmallBalances] = useState(false);
+  const [realTimeSync, setRealTimeSync] = useState(true);
+
+  // Inline edit states for Preferences
+  const [isEditingTheme, setIsEditingTheme] = useState(false);
+  const [isEditingChartType, setIsEditingChartType] = useState(false);
+  const [isEditingColorScheme, setIsEditingColorScheme] = useState(false);
+
+  // Sync Preferences to Backend (Placeholder)
+  const syncPreference = async (key: string, value: any) => {
+    console.log(`[Sync] Updating preference: ${key} = ${value}`);
+    // TODO: Implement fetch('/api/user/preferences', { method: 'PATCH', ... })
+  };
+
+  const handlePreferenceChange = (key: string, value: any, setter: Function) => {
+    setter(value);
+    syncPreference(key, value);
+  };
 
   // Global Notification State
   const [notification, setNotification] = useState<{
@@ -136,11 +160,14 @@ export default function SettingsPage() {
             } else {
               const cloudMs = cloudCurrencyUpdatedAt ? new Date(cloudCurrencyUpdatedAt).getTime() : 0;
               const localMs = localCurrencyUpdatedAt ? new Date(localCurrencyUpdatedAt).getTime() : 0;
+              
               if (cloudMs > localMs) {
+                // Cloud is newer, update local silently
                 setBaseCurrency(cloudCurrency);
                 localStorage.setItem('base_currency', cloudCurrency);
                 if (cloudCurrencyUpdatedAt) localStorage.setItem('base_currency_updated_at', cloudCurrencyUpdatedAt);
               } else if (localMs > cloudMs) {
+                // Local is newer, update cloud silently
                 fetch('/api/portfolio', {
                   method: 'PATCH',
                   headers: { 'Content-Type': 'application/json' },
@@ -360,17 +387,17 @@ export default function SettingsPage() {
       {/* Main Content Area */}
       <main className="flex-1 w-full py-6 md:py-12 flex flex-col md:flex-row justify-center items-start px-4 sm:px-6 gap-8 md:gap-12 relative">
         
-        {/* Sidebar Navigation */}
-        <aside className="w-full md:w-64 flex-shrink-0 md:sticky md:top-28">
-          <h1 className="text-[24px] md:text-[28px] font-bold text-black tracking-tight mb-6 md:mb-8 pl-1 md:pl-4">Settings</h1>
-          <nav className="flex flex-row md:flex-col overflow-x-auto md:overflow-visible pb-2 md:pb-0 space-x-2 md:space-x-0 md:space-y-1.5 relative no-scrollbar">
+        {/* Sidebar Navigation - Hidden on Mobile */}
+        <aside className="hidden md:block w-64 flex-shrink-0 md:sticky md:top-28">
+          <h1 className="text-[24px] md:text-[28px] font-bold text-black tracking-tight mb-6 md:mb-8 pl-4">Settings</h1>
+          <nav className="flex flex-col space-y-1.5">
             {navItems.map((item) => {
               const isActive = activeSection === item.id;
               return (
                 <button 
                   key={item.id}
                   onClick={() => scrollToSection(item.id, item.ref)}
-                  className={`flex items-center space-x-3 px-4 py-2.5 md:py-3.5 rounded-xl md:rounded-[14px] text-[13px] md:text-[14px] font-semibold transition-all group whitespace-nowrap md:w-full text-left ${
+                  className={`flex items-center space-x-3 px-4 py-3.5 rounded-[14px] text-[14px] font-semibold transition-all group w-full text-left ${
                     isActive 
                       ? 'bg-white shadow-sm text-black border border-gray-100/50' 
                       : 'text-gray-500 hover:bg-gray-100/50 hover:text-gray-900 border border-transparent'
@@ -388,6 +415,10 @@ export default function SettingsPage() {
 
         {/* Content Area - Scrollable */}
         <div className="w-full max-w-[720px] pb-32">
+          {/* Mobile Title - Only visible on small screens */}
+          <div className="md:hidden mb-8 px-1">
+            <h1 className="text-[32px] font-bold text-black tracking-tight">Settings</h1>
+          </div>
           
           {/* SECTION: PORTFOLIO */}
           <div id="portfolio" ref={portfolioRef} className="scroll-mt-24 md:scroll-mt-32">
@@ -402,13 +433,15 @@ export default function SettingsPage() {
                 <h3 className="text-[11px] font-bold text-gray-400 uppercase tracking-[0.1em] pl-1">General</h3>
                 <div className="bg-gray-50/50 rounded-2xl border border-gray-100 overflow-hidden transition-all duration-300">
                   <div className="border-b border-gray-100 bg-white sm:bg-transparent">
-                    <div className="px-4 md:px-5 py-4 flex items-center justify-between">
-                      <div className="flex items-center space-x-3 md:space-x-4">
-                        <div className="w-8 h-8 rounded-lg bg-white border border-gray-100 shadow-sm flex items-center justify-center"><Wallet className="w-4 h-4 text-gray-400" /></div>
+                    <div className="px-5 py-4 flex items-center justify-between">
+                      <div className="flex items-center space-x-4">
+                        <div className={`w-8 h-8 rounded-lg bg-white border border-gray-100 shadow-sm flex items-center justify-center transition-all duration-300 ${isEditingPortfolioName ? 'scale-110 border-gray-200 ring-4 ring-black/5' : ''}`}>
+                          <Wallet className={`w-4 h-4 transition-colors duration-300 ${isEditingPortfolioName ? 'text-black' : 'text-gray-400'}`} />
+                        </div>
                         <div>
                           <div className="text-[14px] font-bold text-black leading-tight">Portfolio Name</div>
                           <div className="text-[13px] text-gray-500 font-medium mt-0.5">
-                            {portfolioLoading ? <span className="inline-block w-24 h-3.5 bg-gray-200 rounded animate-pulse" /> : portfolioName}
+                            {portfolioName}
                           </div>
                         </div>
                       </div>
@@ -418,7 +451,7 @@ export default function SettingsPage() {
                           setIsEditingBaseCurrency(false);
                           setPortfolioError(null);
                         }}
-                        className={`text-[12px] md:text-[13px] font-bold px-3 py-1.5 rounded-lg transition-colors shadow-sm active:scale-95 border ${
+                        className={`text-[13px] font-bold px-3 py-1.5 rounded-lg transition-colors shadow-sm active:scale-95 border ${
                           isEditingPortfolioName 
                             ? 'bg-gray-100 border-gray-200 text-gray-700' 
                             : 'bg-white border-gray-100 text-black hover:bg-gray-100'
@@ -460,7 +493,9 @@ export default function SettingsPage() {
                   <div className="bg-white sm:bg-transparent">
                     <div className="px-5 py-4 flex items-center justify-between">
                       <div className="flex items-center space-x-4">
-                        <div className="w-8 h-8 rounded-lg bg-white border border-gray-100 shadow-sm flex items-center justify-center"><Globe className="w-4 h-4 text-gray-400" /></div>
+                        <div className={`w-8 h-8 rounded-lg bg-white border border-gray-100 shadow-sm flex items-center justify-center transition-all duration-300 ${isEditingBaseCurrency ? 'scale-110 border-gray-200 ring-4 ring-black/5' : ''}`}>
+                          <Globe className={`w-4 h-4 transition-colors duration-300 ${isEditingBaseCurrency ? 'text-black' : 'text-gray-400'}`} />
+                        </div>
                         <div>
                           <div className="text-[14px] font-bold text-black leading-tight">Base Currency</div>
                           <div className="text-[13px] text-gray-500 font-medium mt-0.5">{baseCurrency}</div>
@@ -568,50 +603,215 @@ export default function SettingsPage() {
               <div className="space-y-4">
                 <h3 className="text-[11px] font-bold text-gray-400 uppercase tracking-[0.1em] pl-1">Appearance</h3>
                 <div className="bg-gray-50/50 rounded-2xl border border-gray-100 overflow-hidden">
-                  <div className="px-4 md:px-5 py-4 flex items-center justify-between border-b border-gray-100">
-                    <div className="flex items-center space-x-3 md:space-x-4">
-                      <div className="w-8 h-8 rounded-lg bg-white border border-gray-100 shadow-sm flex items-center justify-center"><Monitor className="w-4 h-4 text-gray-400" /></div>
-                      <div>
-                        <div className="text-[14px] font-bold text-black leading-tight">Theme</div>
-                        <div className="text-[13px] text-gray-500 font-medium mt-0.5">Follow System</div>
+                  {/* Theme Row */}
+                  <div className="border-b border-gray-100 bg-white sm:bg-transparent">
+                    <div className="px-4 md:px-5 py-4 flex items-center justify-between group/item">
+                      <div className="flex items-center space-x-3 md:space-x-4">
+                        <div className={`w-8 h-8 rounded-lg bg-white border border-gray-100 shadow-sm flex items-center justify-center transition-all duration-300 ${isEditingTheme ? 'scale-110 border-gray-200 ring-4 ring-black/5' : 'group-hover/item:border-gray-200'}`}>
+                          <Monitor className={`w-4 h-4 transition-colors duration-300 ${isEditingTheme ? 'text-black' : 'text-gray-400 group-hover/item:text-black'}`} />
+                        </div>
+                        <div>
+                          <div className="text-[14px] font-bold text-black leading-tight">Theme</div>
+                          <div className="text-[13px] text-gray-500 font-medium mt-0.5">{theme}</div>
+                        </div>
+                      </div>
+                      <button 
+                        onClick={() => {
+                          setIsEditingTheme(!isEditingTheme);
+                          setIsEditingChartType(false);
+                        }}
+                        className={`text-[12px] md:text-[13px] font-bold px-3 py-1.5 rounded-lg transition-colors shadow-sm active:scale-95 border ${
+                          isEditingTheme 
+                            ? 'bg-gray-100 border-gray-200 text-gray-700' 
+                            : 'bg-white border-gray-100 text-black hover:bg-gray-100'
+                        }`}
+                      >
+                        {isEditingTheme ? 'Cancel' : 'Select'}
+                      </button>
+                    </div>
+                    {/* Expandable Theme Drawer */}
+                    <div className={`grid transition-all duration-300 ease-in-out ${isEditingTheme ? 'grid-rows-[1fr] opacity-100' : 'grid-rows-[0fr] opacity-0'}`}>
+                      <div className="overflow-hidden">
+                        <div className="p-4 md:p-5 bg-white border-t border-gray-100/60 flex flex-wrap gap-2">
+                          {['Light', 'Dark', 'System'].map((t) => (
+                            <button 
+                              key={t}
+                              onClick={() => {
+                                handlePreferenceChange('theme', t, setTheme);
+                                setIsEditingTheme(false);
+                              }}
+                              className={`flex-1 min-w-[80px] text-[12px] font-bold py-2.5 rounded-xl transition-all active:scale-95 border ${
+                                theme === t 
+                                  ? 'bg-black border-black text-white shadow-sm' 
+                                  : 'bg-gray-50 border-gray-100 text-black hover:border-gray-200 hover:bg-gray-100'
+                              }`}
+                            >
+                              {t}
+                            </button>
+                          ))}
+                        </div>
                       </div>
                     </div>
-                    <button className="text-[12px] md:text-[13px] font-bold text-black border border-gray-100 bg-white hover:bg-gray-100 px-3 py-1.5 rounded-lg transition-colors shadow-sm active:scale-95">Select</button>
                   </div>
-                  <div className="px-4 md:px-5 py-4 flex items-center justify-between border-b border-gray-100">
-                    <div className="flex items-center space-x-3 md:space-x-4">
-                      <div className="w-8 h-8 rounded-lg bg-white border border-gray-100 shadow-sm flex items-center justify-center"><BarChart2 className="w-4 h-4 text-gray-400" /></div>
-                      <div>
-                        <div className="text-[14px] font-bold text-black leading-tight">Default Chart Type</div>
-                        <div className="text-[13px] text-gray-500 font-medium mt-0.5">Area Chart</div>
+
+                  {/* Market Colors Row */}
+                  <div className="border-b border-gray-100 bg-white sm:bg-transparent">
+                    <div className="px-4 md:px-5 py-4 flex items-center justify-between group/item">
+                      <div className="flex items-center space-x-3 md:space-x-4">
+                        <div className={`w-8 h-8 rounded-lg bg-white border border-gray-100 shadow-sm flex items-center justify-center transition-all duration-300 ${isEditingColorScheme ? 'scale-110 border-gray-200 ring-4 ring-black/5' : 'group-hover/item:border-gray-200'}`}>
+                          <TrendingUp className={`w-4 h-4 transition-colors duration-300 ${isEditingColorScheme ? 'text-black' : 'text-gray-400 group-hover/item:text-black'}`} />
+                        </div>
+                        <div>
+                          <div className="text-[14px] font-bold text-black leading-tight">Market Colors</div>
+                          <div className="text-[13px] text-gray-500 font-medium mt-0.5">
+                            {colorScheme === 'Emerald' ? 'Emerald Gains / Rose Losses' : 'Rose Gains / Emerald Losses'}
+                          </div>
+                        </div>
+                      </div>
+                      <button 
+                        onClick={() => {
+                          setIsEditingColorScheme(!isEditingColorScheme);
+                          setIsEditingTheme(false);
+                          setIsEditingChartType(false);
+                        }}
+                        className={`text-[12px] md:text-[13px] font-bold px-3 py-1.5 rounded-lg transition-colors shadow-sm active:scale-95 border ${
+                          isEditingColorScheme 
+                            ? 'bg-gray-100 border-gray-200 text-gray-700' 
+                            : 'bg-white border-gray-100 text-black hover:bg-gray-100'
+                        }`}
+                      >
+                        {isEditingColorScheme ? 'Cancel' : 'Change'}
+                      </button>
+                    </div>
+                    {/* Expandable Color Scheme Drawer */}
+                    <div className={`grid transition-all duration-300 ease-in-out ${isEditingColorScheme ? 'grid-rows-[1fr] opacity-100' : 'grid-rows-[0fr] opacity-0'}`}>
+                      <div className="overflow-hidden">
+                        <div className="p-4 md:p-5 bg-white border-t border-gray-100/60 flex flex-col space-y-2">
+                          {[
+                            { id: 'Emerald', label: 'Emerald Gains', desc: 'Green for growth, Red for decline' },
+                            { id: 'Rose', label: 'Rose Gains', desc: 'Red for growth, Green for decline' }
+                          ].map((scheme) => (
+                            <button 
+                              key={scheme.id}
+                              onClick={() => {
+                                handlePreferenceChange('colorScheme', scheme.id, setColorScheme);
+                                setIsEditingColorScheme(false);
+                              }}
+                              className={`flex items-center justify-between px-4 py-3 rounded-xl transition-all active:scale-[0.98] border ${
+                                colorScheme === scheme.id 
+                                  ? 'bg-black border-black text-white shadow-sm' 
+                                  : 'bg-gray-50 border-gray-100 text-black hover:border-gray-200 hover:bg-gray-100'
+                              }`}
+                            >
+                              <div className="flex flex-col items-start">
+                                <span className="text-[13px] font-bold">{scheme.label}</span>
+                                <span className={`text-[11px] font-medium ${colorScheme === scheme.id ? 'text-gray-300' : 'text-gray-400'}`}>
+                                  {scheme.desc}
+                                </span>
+                              </div>
+                              <div className="flex items-center space-x-1">
+                                <div className={`w-2.5 h-2.5 rounded-full ${scheme.id === 'Emerald' ? 'bg-emerald-500' : 'bg-rose-500'}`}></div>
+                                <div className={`w-2.5 h-2.5 rounded-full ${scheme.id === 'Emerald' ? 'bg-rose-500' : 'bg-emerald-500'}`}></div>
+                              </div>
+                            </button>
+                          ))}
+                        </div>
                       </div>
                     </div>
-                    <button className="text-[12px] md:text-[13px] font-bold text-black border border-gray-100 bg-white hover:bg-gray-100 px-3 py-1.5 rounded-lg transition-colors shadow-sm active:scale-95">Switch</button>
                   </div>
-                  <div className="px-4 md:px-5 py-4 flex items-center justify-between">
+
+                  {/* Chart Type Row */}
+                  <div className="border-b border-gray-100 bg-white sm:bg-transparent">
+                    <div className="px-4 md:px-5 py-4 flex items-center justify-between group/item">
+                      <div className="flex items-center space-x-3 md:space-x-4">
+                        <div className={`w-8 h-8 rounded-lg bg-white border border-gray-100 shadow-sm flex items-center justify-center transition-all duration-300 ${isEditingChartType ? 'scale-110 border-gray-200 ring-4 ring-black/5' : 'group-hover/item:border-gray-200'}`}>
+                          <BarChart2 className={`w-4 h-4 transition-colors duration-300 ${isEditingChartType ? 'text-black' : 'text-gray-400 group-hover/item:text-black'}`} />
+                        </div>
+                        <div>
+                          <div className="text-[14px] font-bold text-black leading-tight">Default Chart Type</div>
+                          <div className="text-[13px] text-gray-500 font-medium mt-0.5">{chartType}</div>
+                        </div>
+                      </div>
+                      <button 
+                        onClick={() => {
+                          setIsEditingChartType(!isEditingChartType);
+                          setIsEditingTheme(false);
+                        }}
+                        className={`text-[12px] md:text-[13px] font-bold px-3 py-1.5 rounded-lg transition-colors shadow-sm active:scale-95 border ${
+                          isEditingChartType 
+                            ? 'bg-gray-100 border-gray-200 text-gray-700' 
+                            : 'bg-white border-gray-100 text-black hover:bg-gray-100'
+                        }`}
+                      >
+                        {isEditingChartType ? 'Cancel' : 'Switch'}
+                      </button>
+                    </div>
+                    {/* Expandable Chart Type Drawer */}
+                    <div className={`grid transition-all duration-300 ease-in-out ${isEditingChartType ? 'grid-rows-[1fr] opacity-100' : 'grid-rows-[0fr] opacity-0'}`}>
+                      <div className="overflow-hidden">
+                        <div className="p-4 md:p-5 bg-white border-t border-gray-100/60 flex flex-wrap gap-2">
+                          {['Area', 'Line', 'Bar'].map((c) => (
+                            <button 
+                              key={c}
+                              onClick={() => {
+                                handlePreferenceChange('chartType', `${c} Chart`, setChartType);
+                                setIsEditingChartType(false);
+                              }}
+                              className={`flex-1 min-w-[80px] text-[12px] font-bold py-2.5 rounded-xl transition-all active:scale-95 border ${
+                                chartType.startsWith(c)
+                                  ? 'bg-black border-black text-white shadow-sm' 
+                                  : 'bg-gray-50 border-gray-100 text-black hover:border-gray-200 hover:bg-gray-100'
+                              }`}
+                            >
+                              {c}
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Toggle Row: Hide Small Balances */}
+                  <div className="px-4 md:px-5 py-4 flex items-center justify-between group/item">
                     <div className="flex items-center space-x-3 md:space-x-4">
-                      <div className="w-8 h-8 rounded-lg bg-white border border-gray-100 shadow-sm flex items-center justify-center"><EyeOff className="w-4 h-4 text-gray-400" /></div>
+                      <div className="w-8 h-8 rounded-lg bg-white border border-gray-100 shadow-sm flex items-center justify-center transition-all duration-300 group-hover/item:scale-110 group-hover/item:ring-4 group-hover/item:ring-black/5">
+                        <EyeOff className="w-4 h-4 text-gray-400 transition-colors group-hover/item:text-black" />
+                      </div>
                       <div>
                         <div className="text-[14px] font-bold text-black leading-tight">Hide Small Balances</div>
                         <div className="text-[12px] text-gray-400 font-medium mt-0.5">Hide holdings &lt; $10</div>
                       </div>
                     </div>
-                    {renderToggle(false)}
+                    <button 
+                      onClick={() => handlePreferenceChange('hideSmallBalances', !hideSmallBalances, setHideSmallBalances)}
+                      className={`w-10 h-5 ${hideSmallBalances ? 'bg-black' : 'bg-gray-200'} rounded-full relative transition-colors active:scale-90`}
+                    >
+                      <div className={`absolute ${hideSmallBalances ? 'left-[22px]' : 'left-0.5'} top-0.5 w-4 h-4 bg-white rounded-full shadow-sm transition-all`}></div>
+                    </button>
                   </div>
                 </div>
               </div>
+
+              {/* Performance Group */}
               <div className="space-y-4">
                 <h3 className="text-[11px] font-bold text-gray-400 uppercase tracking-[0.1em] pl-1">Performance</h3>
                 <div className="bg-gray-50/50 rounded-2xl border border-gray-100 overflow-hidden">
-                  <div className="px-4 md:px-5 py-4 flex items-center justify-between">
+                  <div className="px-4 md:px-5 py-4 flex items-center justify-between group/item">
                     <div className="flex items-center space-x-3 md:space-x-4">
-                      <div className="w-8 h-8 rounded-lg bg-white border border-gray-100 shadow-sm flex items-center justify-center"><Zap className="w-4 h-4 text-gray-400" /></div>
+                      <div className="w-8 h-8 rounded-lg bg-white border border-gray-100 shadow-sm flex items-center justify-center transition-all duration-300 group-hover/item:scale-110 group-hover/item:ring-4 group-hover/item:ring-black/5">
+                        <Zap className="w-4 h-4 text-gray-400 transition-colors group-hover/item:text-black" />
+                      </div>
                       <div>
                         <div className="text-[14px] font-bold text-black leading-tight">Real-time Sync</div>
                         <div className="text-[12px] text-gray-400 font-medium mt-0.5">Faster updates</div>
                       </div>
                     </div>
-                    {renderToggle(true)}
+                    <button 
+                      onClick={() => handlePreferenceChange('realTimeSync', !realTimeSync, setRealTimeSync)}
+                      className={`w-10 h-5 ${realTimeSync ? 'bg-black' : 'bg-gray-200'} rounded-full relative transition-colors active:scale-90`}
+                    >
+                      <div className={`absolute ${realTimeSync ? 'left-[22px]' : 'left-0.5'} top-0.5 w-4 h-4 bg-white rounded-full shadow-sm transition-all`}></div>
+                    </button>
                   </div>
                 </div>
               </div>
@@ -698,11 +898,39 @@ export default function SettingsPage() {
                         </div>
                         <button 
                           onClick={handleSignOut}
-                          className="w-full sm:w-auto text-[13px] font-bold text-rose-500 border border-rose-100 bg-white hover:bg-rose-50 px-4 py-2 rounded-xl transition-all shadow-sm active:scale-95"
+                          className="w-full sm:w-auto flex items-center justify-center space-x-2 text-[13px] font-bold text-rose-500 border border-rose-100/50 bg-rose-50/30 hover:bg-rose-50 px-4 py-2 rounded-xl transition-all shadow-sm active:scale-95 group"
                         >
-                          Sign Out
+                          <LogOut className="w-3.5 h-3.5 group-hover:-translate-x-0.5 transition-transform" />
+                          <span>Sign Out</span>
                         </button>
                       </div>
+
+                      {/* Device Context Info */}
+                      {user?.last_sign_in_at && (
+                        <div className="px-4 py-2.5 bg-gray-50/30 rounded-2xl border border-gray-100/60 flex items-center justify-between">
+                          <div className="flex items-center space-x-2.5">
+                            <div className="w-6 h-6 rounded-lg bg-white border border-gray-100 flex items-center justify-center">
+                              <Monitor className="w-3.5 h-3.5 text-gray-400" />
+                            </div>
+                            <span className="text-[11px] font-medium text-gray-400 uppercase tracking-wider">
+                              Last Session: {new Date(user.last_sign_in_at).toLocaleDateString()} at {new Date(user.last_sign_in_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                            </span>
+                          </div>
+                          <div className="flex items-center space-x-1.5 opacity-60">
+                            <div className="w-1.5 h-1.5 bg-emerald-500 rounded-full animate-pulse"></div>
+                            <span className="text-[11px] font-bold text-gray-500">
+                              {typeof window !== 'undefined' && (
+                                <>
+                                  {navigator.userAgent.includes('Mac') ? 'macOS' : navigator.userAgent.includes('Win') ? 'Windows' : 'Mobile'}
+                                  {' • '}
+                                  {navigator.userAgent.includes('Safari') && !navigator.userAgent.includes('Chrome') ? 'Safari' : 'Chromium'}
+                                </>
+                              )}
+                            </span>
+                          </div>
+                        </div>
+                      )}
+
                       <div className="p-4 bg-emerald-50/30 rounded-2xl border border-emerald-100 flex items-start space-x-3">
                         <ShieldCheck className="w-5 h-5 text-emerald-500 mt-0.5 shrink-0" />
                         <div>
@@ -722,7 +950,9 @@ export default function SettingsPage() {
                       <div className="border-b border-gray-100 bg-white sm:bg-transparent">
                         <div className="px-4 md:px-5 py-4 flex items-center justify-between">
                           <div className="flex items-center space-x-3 md:space-x-4 min-w-0 mr-3">
-                            <div className="w-8 h-8 rounded-lg bg-white border border-gray-100 shadow-sm flex items-center justify-center shrink-0"><Mail className="w-4 h-4 text-gray-400" /></div>
+                            <div className={`w-8 h-8 rounded-lg bg-white border border-gray-100 shadow-sm flex items-center justify-center shrink-0 transition-all duration-300 ${isEditingEmail ? 'scale-110 border-gray-200 ring-4 ring-black/5' : ''}`}>
+                              <Mail className={`w-4 h-4 transition-colors duration-300 ${isEditingEmail ? 'text-black' : 'text-gray-400'}`} />
+                            </div>
                             <div className="min-w-0">
                               <div className="text-[14px] font-bold text-black leading-tight">Email Address</div>
                               <div className="text-[12px] md:text-[13px] text-gray-500 font-medium mt-0.5 truncate">{user?.email}</div>
@@ -786,7 +1016,9 @@ export default function SettingsPage() {
                       <div className="bg-white sm:bg-transparent">
                         <div className="px-4 md:px-5 py-4 flex items-center justify-between">
                           <div className="flex items-center space-x-3 md:space-x-4">
-                            <div className="w-8 h-8 rounded-lg bg-white border border-gray-100 shadow-sm flex items-center justify-center shrink-0"><Lock className="w-4 h-4 text-gray-400" /></div>
+                            <div className={`w-8 h-8 rounded-lg bg-white border border-gray-100 shadow-sm flex items-center justify-center shrink-0 transition-all duration-300 ${isEditingPassword ? 'scale-110 border-gray-200 ring-4 ring-black/5' : ''}`}>
+                              <Lock className={`w-4 h-4 transition-colors duration-300 ${isEditingPassword ? 'text-black' : 'text-gray-400'}`} />
+                            </div>
                             <div>
                               <div className="text-[14px] font-bold text-black leading-tight">Password</div>
                               <div className="text-[13px] text-gray-500 font-medium mt-0.5 tracking-widest mt-1">••••••••</div>
@@ -903,7 +1135,7 @@ export default function SettingsPage() {
                     <div className="bg-gray-50/50 rounded-2xl border border-gray-100 overflow-hidden">
                       <div className="px-4 md:px-5 py-4 flex items-center justify-between">
                         <div className="flex items-center space-x-3 md:space-x-4 min-w-0 mr-3">
-                          <div className="w-8 h-8 rounded-lg bg-white border border-gray-100 shadow-sm flex items-center justify-center shrink-0"><Key className="w-4 h-4 text-gray-400" /></div>
+                          <div className="w-8 h-8 rounded-lg bg-white border border-gray-100 shadow-sm flex items-center justify-center shrink-0 transition-all duration-300 transition-all duration-300"><Key className="w-4 h-4 text-gray-400 transition-colors duration-300" /></div>
                           <div className="min-w-0">
                             <div className="text-[14px] font-bold text-black leading-tight">Finnhub API Key</div>
                             <div className="text-[13px] text-gray-500 font-medium mt-0.5 tracking-widest mt-1 truncate">••••••••••••</div>
