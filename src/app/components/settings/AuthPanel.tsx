@@ -1,9 +1,10 @@
 'use client';
 
 import React, { useState } from 'react';
-import { Mail, Lock, ArrowRight, AlertCircle, Shield } from 'lucide-react';
+import { Mail, Lock, ArrowRight, AlertCircle, Shield, Fingerprint, Loader2 } from 'lucide-react';
 import { createClient } from '@/lib/supabase';
 import Notification from '../Notification';
+import { get } from '@github/webauthn-json';
 
 interface AuthPanelProps {
   onLogin: () => void;
@@ -16,6 +17,7 @@ export default function AuthPanel({ onLogin }: AuthPanelProps) {
   const [confirmPassword, setConfirmPassword] = useState('');
   const [rememberMe, setRememberMe] = useState(false);
   const [loading, setLoading] = useState(false);
+  const [passkeyLoading, setPasskeyLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [notification, setNotification] = useState<{show: boolean, type: 'success'|'error', title: string, message: string}>({ show: false, type: 'success', title: '', message: '' });
 
@@ -90,6 +92,35 @@ export default function AuthPanel({ onLogin }: AuthPanelProps) {
       setError(err.message || 'An error occurred during authentication');
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handlePasskeyLogin = async () => {
+    setPasskeyLoading(true);
+    setError(null);
+    try {
+      const initRes = await fetch('/api/passkeys/login/initialize', { method: 'POST' });
+      if (!initRes.ok) throw new Error('Failed to initialize passkey login');
+      const options = await initRes.json();
+
+      const credential = await get(options as any);
+
+      const finalRes = await fetch('/api/passkeys/login/finalize', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(credential),
+      });
+      if (!finalRes.ok) throw new Error('Passkey authentication failed');
+
+      onLogin();
+    } catch (err: any) {
+      if (err?.name === 'NotAllowedError') {
+        setError('Passkey sign-in was cancelled. Try again when you\'re ready.');
+      } else {
+        setError(err.message || 'Passkey login failed');
+      }
+    } finally {
+      setPasskeyLoading(false);
     }
   };
 
@@ -271,6 +302,29 @@ export default function AuthPanel({ onLogin }: AuthPanelProps) {
           )}
         </button>
       </form>
+
+      {mode === 'login' && (
+        <>
+          <div className="flex items-center gap-3">
+            <div className="flex-1 h-px bg-gray-100" />
+            <span className="text-[11px] font-bold text-gray-300 uppercase tracking-wider">or</span>
+            <div className="flex-1 h-px bg-gray-100" />
+          </div>
+          <button
+            type="button"
+            onClick={handlePasskeyLogin}
+            disabled={passkeyLoading}
+            className="w-full border border-gray-100 bg-gray-50 hover:bg-gray-100 text-black rounded-2xl py-3.5 text-[14px] font-bold transition-all flex items-center justify-center gap-2.5 disabled:opacity-50 disabled:cursor-not-allowed active:scale-[0.98]"
+          >
+            {passkeyLoading ? (
+              <Loader2 className="w-4 h-4 animate-spin" />
+            ) : (
+              <Fingerprint className="w-4 h-4" />
+            )}
+            <span>{passkeyLoading ? 'Authenticating...' : 'Sign in with Passkey'}</span>
+          </button>
+        </>
+      )}
 
       <div className="pt-4 text-center">
         <button

@@ -19,7 +19,6 @@ import {
   ShieldCheck,
   Lock,
   Mail,
-  Fingerprint,
   Key,
   TrendingUp,
   FileText,
@@ -31,6 +30,7 @@ import {
   LogOut
 } from 'lucide-react';
 import AuthPanel from '@/app/components/settings/AuthPanel';
+import PasskeySection from '@/app/components/settings/PasskeySection';
 import { createClient } from '@/lib/supabase';
 import { User } from '@supabase/supabase-js';
 import Notification from '@/app/components/Notification';
@@ -195,6 +195,7 @@ export default function SettingsPage() {
         localStorage.removeItem('portfolio_name_updated_at');
         localStorage.removeItem('base_currency');
         localStorage.removeItem('base_currency_updated_at');
+        localStorage.removeItem('passkey_credentials');
         setPortfolioName('');
         setBaseCurrency('USD');
       }
@@ -1116,16 +1117,7 @@ export default function SettingsPage() {
                         </div>
                         <button className="text-[12px] md:text-[13px] font-bold text-black border border-gray-100 bg-white hover:bg-gray-100 px-3 py-1.5 rounded-lg transition-colors shadow-sm active:scale-95">Enable</button>
                       </div>
-                      <div className="px-4 md:px-5 py-4 flex items-center justify-between">
-                        <div className="flex items-center space-x-3 md:space-x-4">
-                          <div className="w-8 h-8 rounded-lg bg-white border border-gray-100 shadow-sm flex items-center justify-center"><Fingerprint className="w-4 h-4 text-gray-400" /></div>
-                          <div>
-                            <div className="text-[14px] font-bold text-black leading-tight">Passkeys</div>
-                            <div className="text-[12px] text-gray-400 font-medium mt-0.5">FaceID / TouchID</div>
-                          </div>
-                        </div>
-                        <button className="text-[12px] md:text-[13px] font-bold text-black border border-gray-100 bg-white hover:bg-gray-100 px-3 py-1.5 rounded-lg transition-colors shadow-sm active:scale-95">Setup</button>
-                      </div>
+                      <PasskeySection user={user} />
                     </div>
                   </div>
 
