@@ -58,5 +58,6 @@ src/
 ## 📜 Development Commandments
 - **NEVER** add a global state manager (Redux/Zustand) unless explicitly ordered.
 - **NEVER** use TailwindCSS v4 features if the project is on v3 (and vice versa).
+- **NEVER** perform any Git operations (add, commit, push, etc.) - all Git operations are handled by the user.
 - **ALWAYS** check for `tabular-nums` when rendering currency or percentages.
 - **ALWAYS** maintain the "Center-aligned White Box" layout for major management interfaces.
