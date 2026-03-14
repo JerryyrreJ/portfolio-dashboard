@@ -89,8 +89,9 @@ export async function PATCH(request: NextRequest) {
     const updatedPortfolio = await prisma.portfolio.update({
       where: { id: existingPortfolio.id },
       data: {
-        ...(name !== undefined && { name, nameUpdatedAt: new Date() }),
-        ...(currency !== undefined && { currency, currencyUpdatedAt: new Date() }),
+        ...(name !== undefined && { name }),
+        ...(currency !== undefined && { currency }),
+        settingsUpdatedAt: new Date(),
       },
     });
 

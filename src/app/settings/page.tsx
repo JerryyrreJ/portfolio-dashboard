@@ -124,54 +124,38 @@ export default function SettingsPage() {
           if (res.ok) {
             const data = await res.json();
             const cloudName: string = data.portfolio.name || '';
-            const cloudNameUpdatedAt: string | null = data.portfolio.nameUpdatedAt ?? null;
-            const localNameUpdatedAt = localStorage.getItem('portfolio_name_updated_at');
-
             const cloudCurrency: string = data.portfolio.currency || 'USD';
-            const cloudCurrencyUpdatedAt: string | null = data.portfolio.currencyUpdatedAt ?? null;
-            const localCurrencyUpdatedAt = localStorage.getItem('base_currency_updated_at');
+            const cloudSettingsUpdatedAt: string | null = data.portfolio.settingsUpdatedAt ?? null;
+            const localSettingsUpdatedAt = localStorage.getItem('settings_updated_at');
 
-            // Sync name
-            if (cachedName === null) {
+            // Sync settings using unified timestamp
+            if (cachedName === null && cachedCurrency === null) {
+              // No local data, use cloud data
               setPortfolioName(cloudName);
-              localStorage.setItem('portfolio_name', cloudName);
-              if (cloudNameUpdatedAt) localStorage.setItem('portfolio_name_updated_at', cloudNameUpdatedAt);
-            } else {
-              const cloudMs = cloudNameUpdatedAt ? new Date(cloudNameUpdatedAt).getTime() : 0;
-              const localMs = localNameUpdatedAt ? new Date(localNameUpdatedAt).getTime() : 0;
-              if (cloudMs > localMs) {
-                setPortfolioName(cloudName);
-                localStorage.setItem('portfolio_name', cloudName);
-                if (cloudNameUpdatedAt) localStorage.setItem('portfolio_name_updated_at', cloudNameUpdatedAt);
-              } else if (localMs > cloudMs) {
-                fetch('/api/portfolio', {
-                  method: 'PATCH',
-                  headers: { 'Content-Type': 'application/json' },
-                  body: JSON.stringify({ name: cachedName }),
-                }).catch(() => {});
-              }
-            }
-
-            // Sync currency
-            if (cachedCurrency === null) {
               setBaseCurrency(cloudCurrency);
+              localStorage.setItem('portfolio_name', cloudName);
               localStorage.setItem('base_currency', cloudCurrency);
-              if (cloudCurrencyUpdatedAt) localStorage.setItem('base_currency_updated_at', cloudCurrencyUpdatedAt);
+              if (cloudSettingsUpdatedAt) localStorage.setItem('settings_updated_at', cloudSettingsUpdatedAt);
             } else {
-              const cloudMs = cloudCurrencyUpdatedAt ? new Date(cloudCurrencyUpdatedAt).getTime() : 0;
-              const localMs = localCurrencyUpdatedAt ? new Date(localCurrencyUpdatedAt).getTime() : 0;
-              
+              const cloudMs = cloudSettingsUpdatedAt ? new Date(cloudSettingsUpdatedAt).getTime() : 0;
+              const localMs = localSettingsUpdatedAt ? new Date(localSettingsUpdatedAt).getTime() : 0;
+
               if (cloudMs > localMs) {
-                // Cloud is newer, update local silently
+                // Cloud is newer, update local
+                setPortfolioName(cloudName);
                 setBaseCurrency(cloudCurrency);
+                localStorage.setItem('portfolio_name', cloudName);
                 localStorage.setItem('base_currency', cloudCurrency);
-                if (cloudCurrencyUpdatedAt) localStorage.setItem('base_currency_updated_at', cloudCurrencyUpdatedAt);
+                if (cloudSettingsUpdatedAt) localStorage.setItem('settings_updated_at', cloudSettingsUpdatedAt);
               } else if (localMs > cloudMs) {
-                // Local is newer, update cloud silently
+                // Local is newer, update cloud
                 fetch('/api/portfolio', {
                   method: 'PATCH',
                   headers: { 'Content-Type': 'application/json' },
-                  body: JSON.stringify({ currency: cachedCurrency }),
+                  body: JSON.stringify({
+                    name: cachedName || cloudName,
+                    currency: cachedCurrency || cloudCurrency
+                  }),
                 }).catch(() => {});
               }
             }
@@ -192,9 +176,8 @@ export default function SettingsPage() {
       setUser(session?.user ?? null);
       if (!session?.user) {
         localStorage.removeItem('portfolio_name');
-        localStorage.removeItem('portfolio_name_updated_at');
         localStorage.removeItem('base_currency');
-        localStorage.removeItem('base_currency_updated_at');
+        localStorage.removeItem('settings_updated_at');
         localStorage.removeItem('passkey_credentials');
         setPortfolioName('');
         setBaseCurrency('USD');
@@ -229,12 +212,12 @@ export default function SettingsPage() {
       const now = new Date().toISOString();
       if (field === 'name') {
         localStorage.setItem('portfolio_name', portfolioName);
-        localStorage.setItem('portfolio_name_updated_at', now);
+        localStorage.setItem('settings_updated_at', now);
         showNotification('success', 'Name Saved', 'Portfolio name saved locally.');
         setIsEditingPortfolioName(false);
       } else if (field === 'currency') {
         localStorage.setItem('base_currency', baseCurrency);
-        localStorage.setItem('base_currency_updated_at', now);
+        localStorage.setItem('settings_updated_at', now);
         showNotification('success', 'Currency Saved', 'Base currency saved locally.');
         setIsEditingBaseCurrency(false);
       }
@@ -259,15 +242,14 @@ export default function SettingsPage() {
 
       showNotification('success', 'Settings Saved', 'Your portfolio configuration has been updated successfully.');
 
+      const now = new Date().toISOString();
+      localStorage.setItem('portfolio_name', portfolioName);
+      localStorage.setItem('base_currency', baseCurrency);
+      localStorage.setItem('settings_updated_at', now);
+
       if (field === 'name') {
-        const now = new Date().toISOString();
-        localStorage.setItem('portfolio_name', portfolioName);
-        localStorage.setItem('portfolio_name_updated_at', now);
         setIsEditingPortfolioName(false);
       } else {
-        const now = new Date().toISOString();
-        localStorage.setItem('base_currency', baseCurrency);
-        localStorage.setItem('base_currency_updated_at', now);
         setIsEditingBaseCurrency(false);
       }
     } catch (err: any) {

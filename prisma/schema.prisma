@@ -12,13 +12,13 @@ model Portfolio {
   id          String   @id @default(cuid())
   userId      String?
   name          String
-  nameUpdatedAt DateTime? // UTC timestamp of last name update, for local-first sync
   currency          String   @default("USD")
-  currencyUpdatedAt DateTime? // UTC timestamp of last currency update, for local-first sync
-  
+
   // Unified Preferences
   preferences         String?   // JSON string storing all user preferences
-  preferencesUpdatedAt DateTime? // Unified timestamp for all preference sync
+
+  // Unified timestamp for all settings (name, currency, preferences)
+  settingsUpdatedAt DateTime? // UTC timestamp for local-first sync
 
   createdAt     DateTime @default(now())
   updatedAt     DateTime @updatedAt
