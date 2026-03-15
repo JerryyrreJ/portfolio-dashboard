@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
 import Image from 'next/image';
 import {
@@ -28,6 +28,7 @@ import {
 import AddTransactionModal from './components/AddTransactionModal';
 import Link from 'next/link';
 import { useCurrency } from '@/lib/useCurrency';
+import { useStock } from '@/hooks/useStock';
 
 // --- 辅助格式化组件 ---
 interface FormatValueProps {
@@ -96,6 +97,51 @@ export default function DashboardClient({ portfolioId, portfolioName, holdingsDa
   const router = useRouter();
   const { symbol, convert, fmt } = useCurrency();
   const [isModalOpen, setIsModalOpen] = useState(false);
+
+  // 搜索栏状态
+  const [searchQuery, setSearchQuery] = useState<string>('');
+  const [searchResults, setSearchResults] = useState<Array<{ description: string; displaySymbol: string; symbol: string; type: string }>>([]);
+  const [showSearchResults, setShowSearchResults] = useState<boolean>(false);
+  const [isSearching, setIsSearching] = useState<boolean>(false);
+  const searchRef = useRef<HTMLDivElement>(null);
+  const searchDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const { searchStock } = useStock();
+
+  const handleSearchChange = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
+    const q = e.target.value;
+    setSearchQuery(q);
+    if (searchDebounceRef.current) clearTimeout(searchDebounceRef.current);
+    if (!q.trim()) {
+      setSearchResults([]);
+      setShowSearchResults(false);
+      return;
+    }
+    searchDebounceRef.current = setTimeout(async () => {
+      setIsSearching(true);
+      const results = await searchStock(q);
+      setSearchResults(results.slice(0, 8));
+      setShowSearchResults(true);
+      setIsSearching(false);
+    }, 300);
+  }, [searchStock]);
+
+  const handleSelectStock = useCallback((ticker: string) => {
+    setSearchQuery('');
+    setSearchResults([]);
+    setShowSearchResults(false);
+    router.push(`/stock/${ticker}`);
+  }, [router]);
+
+  // 点击外部关闭搜索结果
+  useEffect(() => {
+    const handleClickOutside = (e: MouseEvent) => {
+      if (searchRef.current && !searchRef.current.contains(e.target as Node)) {
+        setShowSearchResults(false);
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [returnDisplayMode, setReturnDisplayMode] = useState<'percentage' | 'currency'>('percentage');
 
@@ -297,13 +343,36 @@ export default function DashboardClient({ portfolioId, portfolioName, holdingsDa
           </nav>
         </div>
         <div className="flex items-center space-x-5">
-          <div className="relative hidden sm:block">
-            <Search className="w-3.5 h-3.5 absolute left-3 top-[10px] text-gray-400" />
-            <input 
-              type="text" 
-              placeholder="Search" 
-              className="bg-gray-100 border-none rounded-lg py-1.5 pl-9 pr-4 text-[13px] w-44 focus:w-60 focus:ring-1 focus:ring-black/5 focus:bg-white transition-all duration-300"
+          <div className="relative hidden sm:block" ref={searchRef}>
+            {isSearching
+              ? <svg className="w-3.5 h-3.5 absolute left-3 top-[10px] text-gray-400 animate-spin" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"/><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8z"/></svg>
+              : <Search className="w-3.5 h-3.5 absolute left-3 top-[10px] text-gray-400" />
+            }
+            <input
+              type="text"
+              value={searchQuery ?? ''}
+              onChange={handleSearchChange}
+              onFocus={() => searchResults.length > 0 && setShowSearchResults(true)}
+              placeholder="Search stocks..."
+              className="bg-gray-100 border-none rounded-lg py-1.5 pl-9 pr-4 text-[13px] w-44 focus:w-60 focus:ring-1 focus:ring-black/5 focus:bg-white transition-all duration-300 outline-none"
             />
+            {showSearchResults && searchResults.length > 0 && (
+              <div className="absolute top-full mt-2 left-0 w-full min-w-[320px] bg-white rounded-2xl shadow-2xl border border-gray-100 overflow-hidden z-50 py-1.5 animate-in fade-in slide-in-from-top-2 duration-200">
+                {searchResults.map((r) => (
+                  <button
+                    key={r.symbol}
+                    onMouseDown={() => handleSelectStock(r.symbol)}
+                    className="w-full flex flex-col px-4 py-2.5 hover:bg-gray-50 transition-colors text-left group/item"
+                  >
+                    <div className="flex items-center justify-between mb-0.5">
+                      <span className="text-[14px] font-bold text-black tracking-tight">{r.displaySymbol}</span>
+                      <span className="text-[10px] font-bold text-gray-300 uppercase tracking-widest group-hover/item:text-gray-400 transition-colors">{r.type}</span>
+                    </div>
+                    <span className="text-[12px] text-gray-500 font-medium truncate w-full">{r.description}</span>
+                  </button>
+                ))}
+              </div>
+            )}
           </div>
           <div className="flex items-center space-x-2.5">
             {/* Mobile Transactions Link */}

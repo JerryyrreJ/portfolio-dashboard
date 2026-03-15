@@ -9,12 +9,14 @@ import {
 import {
   ArrowLeft, RefreshCw, TrendingUp, TrendingDown, Plus,
   ExternalLink, Newspaper, BarChart2, History, ChevronRight,
-  Home, DollarSign, Wallet, ArrowUpRight, ArrowDownRight, Globe, Search, User
+  Home, DollarSign, Wallet, ArrowUpRight, ArrowDownRight, Globe, Search, User, Share2
 } from 'lucide-react';
 import AddTransactionModal from '@/app/components/AddTransactionModal';
+import ShareCardModal from '@/app/components/ShareCardModal';
 import Link from 'next/link';
 import Image from 'next/image';
 import { useCurrency } from '@/lib/useCurrency';
+import { useStock } from '@/hooks/useStock';
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
@@ -175,12 +177,57 @@ export default function StockDetailClient({ stockData }: { stockData: StockData 
   const [timeRange, setTimeRange] = useState('1Y');
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [isAddTradeOpen, setIsAddTradeOpen] = useState(false);
+  const [isShareModalOpen, setIsShareModalOpen] = useState(false);
   const [chartData, setChartData] = useState<ChartPoint[]>(stockData.chartData);
   const [isChartLoading, setIsChartLoading] = useState(false);
   const [news, setNews] = useState<NewsArticle[]>([]);
   const [isNewsLoading, setIsNewsLoading] = useState(false);
   const [newsLoaded, setNewsLoaded] = useState(false);
   const hasSynced = useRef(false);
+
+  const [searchQuery, setSearchQuery] = useState<string>('');
+  const [searchResults, setSearchResults] = useState<Array<{ description: string; displaySymbol: string; symbol: string; type: string }>>([]);
+  const [showSearchResults, setShowSearchResults] = useState<boolean>(false);
+  const [isSearching, setIsSearching] = useState<boolean>(false);
+  const searchRef = useRef<HTMLDivElement>(null);
+  const searchDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const { searchStock } = useStock();
+
+  const handleSearchChange = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
+    const q = e.target.value;
+    setSearchQuery(q);
+    if (searchDebounceRef.current) clearTimeout(searchDebounceRef.current);
+    if (!q.trim()) {
+      setSearchResults([]);
+      setShowSearchResults(false);
+      return;
+    }
+    searchDebounceRef.current = setTimeout(async () => {
+      setIsSearching(true);
+      const results = await searchStock(q);
+      setSearchResults(results.slice(0, 8));
+      setShowSearchResults(true);
+      setIsSearching(false);
+    }, 300);
+  }, [searchStock]);
+
+  const handleSelectStock = useCallback((selectedTicker: string) => {
+    setSearchQuery('');
+    setSearchResults([]);
+    setShowSearchResults(false);
+    router.push(`/stock/${selectedTicker}`);
+  }, [router]);
+
+  // Click outside to close
+  useEffect(() => {
+    const handleClickOutside = (e: MouseEvent) => {
+      if (searchRef.current && !searchRef.current.contains(e.target as Node)) {
+        setShowSearchResults(false);
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
 
   const {
     ticker, name, market,
@@ -303,9 +350,36 @@ export default function StockDetailClient({ stockData }: { stockData: StockData 
           </nav>
         </div>
         <div className="flex items-center space-x-5">
-          <div className="relative hidden sm:block">
-            <Search className="w-3.5 h-3.5 absolute left-3 top-[10px] text-gray-400" />
-            <input type="text" placeholder="Search" className="bg-gray-100 border-none rounded-lg py-1.5 pl-9 pr-4 text-[13px] w-44 focus:w-60 focus:ring-1 focus:ring-black/5 focus:bg-white transition-all duration-300" />
+          <div className="relative hidden sm:block" ref={searchRef}>
+            {isSearching
+              ? <svg className="w-3.5 h-3.5 absolute left-3 top-[10px] text-gray-400 animate-spin" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"/><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8z"/></svg>
+              : <Search className="w-3.5 h-3.5 absolute left-3 top-[10px] text-gray-400" />
+            }
+            <input
+              type="text"
+              value={searchQuery ?? ''}
+              onChange={handleSearchChange}
+              onFocus={() => searchResults.length > 0 && setShowSearchResults(true)}
+              placeholder="Search stocks..."
+              className="bg-gray-100 border-none rounded-lg py-1.5 pl-9 pr-4 text-[13px] w-44 focus:w-60 focus:ring-1 focus:ring-black/5 focus:bg-white transition-all duration-300 outline-none"
+            />
+            {showSearchResults && searchResults.length > 0 && (
+              <div className="absolute top-full mt-2 left-0 w-full min-w-[320px] bg-white rounded-2xl shadow-2xl border border-gray-100 overflow-hidden z-50 py-1.5 animate-in fade-in slide-in-from-top-2 duration-200">
+                {searchResults.map((r) => (
+                  <button
+                    key={r.symbol}
+                    onMouseDown={() => handleSelectStock(r.symbol)}
+                    className="w-full flex flex-col px-4 py-2.5 hover:bg-gray-50 transition-colors text-left group/item"
+                  >
+                    <div className="flex items-center justify-between mb-0.5">
+                      <span className="text-[14px] font-bold text-black tracking-tight">{r.displaySymbol}</span>
+                      <span className="text-[10px] font-bold text-gray-300 uppercase tracking-widest group-hover/item:text-gray-400 transition-colors">{r.type}</span>
+                    </div>
+                    <span className="text-[12px] text-gray-500 font-medium truncate w-full">{r.description}</span>
+                  </button>
+                ))}
+              </div>
+            )}
           </div>
           <Link 
             href="/settings"
@@ -366,7 +440,14 @@ export default function StockDetailClient({ stockData }: { stockData: StockData 
               </div>
             </div>
             <div className="h-10 w-px bg-gray-100 hidden sm:block"></div>
-            <div className="flex items-center shrink-0">
+            <div className="flex items-center shrink-0 gap-3">
+              <button 
+                onClick={() => setIsShareModalOpen(true)}
+                className="p-3 sm:p-2.5 bg-gray-100 text-gray-600 rounded-xl hover:bg-gray-200 transition-all flex items-center justify-center shadow-sm"
+                title="Share position"
+              >
+                <Share2 className="w-4 h-4" />
+              </button>
               <button onClick={() => setIsAddTradeOpen(true)} className="px-4 py-3 sm:px-5 sm:py-2 bg-black text-white text-[13px] sm:text-[14px] font-bold rounded-xl hover:bg-gray-800 transition-all shadow-md flex items-center gap-1.5">
                 <Plus className="w-4 h-4" /> <span className="hidden sm:inline-block">Add Trade</span><span className="sm:hidden">Trade</span>
               </button>
@@ -620,6 +701,22 @@ export default function StockDetailClient({ stockData }: { stockData: StockData 
           portfolioId={portfolioId}
         />
       )}
+
+      <ShareCardModal 
+        isOpen={isShareModalOpen}
+        onClose={() => setIsShareModalOpen(false)}
+        stockData={{
+          ticker,
+          name,
+          currentPrice,
+          avgBuyPrice,
+          totalReturn,
+          totalReturnPercent,
+          logo: profile?.logo,
+          currencySymbol: symbol,
+          chartData: chartData // Pass the real price history data
+        }}
+      />
     </div>
   );
 }
