@@ -1,6 +1,6 @@
 'use client';
 
-import React from 'react';
+import React, { useState } from 'react';
 import { format } from 'date-fns';
 import Link from 'next/link';
 import Image from 'next/image';
@@ -59,11 +59,29 @@ function formatNumber(num: number, decimals: number = 4): string {
 }
 
 export default function TransactionsClient({
-  transactions, total, totalPages, currentPage, limit,
+  transactions: initialTransactions, total, totalPages, currentPage, limit,
   portfolioName, logoMap, searchTicker, searchType,
   buyCount, sellCount, totalVolume,
 }: TransactionsClientProps) {
   const { fmt, symbol } = useCurrency();
+  const [transactions, setTransactions] = useState(initialTransactions);
+  const [confirmingId, setConfirmingId] = useState<string | null>(null);
+  const [deletingId, setDeletingId] = useState<string | null>(null);
+
+  const handleDelete = async (id: string) => {
+    setDeletingId(id);
+    const prev = transactions;
+    setTransactions(t => t.filter(tx => tx.id !== id));
+    setConfirmingId(null);
+    try {
+      const res = await fetch(`/api/transactions/${id}`, { method: 'DELETE' });
+      if (!res.ok) throw new Error();
+    } catch {
+      setTransactions(prev);
+    } finally {
+      setDeletingId(null);
+    }
+  };
 
   return (
     <div className="min-h-screen bg-[#FBFBFD] text-[#1D1D1F] font-sans antialiased">
@@ -181,9 +199,6 @@ export default function TransactionsClient({
                         <div className="text-[13px] font-semibold text-black leading-tight">
                           {format(new Date(transaction.date), 'MMM dd, yyyy')}
                         </div>
-                        <div className="text-[11px] text-gray-400 font-medium">
-                          {format(new Date(transaction.date), 'HH:mm')}
-                        </div>
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap">
                         <Link href={`/stock/${transaction.asset.ticker}`} className="flex items-center gap-3">
@@ -218,14 +233,34 @@ export default function TransactionsClient({
                         )}
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap text-center">
-                        <div className="flex items-center justify-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                          <button className="p-1.5 text-gray-400 hover:text-black transition-colors rounded-md hover:bg-gray-100">
-                            <Edit2 className="w-3.5 h-3.5" />
-                          </button>
-                          <button className="p-1.5 text-gray-400 hover:text-rose-500 transition-colors rounded-md hover:bg-rose-50">
-                            <Trash2 className="w-3.5 h-3.5" />
-                          </button>
-                        </div>
+                        {confirmingId === transaction.id ? (
+                          <div className="flex items-center justify-center gap-1.5">
+                            <button
+                              onClick={() => handleDelete(transaction.id)}
+                              className="px-2.5 py-1 text-[11px] font-bold text-rose-500 bg-rose-50 hover:bg-rose-100 rounded-md transition-colors"
+                            >
+                              Confirm
+                            </button>
+                            <button
+                              onClick={() => setConfirmingId(null)}
+                              className="px-2.5 py-1 text-[11px] font-bold text-gray-400 hover:text-black bg-gray-50 hover:bg-gray-100 rounded-md transition-colors"
+                            >
+                              Cancel
+                            </button>
+                          </div>
+                        ) : (
+                          <div className="flex items-center justify-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                            <button className="p-1.5 text-gray-400 hover:text-black transition-colors rounded-md hover:bg-gray-100">
+                              <Edit2 className="w-3.5 h-3.5" />
+                            </button>
+                            <button
+                              onClick={() => setConfirmingId(transaction.id)}
+                              className="p-1.5 text-gray-400 hover:text-rose-500 transition-colors rounded-md hover:bg-rose-50"
+                            >
+                              <Trash2 className="w-3.5 h-3.5" />
+                            </button>
+                          </div>
+                        )}
                       </td>
                     </tr>
                   ))
@@ -269,11 +304,33 @@ export default function TransactionsClient({
                   </div>
                   <div className="flex items-center justify-between mt-2">
                     <div className="text-[12px] text-gray-400 font-medium">
-                      {format(new Date(transaction.date), 'MMM dd, HH:mm')}
+                      {format(new Date(transaction.date), 'MMM dd, yyyy')}
                     </div>
                     <div className="flex items-center gap-3">
                       <button className="text-[12px] font-semibold text-gray-400">Edit</button>
-                      <button className="text-[12px] font-semibold text-rose-400">Delete</button>
+                      {confirmingId === transaction.id ? (
+                        <>
+                          <button
+                            onClick={() => handleDelete(transaction.id)}
+                            className="text-[12px] font-bold text-rose-500"
+                          >
+                            Confirm
+                          </button>
+                          <button
+                            onClick={() => setConfirmingId(null)}
+                            className="text-[12px] font-semibold text-gray-400"
+                          >
+                            Cancel
+                          </button>
+                        </>
+                      ) : (
+                        <button
+                          onClick={() => setConfirmingId(transaction.id)}
+                          className="text-[12px] font-semibold text-rose-400"
+                        >
+                          Delete
+                        </button>
+                      )}
                     </div>
                   </div>
                 </div>

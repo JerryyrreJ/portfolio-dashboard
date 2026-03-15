@@ -76,15 +76,8 @@ export default function PasskeySection({ user }: PasskeySectionProps) {
       const res = await fetch('/api/passkeys/credentials');
       if (!res.ok) return;
       const cloud: Credential[] = await res.json();
-
-      // Compare with cache by id set — update only if different
-      const cached = loadCache();
-      const cloudIds = cloud.map(c => c.id).sort().join(',');
-      const cachedIds = cached.map(c => c.id).sort().join(',');
-      if (cloudIds !== cachedIds) {
-        setCredentials(cloud);
-        saveCache(cloud);
-      }
+      setCredentials(cloud);
+      saveCache(cloud);
     } catch {
       // silently fail — cached list stays
     } finally {
@@ -186,8 +179,11 @@ export default function PasskeySection({ user }: PasskeySectionProps) {
         </div>
         <button
           onClick={() => {
-            if (!hasPasskeys) {
-              // No passkeys yet — go straight to add flow
+            if (isAddingNew) {
+              setIsAddingNew(false);
+              setError(null);
+              setNewPasskeyName('');
+            } else if (!hasPasskeys) {
               setIsEditOpen(false);
               setIsAddingNew(true);
               setError(null);
@@ -198,12 +194,12 @@ export default function PasskeySection({ user }: PasskeySectionProps) {
             }
           }}
           className={`text-[12px] md:text-[13px] font-bold px-3 py-1.5 rounded-lg transition-colors shadow-sm active:scale-95 border ${
-            isEditOpen
+            isEditOpen || isAddingNew
               ? 'bg-gray-100 border-gray-200 text-gray-700'
               : 'bg-white border-gray-100 text-black hover:bg-gray-100'
           }`}
         >
-          {!hasPasskeys ? 'Enable' : isEditOpen ? 'Done' : 'Edit'}
+          {isAddingNew ? 'Cancel' : !hasPasskeys ? 'Enable' : isEditOpen ? 'Done' : 'Edit'}
         </button>
       </div>
 
@@ -233,15 +229,9 @@ export default function PasskeySection({ user }: PasskeySectionProps) {
             </div>
             <div className="flex gap-2">
               <button
-                onClick={() => { setIsAddingNew(false); setError(null); setNewPasskeyName(''); }}
-                className="flex-1 text-[13px] font-bold py-2.5 rounded-xl border border-gray-200 bg-gray-50 text-gray-700 hover:bg-gray-100 transition-colors active:scale-[0.98]"
-              >
-                Cancel
-              </button>
-              <button
                 onClick={handleRegister}
                 disabled={isRegistering || !newPasskeyName.trim()}
-                className="flex-1 bg-black text-white text-[13px] font-bold py-2.5 rounded-xl hover:bg-gray-800 transition-colors active:scale-[0.98] disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2 shadow-sm"
+                className="w-full bg-black text-white text-[13px] font-bold py-2.5 rounded-xl hover:bg-gray-800 transition-colors active:scale-[0.98] disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2 shadow-sm"
               >
                 {isRegistering && <Loader2 className="w-4 h-4 animate-spin" />}
                 {isRegistering ? 'Setting up...' : 'Register Passkey'}
