@@ -5,16 +5,19 @@ import { format } from 'date-fns';
 import Link from 'next/link';
 import Image from 'next/image';
 import {
-  Filter, Download, TrendingUp, Search, ChevronRight, Edit2, Trash2, User
+  Filter, Download, TrendingUp, Search, ChevronRight, Edit2, Trash2, User, Check, X
 } from 'lucide-react';
 import { useCurrency } from '@/lib/useCurrency';
+import { getCurrencySymbol } from '@/lib/currency';
 
 interface TransactionWithAsset {
   id: string;
   type: string;
   quantity: number;
   price: number;
+  priceUSD: number;
   fee: number;
+  currency: string;
   date: Date;
   asset: {
     id: string;
@@ -23,6 +26,13 @@ interface TransactionWithAsset {
     market: string;
     logo?: string | null;
   };
+}
+
+interface EditState {
+  date: string;
+  quantity: string;
+  price: string;
+  fee: string;
 }
 
 interface TransactionsClientProps {
@@ -67,6 +77,57 @@ export default function TransactionsClient({
   const [transactions, setTransactions] = useState(initialTransactions);
   const [confirmingId, setConfirmingId] = useState<string | null>(null);
   const [deletingId, setDeletingId] = useState<string | null>(null);
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [editState, setEditState] = useState<EditState | null>(null);
+  const [isSaving, setIsSaving] = useState(false);
+
+  const openEdit = (tx: TransactionWithAsset) => {
+    setEditingId(tx.id);
+    setConfirmingId(null);
+    setEditState({
+      date: format(new Date(tx.date), 'yyyy-MM-dd'),
+      quantity: String(Math.abs(tx.quantity)),
+      price: String(tx.price),
+      fee: String(tx.fee),
+    });
+  };
+
+  const closeEdit = () => {
+    setEditingId(null);
+    setEditState(null);
+  };
+
+  const handleSave = async (tx: TransactionWithAsset) => {
+    if (!editState) return;
+    setIsSaving(true);
+    const prev = transactions;
+    const quantity = tx.type === 'SELL'
+      ? -Math.abs(parseFloat(editState.quantity))
+      : parseFloat(editState.quantity);
+    // Optimistic update
+    setTransactions(ts => ts.map(t => t.id === tx.id
+      ? { ...t, date: new Date(editState.date), quantity, price: parseFloat(editState.price), fee: parseFloat(editState.fee) }
+      : t
+    ));
+    closeEdit();
+    try {
+      const res = await fetch(`/api/transactions/${tx.id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          date: editState.date,
+          quantity,
+          price: parseFloat(editState.price),
+          fee: parseFloat(editState.fee),
+        }),
+      });
+      if (!res.ok) throw new Error();
+    } catch {
+      setTransactions(prev);
+    } finally {
+      setIsSaving(false);
+    }
+  };
 
   const handleDelete = async (id: string) => {
     setDeletingId(id);
@@ -100,7 +161,6 @@ export default function TransactionsClient({
           <nav className="hidden md:flex space-x-7 text-[14px] font-semibold text-gray-400">
             <Link href="/" className="hover:text-black transition-colors py-[16px]">Investments</Link>
             <Link href="/transactions" className="text-black border-b-2 border-black py-[16px]">Transactions</Link>
-            <a href="#" className="hover:text-black transition-colors py-[16px]">History</a>
           </nav>
         </div>
         <div className="flex items-center space-x-5">
@@ -194,75 +254,153 @@ export default function TransactionsClient({
                   </tr>
                 ) : (
                   transactions.map((transaction) => (
-                    <tr key={transaction.id} className="hover:bg-gray-50/80 transition-all group">
-                      <td className="px-6 py-4 whitespace-nowrap">
-                        <div className="text-[13px] font-semibold text-black leading-tight">
-                          {format(new Date(transaction.date), 'MMM dd, yyyy')}
-                        </div>
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap">
-                        <Link href={`/stock/${transaction.asset.ticker}`} className="flex items-center gap-3">
-                          <div className="w-9 h-9 rounded-full bg-gray-100 border border-gray-100 shadow-sm flex items-center justify-center overflow-hidden">
-                            {logoMap[transaction.asset.ticker] ? (
-                              <Image src={logoMap[transaction.asset.ticker]!} alt={transaction.asset.ticker} width={36} height={36} className="w-full h-full object-cover" />
-                            ) : (
-                              <span className="text-[11px] font-bold text-gray-800">{transaction.asset.ticker.charAt(0)}</span>
-                            )}
+                    <React.Fragment key={transaction.id}>
+                      <tr className={`transition-all group ${editingId === transaction.id ? 'bg-gray-50/80' : 'hover:bg-gray-50/80'}`}>
+                        <td className="px-6 py-4 whitespace-nowrap">
+                          <div className="text-[13px] font-semibold text-black leading-tight">
+                            {format(new Date(transaction.date), 'MMM dd, yyyy')}
                           </div>
-                          <div>
-                            <p className="text-[14px] font-bold text-black leading-tight group-hover:underline underline-offset-2">{transaction.asset.ticker}</p>
-                            <p className="text-[11px] text-gray-400 font-medium truncate max-w-[150px]">{transaction.asset.name}</p>
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap">
+                          <Link href={`/stock/${transaction.asset.ticker}`} className="flex items-center gap-3">
+                            <div className="w-9 h-9 rounded-full bg-gray-100 border border-gray-100 shadow-sm flex items-center justify-center overflow-hidden">
+                              {logoMap[transaction.asset.ticker] ? (
+                                <Image src={logoMap[transaction.asset.ticker]!} alt={transaction.asset.ticker} width={36} height={36} className="w-full h-full object-cover" />
+                              ) : (
+                                <span className="text-[11px] font-bold text-gray-800">{transaction.asset.ticker.charAt(0)}</span>
+                              )}
+                            </div>
+                            <div>
+                              <p className="text-[14px] font-bold text-black leading-tight group-hover:underline underline-offset-2">{transaction.asset.ticker}</p>
+                              <p className="text-[11px] text-gray-400 font-medium truncate max-w-[150px]">{transaction.asset.name}</p>
+                            </div>
+                          </Link>
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap text-center">
+                          <span className={`inline-flex items-center px-2 py-0.5 rounded-md text-[10px] font-bold uppercase tracking-wide ${transaction.type === 'BUY' ? 'bg-emerald-50 text-emerald-700' : 'bg-rose-50 text-rose-600'}`}>
+                            {transaction.type}
+                          </span>
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap text-right">
+                          <p className="text-[13px] font-semibold text-black tabular-nums">{formatNumber(transaction.quantity)}</p>
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap text-right">
+                          <p className="text-[13px] font-medium text-gray-600 tabular-nums">{fmt(transaction.priceUSD ?? transaction.price)}</p>
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap text-right">
+                          <p className="text-[14px] font-bold text-black tabular-nums">{fmt((transaction.priceUSD ?? transaction.price) * Math.abs(transaction.quantity))}</p>
+                          {transaction.fee > 0 && (
+                            <p className="text-[10px] text-gray-400 font-medium">Fee: {getCurrencySymbol(transaction.currency ?? 'USD')}{transaction.fee.toFixed(2)}</p>
+                          )}
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap text-center">
+                          {confirmingId === transaction.id ? (
+                            <div className="flex items-center justify-center gap-1.5">
+                              <button
+                                onClick={() => handleDelete(transaction.id)}
+                                className="px-2.5 py-1 text-[11px] font-bold text-rose-500 bg-rose-50 hover:bg-rose-100 rounded-md transition-colors"
+                              >
+                                Confirm
+                              </button>
+                              <button
+                                onClick={() => setConfirmingId(null)}
+                                className="px-2.5 py-1 text-[11px] font-bold text-gray-400 hover:text-black bg-gray-50 hover:bg-gray-100 rounded-md transition-colors"
+                              >
+                                Cancel
+                              </button>
+                            </div>
+                          ) : (
+                            <div className="flex items-center justify-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                              <button
+                                onClick={() => editingId === transaction.id ? closeEdit() : openEdit(transaction)}
+                                className={`p-1.5 transition-all duration-300 rounded-md ${editingId === transaction.id ? 'text-black bg-gray-100 scale-110 ring-4 ring-black/5' : 'text-gray-400 hover:text-black hover:bg-gray-100'}`}
+                              >
+                                {editingId === transaction.id
+                                  ? <X className="w-3.5 h-3.5" />
+                                  : <Edit2 className="w-3.5 h-3.5" />
+                                }
+                              </button>
+                              <button
+                                onClick={() => setConfirmingId(transaction.id)}
+                                className="p-1.5 text-gray-400 hover:text-rose-500 transition-colors rounded-md hover:bg-rose-50"
+                              >
+                                <Trash2 className="w-3.5 h-3.5" />
+                              </button>
+                            </div>
+                          )}
+                        </td>
+                      </tr>
+
+                      {/* Edit Drawer Row — always rendered, animated via grid-rows */}
+                      <tr className={editingId === transaction.id ? 'bg-gray-50/60' : ''}>
+                        <td colSpan={7} className="p-0">
+                          <div className={`grid transition-all duration-300 ease-in-out ${editingId === transaction.id ? 'grid-rows-[1fr] opacity-100' : 'grid-rows-[0fr] opacity-0'}`}>
+                            <div className="overflow-hidden">
+                              <div className="px-6 pb-5 pt-3 border-t border-gray-100/60">
+                                <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 mb-4">
+                                  <div className="space-y-1.5">
+                                    <label className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">Date</label>
+                                    <input
+                                      type="date"
+                                      value={editState?.date ?? ''}
+                                      onChange={e => setEditState(s => s ? { ...s, date: e.target.value } : s)}
+                                      className="w-full px-3 py-2 bg-white rounded-xl text-[13px] font-semibold text-black border border-gray-200 focus:border-black focus:ring-1 focus:ring-black outline-none transition-all"
+                                    />
+                                  </div>
+                                  <div className="space-y-1.5">
+                                    <label className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">Shares</label>
+                                    <input
+                                      type="number"
+                                      step="0.0001"
+                                      value={editState?.quantity ?? ''}
+                                      onChange={e => setEditState(s => s ? { ...s, quantity: e.target.value } : s)}
+                                      onWheel={e => (e.target as HTMLInputElement).blur()}
+                                      className="w-full px-3 py-2 bg-white rounded-xl text-[13px] font-semibold tabular-nums text-black border border-gray-200 focus:border-black focus:ring-1 focus:ring-black outline-none transition-all [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+                                    />
+                                  </div>
+                                  <div className="space-y-1.5">
+                                    <label className="text-[10px] font-bold text-gray-400 uppercase tracking-widest flex items-center gap-1">
+                                      Unit Price <span className="text-gray-300">·</span> {getCurrencySymbol(transaction.currency ?? 'USD')}
+                                    </label>
+                                    <input
+                                      type="number"
+                                      step="0.01"
+                                      value={editState?.price ?? ''}
+                                      onChange={e => setEditState(s => s ? { ...s, price: e.target.value } : s)}
+                                      onWheel={e => (e.target as HTMLInputElement).blur()}
+                                      className="w-full px-3 py-2 bg-white rounded-xl text-[13px] font-semibold tabular-nums text-black border border-gray-200 focus:border-black focus:ring-1 focus:ring-black outline-none transition-all [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+                                    />
+                                  </div>
+                                  <div className="space-y-1.5">
+                                    <label className="text-[10px] font-bold text-gray-400 uppercase tracking-widest flex items-center gap-1">
+                                      Fee <span className="text-gray-300">·</span> {getCurrencySymbol(transaction.currency ?? 'USD')}
+                                    </label>
+                                    <input
+                                      type="number"
+                                      step="0.01"
+                                      value={editState?.fee ?? ''}
+                                      onChange={e => setEditState(s => s ? { ...s, fee: e.target.value } : s)}
+                                      onWheel={e => (e.target as HTMLInputElement).blur()}
+                                      className="w-full px-3 py-2 bg-white rounded-xl text-[13px] font-semibold tabular-nums text-black border border-gray-200 focus:border-black focus:ring-1 focus:ring-black outline-none transition-all [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+                                    />
+                                  </div>
+                                </div>
+                                <div className="flex justify-end">
+                                  <button
+                                    onClick={() => handleSave(transaction)}
+                                    disabled={isSaving}
+                                    className="flex items-center gap-1.5 px-4 py-2 text-[12px] font-bold text-white bg-black hover:bg-gray-800 rounded-xl transition-colors active:scale-95 disabled:opacity-50 shadow-sm"
+                                  >
+                                    <Check className="w-3.5 h-3.5" />
+                                    Save Changes
+                                  </button>
+                                </div>
+                              </div>
+                            </div>
                           </div>
-                        </Link>
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap text-center">
-                        <span className={`inline-flex items-center px-2 py-0.5 rounded-md text-[10px] font-bold uppercase tracking-wide ${transaction.type === 'BUY' ? 'bg-emerald-50 text-emerald-700' : 'bg-rose-50 text-rose-600'}`}>
-                          {transaction.type}
-                        </span>
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap text-right">
-                        <p className="text-[13px] font-semibold text-black tabular-nums">{formatNumber(transaction.quantity)}</p>
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap text-right">
-                        <p className="text-[13px] font-medium text-gray-600 tabular-nums">{fmt(transaction.price)}</p>
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap text-right">
-                        <p className="text-[14px] font-bold text-black tabular-nums">{fmt(transaction.price * transaction.quantity)}</p>
-                        {transaction.fee > 0 && (
-                          <p className="text-[10px] text-gray-400 font-medium">Fee: {symbol}{transaction.fee.toFixed(2)}</p>
-                        )}
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap text-center">
-                        {confirmingId === transaction.id ? (
-                          <div className="flex items-center justify-center gap-1.5">
-                            <button
-                              onClick={() => handleDelete(transaction.id)}
-                              className="px-2.5 py-1 text-[11px] font-bold text-rose-500 bg-rose-50 hover:bg-rose-100 rounded-md transition-colors"
-                            >
-                              Confirm
-                            </button>
-                            <button
-                              onClick={() => setConfirmingId(null)}
-                              className="px-2.5 py-1 text-[11px] font-bold text-gray-400 hover:text-black bg-gray-50 hover:bg-gray-100 rounded-md transition-colors"
-                            >
-                              Cancel
-                            </button>
-                          </div>
-                        ) : (
-                          <div className="flex items-center justify-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                            <button className="p-1.5 text-gray-400 hover:text-black transition-colors rounded-md hover:bg-gray-100">
-                              <Edit2 className="w-3.5 h-3.5" />
-                            </button>
-                            <button
-                              onClick={() => setConfirmingId(transaction.id)}
-                              className="p-1.5 text-gray-400 hover:text-rose-500 transition-colors rounded-md hover:bg-rose-50"
-                            >
-                              <Trash2 className="w-3.5 h-3.5" />
-                            </button>
-                          </div>
-                        )}
-                      </td>
-                    </tr>
+                        </td>
+                      </tr>
+                    </React.Fragment>
                   ))
                 )}
               </tbody>
@@ -277,60 +415,116 @@ export default function TransactionsClient({
               </div>
             ) : (
               transactions.map((transaction) => (
-                <div key={transaction.id} className="p-4 active:bg-gray-50 transition-colors">
-                  <div className="flex items-center justify-between mb-3">
-                    <div className="flex items-center gap-3">
-                      <div className="w-10 h-10 rounded-full bg-gray-100 border border-gray-100 shadow-sm flex items-center justify-center overflow-hidden">
-                        {logoMap[transaction.asset.ticker] ? (
-                          <Image src={logoMap[transaction.asset.ticker]!} alt={transaction.asset.ticker} width={40} height={40} className="w-full h-full object-cover" />
+                <div key={transaction.id} className={`transition-colors ${editingId === transaction.id ? 'bg-gray-50/80' : ''}`}>
+                  <div className="p-4">
+                    <div className="flex items-center justify-between mb-3">
+                      <div className="flex items-center gap-3">
+                        <div className="w-10 h-10 rounded-full bg-gray-100 border border-gray-100 shadow-sm flex items-center justify-center overflow-hidden">
+                          {logoMap[transaction.asset.ticker] ? (
+                            <Image src={logoMap[transaction.asset.ticker]!} alt={transaction.asset.ticker} width={40} height={40} className="w-full h-full object-cover" />
+                          ) : (
+                            <span className="text-[12px] font-bold text-gray-800">{transaction.asset.ticker.charAt(0)}</span>
+                          )}
+                        </div>
+                        <div>
+                          <div className="flex items-center gap-2">
+                            <p className="text-[15px] font-bold text-black leading-tight">{transaction.asset.ticker}</p>
+                            <span className={`px-1.5 py-0.5 rounded text-[9px] font-bold uppercase tracking-wide ${transaction.type === 'BUY' ? 'bg-emerald-50 text-emerald-700' : 'bg-rose-50 text-rose-600'}`}>
+                              {transaction.type}
+                            </span>
+                          </div>
+                          <p className="text-[12px] text-gray-400 font-medium truncate max-w-[140px]">{transaction.asset.name}</p>
+                        </div>
+                      </div>
+                      <div className="text-right">
+                        <p className="text-[15px] font-bold text-black tabular-nums">{fmt((transaction.priceUSD ?? transaction.price) * Math.abs(transaction.quantity))}</p>
+                        <p className="text-[12px] text-gray-400 font-medium tabular-nums">{formatNumber(transaction.quantity)} shares</p>
+                      </div>
+                    </div>
+                    <div className="flex items-center justify-between mt-2">
+                      <div className="text-[12px] text-gray-400 font-medium">
+                        {format(new Date(transaction.date), 'MMM dd, yyyy')}
+                      </div>
+                      <div className="flex items-center gap-3">
+                        <button
+                          onClick={() => editingId === transaction.id ? closeEdit() : openEdit(transaction)}
+                          className={`text-[12px] font-semibold transition-colors ${editingId === transaction.id ? 'text-black' : 'text-gray-400'}`}
+                        >
+                          {editingId === transaction.id ? 'Close' : 'Edit'}
+                        </button>
+                        {confirmingId === transaction.id ? (
+                          <>
+                            <button onClick={() => handleDelete(transaction.id)} className="text-[12px] font-bold text-rose-500">Confirm</button>
+                            <button onClick={() => setConfirmingId(null)} className="text-[12px] font-semibold text-gray-400">Cancel</button>
+                          </>
                         ) : (
-                          <span className="text-[12px] font-bold text-gray-800">{transaction.asset.ticker.charAt(0)}</span>
+                          <button onClick={() => setConfirmingId(transaction.id)} className="text-[12px] font-semibold text-rose-400">Delete</button>
                         )}
                       </div>
-                      <div>
-                        <div className="flex items-center gap-2">
-                          <p className="text-[15px] font-bold text-black leading-tight">{transaction.asset.ticker}</p>
-                          <span className={`px-1.5 py-0.5 rounded text-[9px] font-bold uppercase tracking-wide ${transaction.type === 'BUY' ? 'bg-emerald-50 text-emerald-700' : 'bg-rose-50 text-rose-600'}`}>
-                            {transaction.type}
-                          </span>
-                        </div>
-                        <p className="text-[12px] text-gray-400 font-medium truncate max-w-[140px]">{transaction.asset.name}</p>
-                      </div>
-                    </div>
-                    <div className="text-right">
-                      <p className="text-[15px] font-bold text-black tabular-nums">{fmt(transaction.price * transaction.quantity)}</p>
-                      <p className="text-[12px] text-gray-400 font-medium tabular-nums">{formatNumber(transaction.quantity)} shares</p>
                     </div>
                   </div>
-                  <div className="flex items-center justify-between mt-2">
-                    <div className="text-[12px] text-gray-400 font-medium">
-                      {format(new Date(transaction.date), 'MMM dd, yyyy')}
-                    </div>
-                    <div className="flex items-center gap-3">
-                      <button className="text-[12px] font-semibold text-gray-400">Edit</button>
-                      {confirmingId === transaction.id ? (
-                        <>
-                          <button
-                            onClick={() => handleDelete(transaction.id)}
-                            className="text-[12px] font-bold text-rose-500"
-                          >
-                            Confirm
-                          </button>
-                          <button
-                            onClick={() => setConfirmingId(null)}
-                            className="text-[12px] font-semibold text-gray-400"
-                          >
-                            Cancel
-                          </button>
-                        </>
-                      ) : (
+
+                  {/* Mobile Edit Drawer — always rendered, animated via grid-rows */}
+                  <div className={`grid transition-all duration-300 ease-in-out ${editingId === transaction.id ? 'grid-rows-[1fr] opacity-100' : 'grid-rows-[0fr] opacity-0'}`}>
+                    <div className="overflow-hidden">
+                      <div className="px-4 pb-4 space-y-3 border-t border-gray-100/60">
+                        <div className="grid grid-cols-2 gap-3 pt-3">
+                          <div className="space-y-1.5">
+                            <label className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">Date</label>
+                            <input
+                              type="date"
+                              value={editState?.date ?? ''}
+                              onChange={e => setEditState(s => s ? { ...s, date: e.target.value } : s)}
+                              className="w-full px-3 py-2 bg-gray-50/50 rounded-xl text-[13px] font-semibold text-black border border-gray-200 focus:border-black focus:ring-1 focus:ring-black outline-none transition-all"
+                            />
+                          </div>
+                          <div className="space-y-1.5">
+                            <label className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">Shares</label>
+                            <input
+                              type="number"
+                              step="0.0001"
+                              value={editState?.quantity ?? ''}
+                              onChange={e => setEditState(s => s ? { ...s, quantity: e.target.value } : s)}
+                              onWheel={e => (e.target as HTMLInputElement).blur()}
+                              className="w-full px-3 py-2 bg-gray-50/50 rounded-xl text-[13px] font-semibold tabular-nums text-black border border-gray-200 focus:border-black focus:ring-1 focus:ring-black outline-none transition-all [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+                            />
+                          </div>
+                          <div className="space-y-1.5">
+                            <label className="text-[10px] font-bold text-gray-400 uppercase tracking-widest flex items-center gap-1">
+                              Unit Price <span className="text-gray-300">·</span> {getCurrencySymbol(transaction.currency ?? 'USD')}
+                            </label>
+                            <input
+                              type="number"
+                              step="0.01"
+                              value={editState?.price ?? ''}
+                              onChange={e => setEditState(s => s ? { ...s, price: e.target.value } : s)}
+                              onWheel={e => (e.target as HTMLInputElement).blur()}
+                              className="w-full px-3 py-2 bg-gray-50/50 rounded-xl text-[13px] font-semibold tabular-nums text-black border border-gray-200 focus:border-black focus:ring-1 focus:ring-black outline-none transition-all [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+                            />
+                          </div>
+                          <div className="space-y-1.5">
+                            <label className="text-[10px] font-bold text-gray-400 uppercase tracking-widest flex items-center gap-1">
+                              Fee <span className="text-gray-300">·</span> {getCurrencySymbol(transaction.currency ?? 'USD')}
+                            </label>
+                            <input
+                              type="number"
+                              step="0.01"
+                              value={editState?.fee ?? ''}
+                              onChange={e => setEditState(s => s ? { ...s, fee: e.target.value } : s)}
+                              onWheel={e => (e.target as HTMLInputElement).blur()}
+                              className="w-full px-3 py-2 bg-gray-50/50 rounded-xl text-[13px] font-semibold tabular-nums text-black border border-gray-200 focus:border-black focus:ring-1 focus:ring-black outline-none transition-all [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+                            />
+                          </div>
+                        </div>
                         <button
-                          onClick={() => setConfirmingId(transaction.id)}
-                          className="text-[12px] font-semibold text-rose-400"
+                          onClick={() => handleSave(transaction)}
+                          disabled={isSaving}
+                          className="w-full flex items-center justify-center gap-1.5 py-2.5 text-[13px] font-bold text-white bg-black hover:bg-gray-800 rounded-xl transition-colors active:scale-[0.98] disabled:opacity-50 shadow-sm"
                         >
-                          Delete
+                          <Check className="w-3.5 h-3.5" />
+                          Save Changes
                         </button>
-                      )}
+                      </div>
                     </div>
                   </div>
                 </div>

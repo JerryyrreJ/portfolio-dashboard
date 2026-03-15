@@ -300,7 +300,6 @@ export default function StockDetailClient({ stockData }: { stockData: StockData 
           <nav className="hidden md:flex space-x-7 text-[14px] font-semibold text-gray-400">
             <Link href="/" className="hover:text-black transition-colors py-[16px]">Investments</Link>
             <Link href="/transactions" className="hover:text-black transition-colors py-[16px]">Transactions</Link>
-            <a href="#" className="hover:text-black transition-colors py-[16px]">History</a>
           </nav>
         </div>
         <div className="flex items-center space-x-5">
