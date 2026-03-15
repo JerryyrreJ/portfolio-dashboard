@@ -2,6 +2,8 @@ import { notFound } from 'next/navigation'
 import StockDetailClient from './StockDetailClient'
 import { getUser } from '@/lib/supabase-server'
 import prisma, { withRetry } from '@/lib/prisma'
+import { getQuote, getCompanyProfile } from '@/lib/finnhub'
+import { get12MonthHistory } from '@/lib/twelvedata'
 
 interface PageProps {
   params: Promise<{ ticker: string }>
@@ -29,7 +31,83 @@ export default async function StockDetailPage(props: PageProps) {
   }))
 
   if (!asset) {
-    notFound()
+    // Asset not in DB — fetch live data from Finnhub for read-only view
+    // Use individual try-catch to prevent one failing API from crashing the whole page
+    let quote: any = null;
+    let companyProfile: any = null;
+    let chartData: any[] = [];
+try {
+  const results = await Promise.allSettled([
+    getQuote(decodedTicker),
+    getCompanyProfile(decodedTicker),
+    get12MonthHistory(decodedTicker),
+  ]);
+
+  if (results[0].status === 'fulfilled') quote = results[0].value;
+  if (results[1].status === 'fulfilled') companyProfile = results[1].value;
+  if (results[2].status === 'fulfilled') chartData = results[2].value;
+} catch (e) {
+  console.error('Remote data fetch failed partially:', e);
+}
+
+// Only show 404 if we have absolutely NO basic info about the ticker
+// Even if quote fails (403), if we have a name or it came from a valid search, we should show the page
+if (!companyProfile?.name && (!quote || quote.c === 0)) {
+  // One last check: maybe it's a valid ticker but our API has NO access
+  // If we got this far, it means DB doesn't have it either.
+  // Let's at least show a placeholder page for the ticker instead of 404
+  if (!decodedTicker || decodedTicker.length > 20) notFound();
+}
+
+let defaultPortfolioId = ''
+let defaultPortfolioName = ''
+if (user) {
+  const portfolio = await withRetry(() => prisma.portfolio.findFirst({ where: { userId: user.id } }))
+  if (portfolio) {
+    defaultPortfolioId = portfolio.id
+    defaultPortfolioName = portfolio.name
+  }
+}
+
+    const stockData = {
+      ticker: decodedTicker,
+      name: companyProfile?.name || decodedTicker,
+      market: companyProfile?.exchange || 'Unknown Market',
+      currentPrice: quote?.c || 0,
+      priceChange: quote?.d || 0,
+      priceChangePercent: quote?.dp || 0,
+      dayHigh: quote?.h || 0,
+      dayLow: quote?.l || 0,
+      dayOpen: quote?.o || 0,
+      prevClose: quote?.pc || 0,
+      lastUpdated: new Date(),
+      totalQty: 0,
+      currentValue: 0,
+      costBasis: 0,
+      totalReturn: 0,
+      totalReturnPercent: 0,
+      avgBuyPrice: 0,
+      totalFees: 0,
+      chartData,
+      transactions: [],
+      portfolioId: defaultPortfolioId,
+      portfolioName: defaultPortfolioName,
+      profile: {
+        name: companyProfile?.name || decodedTicker,
+        ticker: decodedTicker,
+        exchange: companyProfile?.exchange || '',
+        logo: companyProfile?.logo || '',
+        finnhubIndustry: companyProfile?.finnhubIndustry || '',
+        country: companyProfile?.country || '',
+        currency: companyProfile?.currency || 'USD',
+        weburl: companyProfile?.weburl || '',
+        ipo: companyProfile?.ipo || '',
+        marketCapitalization: companyProfile?.marketCapitalization || 0,
+      },
+      metrics: null,
+    }
+
+    return <StockDetailClient stockData={stockData} />
   }
 
   // 2. Compute position data (process in chronological order)

@@ -25,9 +25,10 @@ export async function middleware(request: NextRequest) {
     }
   )
 
-  // Refresh the session — must not block rendering
-  await supabase.auth.getUser()
-
+  // IMPORTANT: Do NOT await getUser() here. It blocks every single request (including images/APIs) 
+  // and can cause infinite fetch loops in dev environments.
+  // The client will handle session refresh if needed, or Server Components will do it.
+  
   return supabaseResponse
 }
 
