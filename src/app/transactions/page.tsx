@@ -8,7 +8,9 @@ interface TransactionWithAsset {
   type: string;
   quantity: number;
   price: number;
+  priceUSD: number;
   fee: number;
+  currency: string;
   date: Date;
   asset: {
     id: string;

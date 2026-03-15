@@ -294,7 +294,6 @@ export default function DashboardClient({ portfolioId, portfolioName, holdingsDa
           <nav className="hidden md:flex space-x-7 text-[14px] font-semibold text-gray-400">
             <a href="/" className="text-black border-b-2 border-black py-[16px]">Investments</a>
             <a href="/transactions" className="hover:text-black transition-colors py-[16px]">Transactions</a>
-            <a href="#" className="hover:text-black transition-colors py-[16px]">History</a>
           </nav>
         </div>
         <div className="flex items-center space-x-5">

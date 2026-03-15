@@ -16,7 +16,6 @@ export default function DashboardLoading() {
           <nav className="hidden md:flex space-x-7 text-[14px] font-semibold text-gray-400">
             <div className="text-black border-b-2 border-black py-[16px]">Investments</div>
             <div className="py-[16px]">Transactions</div>
-            <div className="py-[16px]">History</div>
           </nav>
         </div>
         <div className="flex items-center space-x-5">

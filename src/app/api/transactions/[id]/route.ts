@@ -2,6 +2,32 @@ import { NextRequest, NextResponse } from 'next/server';
 
 import prisma from '@/lib/prisma';
 
+// PATCH /api/transactions/[id] - 编辑交易
+export async function PATCH(
+  request: NextRequest,
+  { params }: { params: Promise<{ id: string }> }
+) {
+  try {
+    const { id } = await params;
+    const body = await request.json();
+
+    const updated = await prisma.transaction.update({
+      where: { id },
+      data: {
+        date: body.date ? new Date(body.date) : undefined,
+        quantity: body.quantity !== undefined ? parseFloat(body.quantity) : undefined,
+        price: body.price !== undefined ? parseFloat(body.price) : undefined,
+        fee: body.fee !== undefined ? parseFloat(body.fee) : undefined,
+      },
+    });
+
+    return NextResponse.json({ success: true, transaction: updated });
+  } catch (error) {
+    console.error('Failed to update transaction:', error);
+    return NextResponse.json({ error: 'Failed to update transaction' }, { status: 500 });
+  }
+}
+
 // DELETE /api/transactions/[id] - 删除交易
 export async function DELETE(
   request: NextRequest,
