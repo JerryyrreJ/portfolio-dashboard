@@ -28,7 +28,9 @@ export async function GET(request: NextRequest) {
     });
 
     if (!response.ok) {
-      throw new Error(`Finnhub API error: ${response.status}`);
+      // 非美股在免费套餐下会返回 403，静默处理，前端价格留空让用户手动填
+      console.warn(`Finnhub quote unavailable for ${symbol}: ${response.status}`);
+      return NextResponse.json({ c: 0 });
     }
 
     const data = await response.json();

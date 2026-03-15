@@ -86,7 +86,8 @@ export async function POST(request: NextRequest) {
       data: {
         ticker: body.ticker.toUpperCase(),
         name: body.name,
-        market: body.market || 'US', // 默认美股
+        market: body.market || 'US',
+        currency: body.currency || 'USD',
       },
     });
 
@@ -97,6 +98,7 @@ export async function POST(request: NextRequest) {
         ticker: asset.ticker,
         name: asset.name,
         market: asset.market,
+        currency: asset.currency,
       },
     }, { status: 201 });
 

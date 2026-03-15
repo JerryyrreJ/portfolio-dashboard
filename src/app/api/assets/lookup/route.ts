@@ -33,6 +33,7 @@ export async function GET(request: NextRequest) {
       ticker: asset.ticker,
       name: asset.name,
       market: asset.market,
+      currency: asset.currency,
     });
 
   } catch (error) {

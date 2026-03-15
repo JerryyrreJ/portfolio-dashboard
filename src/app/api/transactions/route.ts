@@ -44,6 +44,9 @@ export async function POST(request: NextRequest) {
         price: parseFloat(body.price),
         fee: parseFloat(body.fee || 0),
         date: new Date(body.date),
+        currency: body.currency || 'USD',
+        exchangeRate: parseFloat(body.exchangeRate || 1),
+        priceUSD: parseFloat(body.priceUSD || body.price),
       },
       include: {
         asset: true,

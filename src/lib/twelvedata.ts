@@ -115,6 +115,18 @@ export async function getCandles(
 }
 
 /**
+ * 获取股票报价，包含 currency 字段
+ * @param symbol 股票代码
+ */
+export async function getQuote(symbol: string): Promise<{ currency: string } | null> {
+  const data = await fetchTwelveData('/quote', {
+    symbol: symbol.toUpperCase(),
+  });
+  if (!data?.currency) return null;
+  return { currency: data.currency };
+}
+
+/**
  * 获取指定日期附近的收盘价
  * @param symbol 股票代码
  * @param date 日期字符串或 Date 对象
