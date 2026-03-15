@@ -1,9 +1,37 @@
 'use client';
 
 import React, { useState, useCallback, useEffect, useRef } from 'react';
-import { X, Search as SearchIcon, Loader2, TrendingUp, TrendingDown, Calendar as CalendarIcon, DollarSign, AlertCircle, CheckCircle, ChevronRight, Hash, ChevronLeft } from 'lucide-react';
+import { X, Search as SearchIcon, Loader2, TrendingUp, TrendingDown, Calendar as CalendarIcon, DollarSign, AlertCircle, CheckCircle, ChevronRight, Hash, ChevronLeft, ChevronDown } from 'lucide-react';
 import { format, addMonths, subMonths, startOfMonth, endOfMonth, startOfWeek, endOfWeek, isSameMonth, isSameDay, addDays, eachDayOfInterval } from 'date-fns';
 import { useStock } from '@/hooks/useStock';
+import { useCurrency } from '@/lib/useCurrency';
+import { getCurrencySymbol } from '@/lib/currency';
+
+function inferCurrencyFromTicker(symbol: string): string {
+  const s = symbol.toUpperCase();
+  if (s.endsWith('.HK'))               return 'HKD';
+  if (s.endsWith('.SS') || s.endsWith('.SZ')) return 'CNY';
+  if (s.endsWith('.L') || s.endsWith('.LON')) return 'GBP';
+  if (s.endsWith('.T'))                return 'JPY';
+  if (s.endsWith('.AX'))               return 'AUD';
+  if (s.endsWith('.TO') || s.endsWith('.V')) return 'CAD';
+  if (s.endsWith('.SW'))               return 'CHF';
+  if (s.endsWith('.SI'))               return 'SGD';
+  return 'USD';
+}
+
+const CURRENCIES = [
+  { code: 'USD', name: 'US Dollar' },
+  { code: 'HKD', name: 'HK Dollar' },
+  { code: 'CNY', name: 'Chinese Yuan' },
+  { code: 'EUR', name: 'Euro' },
+  { code: 'GBP', name: 'Pound' },
+  { code: 'JPY', name: 'Japanese Yen' },
+  { code: 'AUD', name: 'AUD' },
+  { code: 'CAD', name: 'CAD' },
+  { code: 'CHF', name: 'Swiss Franc' },
+  { code: 'SGD', name: 'SGD' },
+];
 
 interface AddTransactionModalProps {
   isOpen: boolean;
@@ -26,6 +54,7 @@ export default function AddTransactionModal({
   portfolioId
 }: AddTransactionModalProps) {
   const { searchStock, getQuote, getHistoricalPrice, isLoading } = useStock();
+  const { rates } = useCurrency();
   const calendarRef = useRef<HTMLDivElement>(null);
 
   // 表单状态
@@ -35,6 +64,10 @@ export default function AddTransactionModal({
   const [searchResults, setSearchResults] = useState<SearchResult[]>([]);
   const [showSearchResults, setShowSearchResults] = useState(false);
   const [selectedStock, setSelectedStock] = useState<SearchResult | null>(null);
+
+  // 货币
+  const [txCurrency, setTxCurrency] = useState('USD');
+  const [showCurrencyPicker, setShowCurrencyPicker] = useState(false);
 
   // 日期相关
   const [purchaseDate, setPurchaseDate] = useState(new Date().toISOString().split('T')[0]);
@@ -112,28 +145,41 @@ export default function AddTransactionModal({
     setIsFetchingPrice(true);
     const today = new Date().toISOString().split('T')[0];
 
-    if (purchaseDate && purchaseDate !== today) {
-      // 用户已选历史日期，取当日收盘价
-      const historical = await getHistoricalPrice(stock.symbol, purchaseDate);
-      if (historical && historical.price > 0) {
-        setPrice(historical.price.toFixed(2));
-        setPriceSource('api');
-      } else {
-        // 历史价格不可用（远古数据等），降级到今日价
-        const quote = await getQuote(stock.symbol);
-        if (quote && quote.c > 0) {
-          setPrice(quote.c.toFixed(2));
+    // 并行：获取价格 + 自动检测货币
+    const pricePromise = (async () => {
+      if (purchaseDate && purchaseDate !== today) {
+        const historical = await getHistoricalPrice(stock.symbol, purchaseDate);
+        if (historical && historical.price > 0) {
+          setPrice(historical.price.toFixed(2));
           setPriceSource('api');
+          return;
         }
       }
-    } else {
-      // 今天或未选日期，取实时价
       const quote = await getQuote(stock.symbol);
       if (quote && quote.c > 0) {
         setPrice(quote.c.toFixed(2));
         setPriceSource('api');
       }
-    }
+    })();
+
+    const currencyPromise = (async () => {
+      // 先查 DB 缓存
+      const lookupRes = await fetch(`/api/assets/lookup?ticker=${encodeURIComponent(stock.symbol)}`);
+      if (lookupRes.ok) {
+        const data = await lookupRes.json();
+        if (data.currency && data.currency !== 'USD') { setTxCurrency(data.currency); return; }
+      }
+      // 从 Twelve Data / Finnhub 获取货币（免费套餐仅支持美股）
+      const profileRes = await fetch(`/api/stock/profile?symbol=${encodeURIComponent(stock.symbol)}`);
+      if (profileRes.ok) {
+        const data = await profileRes.json();
+        if (data.currency) { setTxCurrency(data.currency); return; }
+      }
+      // 最终 fallback：根据交易所后缀推断（适用于 API 不支持的非美股）
+      setTxCurrency(inferCurrencyFromTicker(stock.symbol));
+    })();
+
+    await Promise.all([pricePromise, currencyPromise]);
     setIsFetchingPrice(false);
   }, [purchaseDate, getQuote, getHistoricalPrice]);
 
@@ -163,6 +209,8 @@ export default function AddTransactionModal({
     setFees('0');
     setNotes('');
     setPriceSource('manual');
+    setTxCurrency('USD');
+    setShowCurrencyPicker(false);
     setSubmitStatus('idle');
   };
 
@@ -245,11 +293,15 @@ export default function AddTransactionModal({
             ticker: selectedStock.symbol,
             name: selectedStock.description,
             market: 'US',
+            currency: txCurrency,
           }),
         });
         const newAsset = await createAssetRes.json();
-        assetId = newAsset.id;
+        assetId = newAsset.asset?.id ?? newAsset.id;
       }
+
+      const rate = rates[txCurrency] ?? 1;
+      const priceUSD = parseFloat(price) / rate;
 
       const response = await fetch('/api/transactions', {
         method: 'POST',
@@ -263,6 +315,9 @@ export default function AddTransactionModal({
           fee: parseFloat(fees) || 0,
           date: purchaseDate,
           notes: notes || null,
+          currency: txCurrency,
+          exchangeRate: rate,
+          priceUSD,
         }),
       });
 
@@ -463,6 +518,44 @@ export default function AddTransactionModal({
             </div>
           )}
 
+          {/* Currency Selector */}
+          {selectedStock && (
+            <div className="space-y-2">
+              <label className="text-[11px] font-bold text-gray-400 uppercase tracking-widest px-1">Currency</label>
+              <button
+                type="button"
+                onClick={() => setShowCurrencyPicker(v => !v)}
+                className="w-full px-4 py-3 bg-gray-50 rounded-[18px] flex items-center justify-between hover:bg-gray-100 transition-colors active:scale-[0.99]"
+              >
+                <span className="text-[14px] font-bold text-black">
+                  {getCurrencySymbol(txCurrency)}&nbsp;&nbsp;{txCurrency}
+                </span>
+                <ChevronDown className={`w-4 h-4 text-gray-400 transition-transform duration-200 ${showCurrencyPicker ? 'rotate-180' : ''}`} />
+              </button>
+              <div className={`grid transition-all duration-200 ease-in-out ${showCurrencyPicker ? 'grid-rows-[1fr] opacity-100' : 'grid-rows-[0fr] opacity-0'}`}>
+                <div className="overflow-hidden">
+                  <div className="grid grid-cols-4 sm:grid-cols-5 gap-2 pt-2">
+                    {CURRENCIES.map(c => (
+                      <button
+                        key={c.code}
+                        type="button"
+                        onClick={() => { setTxCurrency(c.code); setShowCurrencyPicker(false); }}
+                        className={`py-2.5 rounded-xl text-[12px] font-bold transition-all active:scale-95 flex flex-col items-center gap-0.5 ${
+                          txCurrency === c.code
+                            ? 'bg-black text-white'
+                            : 'bg-gray-50 text-gray-700 hover:bg-gray-100'
+                        }`}
+                      >
+                        <span>{getCurrencySymbol(c.code)}</span>
+                        <span className="text-[10px] font-semibold opacity-70">{c.code}</span>
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
+
           {/* Custom Calendar Trigger */}
           <div className="space-y-2 relative" ref={calendarRef}>
             <label className="text-[11px] font-bold text-gray-400 uppercase tracking-widest px-1 flex justify-between">
@@ -504,7 +597,11 @@ export default function AddTransactionModal({
               </div>
             </div>
             <div className="space-y-2">
-              <label className="text-[11px] font-bold text-gray-400 uppercase tracking-widest px-1">Unit Price</label>
+              <label className="text-[11px] font-bold text-gray-400 uppercase tracking-widest px-1 flex items-center gap-1.5">
+                Unit Price
+                <span className="text-gray-300">·</span>
+                <span>{getCurrencySymbol(txCurrency)}</span>
+              </label>
               <div className="relative">
                 <DollarSign className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-300" />
                 <input 
@@ -523,7 +620,11 @@ export default function AddTransactionModal({
           {/* Fee & Optional Notes Grid */}
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-5 sm:gap-6">
             <div className="space-y-2">
-              <label className="text-[11px] font-bold text-gray-400 uppercase tracking-widest px-1">Fee (Optional)</label>
+              <label className="text-[11px] font-bold text-gray-400 uppercase tracking-widest px-1 flex items-center gap-1.5">
+                Fee (Optional)
+                <span className="text-gray-300">·</span>
+                <span>{getCurrencySymbol(txCurrency)}</span>
+              </label>
               <div className="relative">
                 <DollarSign className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-300" />
                 <input 
