@@ -18,6 +18,7 @@ import Link from 'next/link';
 import Image from 'next/image';
 import { useCurrency } from '@/lib/useCurrency';
 import { useStock } from '@/hooks/useStock';
+import { usePreferences } from '@/lib/usePreferences';
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
@@ -174,6 +175,7 @@ const TIME_RANGES = ['1D', '1W', '1M', '3M', '1Y', 'All'];
 export default function StockDetailClient({ stockData }: { stockData: StockData }) {
   const router = useRouter();
   const { fmt, symbol, convert } = useCurrency();
+  const { colors } = usePreferences();
   const [activeTab, setActiveTab] = useState('summary');
   const [timeRange, setTimeRange] = useState('1Y');
   const [isRefreshing, setIsRefreshing] = useState(false);
@@ -203,6 +205,8 @@ export default function StockDetailClient({ stockData }: { stockData: StockData 
 
   const isUp = priceChange >= 0;
   const isProfit = totalReturn >= 0;
+  const upColor = isUp ? colors.gain : colors.loss;
+  const profitColor = isProfit ? colors.gain : colors.loss;
 
   const fetchChart = useCallback(async (range: string) => {
     setIsChartLoading(true);
@@ -382,7 +386,7 @@ export default function StockDetailClient({ stockData }: { stockData: StockData 
                   <RefreshCw className={`w-3.5 h-3.5 sm:w-4 sm:h-4 ${isRefreshing ? 'animate-spin' : ''}`} />
                 </button>
               </div>
-              <div className={`flex items-center justify-start sm:justify-end gap-1.5 mt-1 font-bold ${isUp ? 'text-emerald-600' : 'text-rose-500'}`}>
+              <div className={`flex items-center justify-start sm:justify-end gap-1.5 mt-1 font-bold ${upColor.tailwind.text}`}>
                 {isUp ? <ArrowUpRight className="w-3.5 h-3.5 sm:w-4 sm:h-4" /> : <ArrowDownRight className="w-3.5 h-3.5 sm:w-4 sm:h-4" />}
                 <span className="text-[15px] sm:text-[17px] tracking-tight tabular-nums">{fmt(Math.abs(priceChange))} ({priceChangePercent.toFixed(2)}%)</span>
               </div>
@@ -433,8 +437,8 @@ export default function StockDetailClient({ stockData }: { stockData: StockData 
                   <AreaChart data={chartData} margin={{ top: 10, right: 10, left: 0, bottom: 0 }}>
                     <defs>
                       <linearGradient id="colorPrice" x1="0" y1="0" x2="0" y2="1">
-                        <stop offset="5%" stopColor={isUp ? '#10b981' : '#f43f5e'} stopOpacity={0.12}/>
-                        <stop offset="95%" stopColor={isUp ? '#10b981' : '#f43f5e'} stopOpacity={0}/>
+                        <stop offset="5%" stopColor={upColor.hex} stopOpacity={0.12}/>
+                        <stop offset="95%" stopColor={upColor.hex} stopOpacity={0}/>
                       </linearGradient>
                     </defs>
                     <CartesianGrid strokeDasharray="0" vertical={false} stroke="#f8f8f8" strokeWidth={1} />
@@ -454,14 +458,14 @@ export default function StockDetailClient({ stockData }: { stockData: StockData 
                       content={<ChartTooltip fmt={fmt} />}
                       cursor={{ stroke: '#f1f1f1', strokeWidth: 1.5 }}
                     />
-                    <Area 
-                      type="monotone" 
-                      dataKey="price" 
-                      stroke={isUp ? '#10b981' : '#f43f5e'} 
-                      strokeWidth={3} 
-                      fill="url(#colorPrice)" 
-                      dot={false} 
-                      activeDot={{ r: 5, strokeWidth: 0, fill: isUp ? '#10b981' : '#f43f5e' }}
+                    <Area
+                      type="monotone"
+                      dataKey="price"
+                      stroke={upColor.hex}
+                      strokeWidth={3}
+                      fill="url(#colorPrice)"
+                      dot={false}
+                      activeDot={{ r: 5, strokeWidth: 0, fill: upColor.hex }}
                       animationDuration={1500}
                     />
                     {avgBuyPrice > 0 && avgBuyPrice >= chartMin * 0.9 && avgBuyPrice <= chartMax * 1.1 && (
@@ -564,7 +568,7 @@ export default function StockDetailClient({ stockData }: { stockData: StockData 
                           <tr key={tx.id} className="hover:bg-gray-50/50">
                             <td className="px-4 sm:px-6 py-4 font-semibold">{new Date(tx.date).toLocaleDateString()}</td>
                             <td className="px-4 sm:px-6 py-4">
-                              <span className={`px-1.5 py-0.5 rounded text-[10px] font-bold uppercase ${tx.type === 'BUY' ? 'bg-emerald-50 text-emerald-700' : 'bg-rose-50 text-rose-700'}`}>{tx.type}</span>
+                              <span className={`px-1.5 py-0.5 rounded text-[10px] font-bold uppercase ${tx.type === 'BUY' ? `bg-${colors.gain.tw}-50 text-${colors.gain.tw}-700` : `bg-${colors.loss.tw}-50 text-${colors.loss.tw}-700`}`}>{tx.type}</span>
                             </td>
                             <td className="px-4 sm:px-6 py-4 text-right font-medium tabular-nums">{tx.quantity.toLocaleString()}</td>
                             <td className="px-4 sm:px-6 py-4 text-right font-medium tabular-nums">{fmt(tx.price)}</td>
@@ -602,16 +606,16 @@ export default function StockDetailClient({ stockData }: { stockData: StockData 
                   <span className="font-bold text-black tabular-nums">{fmt(avgBuyPrice)}</span>
                 </div>
                 
-                <div className={`mt-2 p-3 rounded-xl border ${isProfit ? 'bg-emerald-50/50 border-emerald-100/50' : 'bg-rose-50/50 border-rose-100/50'}`}>
+                <div className={`mt-2 p-3 rounded-xl border ${isProfit ? `bg-${profitColor.tw}-50/50 border-${profitColor.tw}-100/50` : `bg-${colors.loss.tw}-50/50 border-${colors.loss.tw}-100/50`}`}>
                   <div className="flex justify-between items-center">
-                    <span className={`text-[12px] font-bold uppercase tracking-wider ${isProfit ? 'text-emerald-700' : 'text-rose-700'}`}>
+                    <span className={`text-[12px] font-bold uppercase tracking-wider ${profitColor.tailwind.text}`}>
                       Total Return
                     </span>
                     <div className="text-right">
-                      <div className={`text-[16px] font-bold tracking-tight tabular-nums ${isProfit ? 'text-emerald-600' : 'text-rose-600'}`}>
+                      <div className={`text-[16px] font-bold tracking-tight tabular-nums ${profitColor.tailwind.text}`}>
                         {isProfit ? '+' : '-'}{fmt(Math.abs(totalReturn))}
                       </div>
-                      <div className={`text-[11px] font-bold ${isProfit ? 'text-emerald-500' : 'text-rose-500'}`}>
+                      <div className={`text-[11px] font-bold ${profitColor.tailwind.text}`}>
                         {isProfit ? '+' : ''}{totalReturnPercent.toFixed(2)}%
                       </div>
                     </div>
@@ -647,6 +651,8 @@ export default function StockDetailClient({ stockData }: { stockData: StockData 
           onClose={() => setIsAddTradeOpen(false)}
           portfolioName={portfolioName}
           portfolioId={portfolioId}
+          defaultTicker={ticker}
+          defaultTickerName={name}
         />
       )}
 

@@ -9,6 +9,7 @@ import {
 } from 'lucide-react';
 import { useCurrency } from '@/lib/useCurrency';
 import { getCurrencySymbol } from '@/lib/currency';
+import { usePreferences } from '@/lib/usePreferences';
 
 interface TransactionWithAsset {
   id: string;
@@ -19,6 +20,7 @@ interface TransactionWithAsset {
   fee: number;
   currency: string;
   date: Date;
+  notes?: string | null;
   asset: {
     id: string;
     ticker: string;
@@ -33,6 +35,7 @@ interface EditState {
   quantity: string;
   price: string;
   fee: string;
+  notes: string;
 }
 
 interface TransactionsClientProps {
@@ -74,6 +77,7 @@ export default function TransactionsClient({
   buyCount, sellCount, totalVolume,
 }: TransactionsClientProps) {
   const { fmt, symbol } = useCurrency();
+  const { colors } = usePreferences();
   const [transactions, setTransactions] = useState(initialTransactions);
   const [confirmingId, setConfirmingId] = useState<string | null>(null);
   const [deletingId, setDeletingId] = useState<string | null>(null);
@@ -89,6 +93,7 @@ export default function TransactionsClient({
       quantity: String(Math.abs(tx.quantity)),
       price: String(tx.price),
       fee: String(tx.fee),
+      notes: tx.notes ?? '',
     });
   };
 
@@ -106,7 +111,7 @@ export default function TransactionsClient({
       : parseFloat(editState.quantity);
     // Optimistic update
     setTransactions(ts => ts.map(t => t.id === tx.id
-      ? { ...t, date: new Date(editState.date), quantity, price: parseFloat(editState.price), fee: parseFloat(editState.fee) }
+      ? { ...t, date: new Date(editState.date), quantity, price: parseFloat(editState.price), fee: parseFloat(editState.fee), notes: editState.notes || null }
       : t
     ));
     closeEdit();
@@ -119,6 +124,7 @@ export default function TransactionsClient({
           quantity,
           price: parseFloat(editState.price),
           fee: parseFloat(editState.fee),
+          notes: editState.notes || null,
         }),
       });
       if (!res.ok) throw new Error();
@@ -217,11 +223,11 @@ export default function TransactionsClient({
           </div>
           <div className="bg-white p-4 sm:p-5 rounded-2xl border border-gray-100 shadow-sm">
             <p className="text-[10px] sm:text-[11px] text-gray-400 font-bold uppercase tracking-wider mb-1 text-center">Buy Activity</p>
-            <p className="text-[18px] sm:text-[20px] font-bold text-emerald-600 text-center tabular-nums">{buyCount} Orders</p>
+            <p className={`text-[18px] sm:text-[20px] font-bold text-center tabular-nums ${colors.gain.tailwind.text}`}>{buyCount} Orders</p>
           </div>
           <div className="bg-white p-4 sm:p-5 rounded-2xl border border-gray-100 shadow-sm">
             <p className="text-[10px] sm:text-[11px] text-gray-400 font-bold uppercase tracking-wider mb-1 text-center">Sell Activity</p>
-            <p className="text-[18px] sm:text-[20px] font-bold text-rose-500 text-center tabular-nums">{sellCount} Orders</p>
+            <p className={`text-[18px] sm:text-[20px] font-bold text-center tabular-nums ${colors.loss.tailwind.text}`}>{sellCount} Orders</p>
           </div>
           <div className="bg-white p-4 sm:p-5 rounded-2xl border border-gray-100 shadow-sm">
             <p className="text-[10px] sm:text-[11px] text-gray-400 font-bold uppercase tracking-wider mb-1 text-center">Avg. Order</p>
@@ -277,7 +283,7 @@ export default function TransactionsClient({
                           </Link>
                         </td>
                         <td className="px-6 py-4 whitespace-nowrap text-center">
-                          <span className={`inline-flex items-center px-2 py-0.5 rounded-md text-[10px] font-bold uppercase tracking-wide ${transaction.type === 'BUY' ? 'bg-emerald-50 text-emerald-700' : 'bg-rose-50 text-rose-600'}`}>
+                          <span className={`inline-flex items-center px-2 py-0.5 rounded-md text-[10px] font-bold uppercase tracking-wide ${transaction.type === 'BUY' ? `${colors.gain.tailwind.bgLight} ${colors.gain.tailwind.text}` : `${colors.loss.tailwind.bgLight} ${colors.loss.tailwind.text}`}`}>
                             {transaction.type}
                           </span>
                         </td>
@@ -385,6 +391,16 @@ export default function TransactionsClient({
                                     />
                                   </div>
                                 </div>
+                                <div className="space-y-1.5">
+                                  <label className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">Notes</label>
+                                  <input
+                                    type="text"
+                                    value={editState?.notes ?? ''}
+                                    onChange={e => setEditState(s => s ? { ...s, notes: e.target.value } : s)}
+                                    placeholder="Optional"
+                                    className="w-full px-3 py-2 bg-white rounded-xl text-[13px] font-medium text-black border border-gray-200 focus:border-black focus:ring-1 focus:ring-black outline-none transition-all"
+                                  />
+                                </div>
                                 <div className="flex justify-end">
                                   <button
                                     onClick={() => handleSave(transaction)}
@@ -429,7 +445,7 @@ export default function TransactionsClient({
                         <div>
                           <div className="flex items-center gap-2">
                             <p className="text-[15px] font-bold text-black leading-tight">{transaction.asset.ticker}</p>
-                            <span className={`px-1.5 py-0.5 rounded text-[9px] font-bold uppercase tracking-wide ${transaction.type === 'BUY' ? 'bg-emerald-50 text-emerald-700' : 'bg-rose-50 text-rose-600'}`}>
+                            <span className={`px-1.5 py-0.5 rounded text-[9px] font-bold uppercase tracking-wide ${transaction.type === 'BUY' ? `${colors.gain.tailwind.bgLight} ${colors.gain.tailwind.text}` : `${colors.loss.tailwind.bgLight} ${colors.loss.tailwind.text}`}`}>
                               {transaction.type}
                             </span>
                           </div>
@@ -515,6 +531,16 @@ export default function TransactionsClient({
                               className="w-full px-3 py-2 bg-gray-50/50 rounded-xl text-[13px] font-semibold tabular-nums text-black border border-gray-200 focus:border-black focus:ring-1 focus:ring-black outline-none transition-all [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
                             />
                           </div>
+                        </div>
+                        <div className="space-y-1.5">
+                          <label className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">Notes</label>
+                          <input
+                            type="text"
+                            value={editState?.notes ?? ''}
+                            onChange={e => setEditState(s => s ? { ...s, notes: e.target.value } : s)}
+                            placeholder="Optional"
+                            className="w-full px-3 py-2 bg-gray-50/50 rounded-xl text-[13px] font-medium text-black border border-gray-200 focus:border-black focus:ring-1 focus:ring-black outline-none transition-all"
+                          />
                         </div>
                         <button
                           onClick={() => handleSave(transaction)}

@@ -2,14 +2,15 @@
 
 import React, { useRef, useState, useCallback } from 'react';
 import { toPng } from 'html-to-image';
-import { 
-  X, 
-  Download, 
-  TrendingUp, 
-  ArrowUpRight, 
+import {
+  X,
+  Download,
+  TrendingUp,
+  ArrowUpRight,
   ArrowDownRight
 } from 'lucide-react';
 import Image from 'next/image';
+import { usePreferences } from '@/lib/usePreferences';
 
 interface ShareCardModalProps {
   isOpen: boolean;
@@ -31,6 +32,7 @@ export default function ShareCardModal({ isOpen, onClose, stockData }: ShareCard
   const cardRef = useRef<HTMLDivElement>(null);
   const [isGenerating, setIsGenerating] = useState(false);
   const [copied, setCopied] = useState(false);
+  const { colors } = usePreferences();
 
   const {
     ticker,
@@ -45,6 +47,7 @@ export default function ShareCardModal({ isOpen, onClose, stockData }: ShareCard
   } = stockData;
 
   const isProfit = totalReturnPercent >= 0;
+  const profitColor = isProfit ? colors.gain : colors.loss;
 
   // Generate SVG path for the background sparkline
   const generateSparklinePath = useCallback(() => {
@@ -141,7 +144,7 @@ export default function ShareCardModal({ isOpen, onClose, stockData }: ShareCard
             style={{ width: '100%', aspectRatio: '4/5' }}
           >
             {/* Background Accent */}
-            <div className={`absolute top-0 left-0 w-full h-1 bg-gradient-to-r ${isProfit ? 'from-emerald-400 to-emerald-600' : 'from-rose-400 to-rose-600'}`} />
+            <div className={`absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-${profitColor.tw}-400 to-${profitColor.tw}-600`} />
             
             {/* Header: Brand & Market */}
             <div className="w-full flex justify-between items-center mb-6 sm:mb-10">
@@ -177,11 +180,11 @@ export default function ShareCardModal({ isOpen, onClose, stockData }: ShareCard
 
             {/* Hero Number: Return Percentage */}
             <div className="flex flex-col items-center mb-6 sm:mb-10">
-              <div className={`text-[48px] sm:text-[64px] font-black tracking-tighter leading-none tabular-nums flex items-start gap-0.5 sm:gap-1 ${isProfit ? 'text-emerald-500' : 'text-rose-500'}`}>
+              <div className={`text-[48px] sm:text-[64px] font-black tracking-tighter leading-none tabular-nums flex items-start gap-0.5 sm:gap-1 ${profitColor.tailwind.text}`}>
                 {isProfit ? '+' : ''}{totalReturnPercent.toFixed(2)}
                 <span className="text-[20px] sm:text-[28px] mt-1.5 sm:mt-2 font-bold">%</span>
               </div>
-              <div className={`flex items-center gap-1 sm:gap-1.5 px-2.5 py-0.5 sm:px-3 sm:py-1 rounded-full text-[11px] sm:text-[13px] font-bold mt-1.5 sm:mt-2 ${isProfit ? 'bg-emerald-50 text-emerald-600' : 'bg-rose-50 text-rose-500'}`}>
+              <div className={`flex items-center gap-1 sm:gap-1.5 px-2.5 py-0.5 sm:px-3 sm:py-1 rounded-full text-[11px] sm:text-[13px] font-bold mt-1.5 sm:mt-2 ${profitColor.tailwind.bgLight} ${profitColor.tailwind.textLight}`}>
                 {isProfit ? <ArrowUpRight className="w-3.5 h-3.5 sm:w-4 h-4" /> : <ArrowDownRight className="w-3.5 h-3.5 sm:w-4 h-4" />}
                 {isProfit ? 'Total Gain' : 'Total Loss'}
               </div>
@@ -199,7 +202,7 @@ export default function ShareCardModal({ isOpen, onClose, stockData }: ShareCard
               </div>
               <div className="text-center">
                 <p className="text-[9px] sm:text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-0.5 sm:mb-1">{isProfit ? 'Profit' : 'Loss'}</p>
-                <p className={`text-[13px] sm:text-[15px] font-bold tabular-nums ${isProfit ? 'text-emerald-600' : 'text-rose-600'}`}>
+                <p className={`text-[13px] sm:text-[15px] font-bold tabular-nums ${profitColor.tailwind.text}`}>
                   {isProfit ? '+' : '-'}{currencySymbol}{Math.abs(totalReturn).toFixed(2)}
                 </p>
               </div>
@@ -214,14 +217,14 @@ export default function ShareCardModal({ isOpen, onClose, stockData }: ShareCard
               >
                 <defs>
                   <linearGradient id="sparklineGradient" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="0%" stopColor={isProfit ? '#10b981' : '#f43f5e'} stopOpacity="1" />
-                    <stop offset="100%" stopColor={isProfit ? '#10b981' : '#f43f5e'} stopOpacity="0" />
+                    <stop offset="0%" stopColor={profitColor.hex} stopOpacity="1" />
+                    <stop offset="100%" stopColor={profitColor.hex} stopOpacity="0" />
                   </linearGradient>
                 </defs>
                 <path 
                   d={sparklinePath} 
                   fill="url(#sparklineGradient)"
-                  stroke={isProfit ? '#10b981' : '#f43f5e'}
+                  stroke={profitColor.hex}
                   strokeWidth="0.5"
                   strokeLinecap="round"
                   strokeLinejoin="round"

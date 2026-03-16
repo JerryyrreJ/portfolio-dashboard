@@ -18,6 +18,7 @@ export async function PATCH(
         quantity: body.quantity !== undefined ? parseFloat(body.quantity) : undefined,
         price: body.price !== undefined ? parseFloat(body.price) : undefined,
         fee: body.fee !== undefined ? parseFloat(body.fee) : undefined,
+        notes: body.notes !== undefined ? (body.notes || null) : undefined,
       },
     });
 

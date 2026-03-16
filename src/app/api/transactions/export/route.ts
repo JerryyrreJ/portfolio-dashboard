@@ -51,27 +51,59 @@ export async function GET(request: NextRequest) {
     const transactions = portfolio.transactions;
 
     if (formatType === 'json') {
-      return new NextResponse(JSON.stringify(transactions, null, 2), {
+      const cleanData = {
+        portfolio: {
+          name: portfolio.name,
+          currency: portfolio.currency,
+        },
+        exportDate: new Date().toISOString(),
+        range,
+        transactions: transactions.map(t => ({
+          date: format(new Date(t.date), 'yyyy-MM-dd'),
+          ticker: t.asset.ticker,
+          name: t.asset.name,
+          market: t.asset.market,
+          type: t.type,
+          quantity: Math.abs(t.quantity),
+          price: t.price,
+          currency: t.currency || 'USD',
+          fee: t.fee ?? 0,
+          totalValue: (Math.abs(t.quantity) * t.price).toFixed(2),
+          notes: t.notes ?? '',
+        })),
+      };
+
+      return new NextResponse(JSON.stringify(cleanData, null, 2), {
         headers: {
           'Content-Type': 'application/json',
-          'Content-Disposition': 'attachment; filename="portfolio_transactions.json"',
+          'Content-Disposition': `attachment; filename="portfolio_transactions_${range}.json"`,
         },
       });
     }
 
     // Default to CSV
-    const csvHeader = 'Date,Asset,Type,Quantity,Price,Currency,Total Value,Notes\n';
+    const escape = (val: string | number) => {
+      const s = String(val);
+      return s.includes(',') || s.includes('"') || s.includes('\n') ? `"${s.replace(/"/g, '""')}"` : s;
+    };
+
+    const csvHeader = 'Date,Ticker,Name,Market,Type,Quantity,Price,Currency,Fee,Total Value,Notes\n';
     const csvRows = transactions.map((t) => {
       const date = format(new Date(t.date), 'yyyy-MM-dd');
-      const asset = t.asset.ticker;
-      const type = t.type;
-      const quantity = t.quantity.toString();
-      const price = t.price.toString();
-      const currency = t.currency || 'USD';
-      const total = (t.quantity * t.price).toFixed(2);
-      const notes = ''; // Transactions table doesn't have a notes field based on schema
-      
-      return `${date},${asset},${type},${quantity},${price},${currency},${total},${notes}`;
+      const total = (Math.abs(t.quantity) * t.price).toFixed(2);
+      return [
+        date,
+        escape(t.asset.ticker),
+        escape(t.asset.name),
+        escape(t.asset.market),
+        t.type,
+        Math.abs(t.quantity),
+        t.price,
+        t.currency || 'USD',
+        t.fee ?? 0,
+        total,
+        escape(t.notes ?? ''),
+      ].join(',');
     }).join('\n');
 
     return new NextResponse(csvHeader + csvRows, {

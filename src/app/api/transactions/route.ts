@@ -47,6 +47,7 @@ export async function POST(request: NextRequest) {
         currency: body.currency || 'USD',
         exchangeRate: parseFloat(body.exchangeRate || 1),
         priceUSD: parseFloat(body.priceUSD || body.price),
+        notes: body.notes || null,
       },
       include: {
         asset: true,

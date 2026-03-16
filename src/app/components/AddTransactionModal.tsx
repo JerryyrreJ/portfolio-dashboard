@@ -38,6 +38,8 @@ interface AddTransactionModalProps {
   onClose: () => void;
   portfolioName: string;
   portfolioId: string;
+  defaultTicker?: string;
+  defaultTickerName?: string;
 }
 
 interface SearchResult {
@@ -51,7 +53,9 @@ export default function AddTransactionModal({
   isOpen,
   onClose,
   portfolioName,
-  portfolioId
+  portfolioId,
+  defaultTicker,
+  defaultTickerName,
 }: AddTransactionModalProps) {
   const { searchStock, getQuote, getHistoricalPrice, isLoading } = useStock();
   const { rates } = useCurrency();
@@ -118,8 +122,20 @@ export default function AddTransactionModal({
     if (isOpen) {
       fetchHoldings();
       setPurchaseDate(new Date().toISOString().split('T')[0]);
+
+      if (defaultTicker) {
+        const ticker = defaultTicker.toUpperCase();
+        const mockStock: SearchResult = {
+          symbol: ticker,
+          displaySymbol: ticker,
+          description: defaultTickerName || ticker,
+          type: 'Common Stock',
+        };
+        setSearchQuery(ticker);
+        handleSelectStock(mockStock);
+      }
     }
-  }, [isOpen, fetchHoldings]);
+  }, [isOpen, fetchHoldings, defaultTicker]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // 搜索股票逻辑
   useEffect(() => {

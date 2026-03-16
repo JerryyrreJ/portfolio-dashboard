@@ -9,69 +9,55 @@ datasource db {
 }
 
 model Portfolio {
-  id          String   @id @default(cuid())
-  userId      String?
-  name          String
-  currency          String   @default("USD")
-
-  // Unified Preferences
-  preferences         String?   // JSON string storing all user preferences
-
-  // Unified timestamp for all settings (name, currency, preferences)
-  settingsUpdatedAt DateTime? // UTC timestamp for local-first sync
-
-  createdAt     DateTime @default(now())
-  updatedAt     DateTime @updatedAt
-
-  transactions Transaction[]
+  id                String        @id @default(cuid())
+  name              String
+  currency          String        @default("USD")
+  createdAt         DateTime      @default(now())
+  updatedAt         DateTime      @updatedAt
+  userId            String?
+  preferences       String?
+  settingsUpdatedAt DateTime?
+  transactions      Transaction[]
 }
 
 model Asset {
-  id          String   @id @default(cuid())
-  ticker      String   @unique
-  name        String
-  market      String
-  type        String   @default("STOCK")
-  currency    String   @default("USD")
-  logo        String?  // URL to company logo, cached
-  
-  // Real-time quote cache
-  lastPrice          Float?   
-  priceChange        Float?
-  priceChangePercent Float?
+  id                 String        @id @default(cuid())
+  ticker             String        @unique
+  name               String
+  market             String
+  type               String        @default("STOCK")
+  currency           String        @default("USD")
+  priceHistory       String?
+  historyLastUpdated DateTime?
+  logo               String?
+  lastPrice          Float?
+  lastPriceUpdated   DateTime?
   dayHigh            Float?
   dayLow             Float?
   dayOpen            Float?
+  metrics            String?
   prevClose          Float?
-  lastPriceUpdated   DateTime? 
-
-  // Historical data cache
-  priceHistory       String?  // JSON string
-  historyLastUpdated DateTime?
-
-  // Profile & Financials cache
-  profile            String?  // JSON string (industry, country, website, etc)
-  metrics            String?  // JSON string (52w high/low, PE, EPS, Beta, etc)
-  
-  transactions Transaction[]
+  priceChange        Float?
+  priceChangePercent Float?
+  profile            String?
+  transactions       Transaction[]
 }
 
 model Transaction {
-  id          String   @id @default(cuid())
-  portfolioId String
-  assetId     String
-  type        String
-  date        DateTime
-  quantity    Float    @default(0)
-  price       Float    @default(0)
-  priceUSD    Float    @default(0)
-  exchangeRate Float   @default(1)
-  fee         Float    @default(0)
-  currency    String   @default("USD")
-
-  portfolio   Portfolio @relation(fields: [portfolioId], references: [id], onDelete: Cascade)
-  asset       Asset     @relation(fields: [assetId], references: [id], onDelete: Restrict)
-
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
+  id           String    @id @default(cuid())
+  portfolioId  String
+  assetId      String
+  type         String
+  date         DateTime
+  quantity     Float     @default(0)
+  price        Float     @default(0)
+  priceUSD     Float     @default(0)
+  exchangeRate Float     @default(1)
+  fee          Float     @default(0)
+  currency     String    @default("USD")
+  notes        String?
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+  asset        Asset     @relation(fields: [assetId], references: [id])
+  portfolio    Portfolio @relation(fields: [portfolioId], references: [id], onDelete: Cascade)
 }

@@ -30,6 +30,7 @@ import GlobalSearch from './components/GlobalSearch';
 import Link from 'next/link';
 import { useCurrency } from '@/lib/useCurrency';
 import { useStock } from '@/hooks/useStock';
+import { usePreferences } from '@/lib/usePreferences';
 
 // --- 辅助格式化组件 ---
 interface FormatValueProps {
@@ -38,13 +39,15 @@ interface FormatValueProps {
   isCurrency?: boolean;
   symbol?: string;
   convert?: (n: number) => number;
+  gainColor?: string;
+  lossColor?: string;
 }
 
-const FormatValue: React.FC<FormatValueProps> = ({ val, isPercentage = false, isCurrency = true, symbol = '$', convert = (n) => n }) => {
+const FormatValue: React.FC<FormatValueProps> = ({ val, isPercentage = false, isCurrency = true, symbol = '$', convert = (n) => n, gainColor = 'text-emerald-600', lossColor = 'text-rose-500' }) => {
   const converted = isCurrency ? convert(val) : val;
   if (converted === 0) return <span className="text-gray-400">{isCurrency ? symbol : ''}0.00{isPercentage ? '%' : ''}</span>;
   const isPositive = converted > 0;
-  const color = isPositive ? 'text-emerald-600' : 'text-rose-500';
+  const color = isPositive ? gainColor : lossColor;
   const prefix = isCurrency ? (converted < 0 ? `-${symbol}` : symbol) : '';
   const displayVal = Math.abs(converted).toFixed(2);
 
@@ -97,6 +100,7 @@ const MARKET_COLORS: Record<string, { stroke: string; fill: string; dot: string 
 export default function DashboardClient({ portfolioId, portfolioName, holdingsData, chartData, summary }: DashboardClientProps) {
   const router = useRouter();
   const { symbol, convert, fmt } = useCurrency();
+  const { colors } = usePreferences();
   const [isModalOpen, setIsModalOpen] = useState(false);
 
   // 搜索栏状态
@@ -283,6 +287,7 @@ export default function DashboardClient({ portfolioId, portfolioName, holdingsDa
   };
 
   const isUp = localSummary.totalCapGain >= 0;
+  const upColor = isUp ? colors.gain : colors.loss;
   const totalHoldingsCount = localHoldings.reduce((sum: number, g: HoldingsGroup) => sum + g.holdings.length, 0);
 
   return (
@@ -405,7 +410,7 @@ export default function DashboardClient({ portfolioId, portfolioName, holdingsDa
                 </span>
               </div>
               <div className="mt-2 flex items-center space-x-2">
-                <span className={`text-[12px] font-bold px-1.5 py-0.5 rounded ${isUp ? 'bg-emerald-50 text-emerald-600' : 'bg-rose-50 text-rose-500'}`}>
+                <span className={`text-[12px] font-bold px-1.5 py-0.5 rounded ${upColor.tailwind.bgLight} ${upColor.tailwind.text}`}>
                   {isUp ? '+' : ''}{localSummary.totalCapGainPercentage.toFixed(2)}%
                 </span>
                 <span className="text-[12px] font-medium text-gray-400 tabular-nums">
@@ -417,7 +422,7 @@ export default function DashboardClient({ portfolioId, portfolioName, holdingsDa
             <div className="bg-white rounded-2xl p-5 border border-gray-100 shadow-sm">
               <p className="text-[11px] text-gray-400 font-bold uppercase tracking-wider mb-1">Total Gain</p>
               <div className="flex items-baseline">
-                <span className={`text-[22px] font-bold tracking-tight tabular-nums ${isUp ? 'text-emerald-600' : 'text-rose-500'}`}>
+                <span className={`text-[22px] font-bold tracking-tight tabular-nums ${upColor.tailwind.text}`}>
                   {isUp ? '+' : '-'}{fmt(Math.abs(localSummary.totalCapGain))}
                 </span>
               </div>
@@ -626,6 +631,8 @@ export default function DashboardClient({ portfolioId, portfolioName, holdingsDa
                             isCurrency={returnDisplayMode === 'currency'}
                             symbol={symbol}
                             convert={convert}
+                            gainColor={colors.gain.tailwind.text}
+                            lossColor={colors.loss.tailwind.text}
                           /> : <span className="text-gray-400 text-[13px]">--</span>}
                           <div className="text-[10px] text-gray-400 font-medium hidden sm:block">Since purchase</div>
                         </td>
@@ -650,6 +657,8 @@ export default function DashboardClient({ portfolioId, portfolioName, holdingsDa
                       isCurrency={returnDisplayMode === 'currency'}
                       symbol={symbol}
                       convert={convert}
+                      gainColor={colors.gain.tailwind.text}
+                      lossColor={colors.loss.tailwind.text}
                     />
                   </td>
                   <td className="px-4 sm:px-6 py-4 hidden sm:table-cell"></td>

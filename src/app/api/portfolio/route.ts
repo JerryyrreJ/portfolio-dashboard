@@ -76,7 +76,7 @@ export async function PATCH(request: NextRequest) {
     }
 
     const body = await request.json();
-    const { name, currency } = body;
+    const { name, currency, preferences } = body;
 
     const existingPortfolio = await prisma.portfolio.findFirst({
       where: { userId: user.id },
@@ -91,6 +91,7 @@ export async function PATCH(request: NextRequest) {
       data: {
         ...(name !== undefined && { name }),
         ...(currency !== undefined && { currency }),
+        ...(preferences !== undefined && { preferences: JSON.stringify(preferences) }),
         settingsUpdatedAt: new Date(),
       },
     });

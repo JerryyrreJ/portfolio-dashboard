@@ -12,6 +12,7 @@ interface TransactionWithAsset {
   fee: number;
   currency: string;
   date: Date;
+  notes?: string | null;
   asset: {
     id: string;
     ticker: string;

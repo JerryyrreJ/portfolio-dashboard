@@ -2,6 +2,7 @@
 
 import React, { useState, useEffect, useRef } from 'react';
 import { useRouter } from 'next/navigation';
+import { usePreferences } from '@/lib/usePreferences';
 import Link from 'next/link';
 import { 
   ChevronLeft, 
@@ -39,8 +40,9 @@ export default function SettingsPage() {
   const [activeSection, setActiveSection] = useState('portfolio');
   const [user, setUser] = useState<User | null>(null);
   const router = useRouter();
-  
+
   const supabase = createClient();
+  const { prefs, updatePreference } = usePreferences();
 
   // Inline edit states
   const [isEditingEmail, setIsEditingEmail] = useState(false);
@@ -62,13 +64,6 @@ export default function SettingsPage() {
   const [portfolioActionLoading, setPortfolioActionLoading] = useState(false);
   const [portfolioError, setPortfolioError] = useState<string | null>(null);
 
-  // Preference States
-  const [theme, setTheme] = useState('System');
-  const [chartType, setChartType] = useState('Area Chart');
-  const [colorScheme, setColorScheme] = useState('Emerald');
-  const [hideSmallBalances, setHideSmallBalances] = useState(false);
-  const [realTimeSync, setRealTimeSync] = useState(true);
-
   // Inline edit states for Preferences
   const [isEditingTheme, setIsEditingTheme] = useState(false);
   const [isEditingChartType, setIsEditingChartType] = useState(false);
@@ -77,17 +72,6 @@ export default function SettingsPage() {
   const [exportRange, setExportRange] = useState('all');
   const [exportFormat, setExportFormat] = useState('csv');
   const [exportLoading, setExportLoading] = useState(false);
-
-  // Sync Preferences to Backend (Placeholder)
-  const syncPreference = async (key: string, value: any) => {
-    console.log(`[Sync] Updating preference: ${key} = ${value}`);
-    // TODO: Implement fetch('/api/user/preferences', { method: 'PATCH', ... })
-  };
-
-  const handlePreferenceChange = (key: string, value: any, setter: Function) => {
-    setter(value);
-    syncPreference(key, value);
-  };
 
   const handleExport = async () => {
     setExportLoading(true);
@@ -717,7 +701,7 @@ export default function SettingsPage() {
                         </div>
                         <div>
                           <div className="text-[14px] font-bold text-black leading-tight">Theme</div>
-                          <div className="text-[13px] text-gray-500 font-medium mt-0.5">{theme}</div>
+                          <div className="text-[13px] text-gray-500 font-medium mt-0.5">{prefs.theme}</div>
                         </div>
                       </div>
                       <button 
@@ -739,15 +723,15 @@ export default function SettingsPage() {
                       <div className="overflow-hidden">
                         <div className="p-4 md:p-5 bg-white border-t border-gray-100/60 flex flex-wrap gap-2">
                           {['Light', 'Dark', 'System'].map((t) => (
-                            <button 
+                            <button
                               key={t}
                               onClick={() => {
-                                handlePreferenceChange('theme', t, setTheme);
+                                updatePreference('theme', t as 'Light' | 'Dark' | 'System');
                                 setIsEditingTheme(false);
                               }}
                               className={`flex-1 min-w-[80px] text-[12px] font-bold py-2.5 rounded-xl transition-all active:scale-95 border ${
-                                theme === t 
-                                  ? 'bg-black border-black text-white shadow-sm' 
+                                prefs.theme === t
+                                  ? 'bg-black border-black text-white shadow-sm'
                                   : 'bg-gray-50 border-gray-100 text-black hover:border-gray-200 hover:bg-gray-100'
                               }`}
                             >
@@ -769,7 +753,7 @@ export default function SettingsPage() {
                         <div>
                           <div className="text-[14px] font-bold text-black leading-tight">Market Colors</div>
                           <div className="text-[13px] text-gray-500 font-medium mt-0.5">
-                            {colorScheme === 'Emerald' ? 'Emerald Gains / Rose Losses' : 'Rose Gains / Emerald Losses'}
+                            {prefs.colorScheme === 'Emerald' ? 'Emerald Gains / Rose Losses' : 'Rose Gains / Emerald Losses'}
                           </div>
                         </div>
                       </div>
@@ -796,21 +780,21 @@ export default function SettingsPage() {
                             { id: 'Emerald', label: 'Emerald Gains', desc: 'Green for growth, Red for decline' },
                             { id: 'Rose', label: 'Rose Gains', desc: 'Red for growth, Green for decline' }
                           ].map((scheme) => (
-                            <button 
+                            <button
                               key={scheme.id}
                               onClick={() => {
-                                handlePreferenceChange('colorScheme', scheme.id, setColorScheme);
+                                updatePreference('colorScheme', scheme.id as 'Emerald' | 'Rose');
                                 setIsEditingColorScheme(false);
                               }}
                               className={`flex items-center justify-between px-4 py-3 rounded-xl transition-all active:scale-[0.98] border ${
-                                colorScheme === scheme.id 
-                                  ? 'bg-black border-black text-white shadow-sm' 
+                                prefs.colorScheme === scheme.id
+                                  ? 'bg-black border-black text-white shadow-sm'
                                   : 'bg-gray-50 border-gray-100 text-black hover:border-gray-200 hover:bg-gray-100'
                               }`}
                             >
                               <div className="flex flex-col items-start">
                                 <span className="text-[13px] font-bold">{scheme.label}</span>
-                                <span className={`text-[11px] font-medium ${colorScheme === scheme.id ? 'text-gray-300' : 'text-gray-400'}`}>
+                                <span className={`text-[11px] font-medium ${prefs.colorScheme === scheme.id ? 'text-gray-300' : 'text-gray-400'}`}>
                                   {scheme.desc}
                                 </span>
                               </div>
@@ -834,7 +818,7 @@ export default function SettingsPage() {
                         </div>
                         <div>
                           <div className="text-[14px] font-bold text-black leading-tight">Default Chart Type</div>
-                          <div className="text-[13px] text-gray-500 font-medium mt-0.5">{chartType}</div>
+                          <div className="text-[13px] text-gray-500 font-medium mt-0.5">{prefs.chartType}</div>
                         </div>
                       </div>
                       <button 
@@ -856,15 +840,15 @@ export default function SettingsPage() {
                       <div className="overflow-hidden">
                         <div className="p-4 md:p-5 bg-white border-t border-gray-100/60 flex flex-wrap gap-2">
                           {['Area', 'Line', 'Bar'].map((c) => (
-                            <button 
+                            <button
                               key={c}
                               onClick={() => {
-                                handlePreferenceChange('chartType', `${c} Chart`, setChartType);
+                                updatePreference('chartType', `${c} Chart` as 'Area Chart' | 'Line Chart' | 'Bar Chart');
                                 setIsEditingChartType(false);
                               }}
                               className={`flex-1 min-w-[80px] text-[12px] font-bold py-2.5 rounded-xl transition-all active:scale-95 border ${
-                                chartType.startsWith(c)
-                                  ? 'bg-black border-black text-white shadow-sm' 
+                                prefs.chartType.startsWith(c)
+                                  ? 'bg-black border-black text-white shadow-sm'
                                   : 'bg-gray-50 border-gray-100 text-black hover:border-gray-200 hover:bg-gray-100'
                               }`}
                             >
@@ -887,11 +871,11 @@ export default function SettingsPage() {
                         <div className="text-[12px] text-gray-400 font-medium mt-0.5">Hide holdings &lt; $10</div>
                       </div>
                     </div>
-                    <button 
-                      onClick={() => handlePreferenceChange('hideSmallBalances', !hideSmallBalances, setHideSmallBalances)}
-                      className={`w-10 h-5 ${hideSmallBalances ? 'bg-black' : 'bg-gray-200'} rounded-full relative transition-colors active:scale-90`}
+                    <button
+                      onClick={() => updatePreference('hideSmallBalances', !prefs.hideSmallBalances)}
+                      className={`w-10 h-5 ${prefs.hideSmallBalances ? 'bg-black' : 'bg-gray-200'} rounded-full relative transition-colors active:scale-90`}
                     >
-                      <div className={`absolute ${hideSmallBalances ? 'left-[22px]' : 'left-0.5'} top-0.5 w-4 h-4 bg-white rounded-full shadow-sm transition-all`}></div>
+                      <div className={`absolute ${prefs.hideSmallBalances ? 'left-[22px]' : 'left-0.5'} top-0.5 w-4 h-4 bg-white rounded-full shadow-sm transition-all`}></div>
                     </button>
                   </div>
                 </div>
@@ -911,11 +895,11 @@ export default function SettingsPage() {
                         <div className="text-[12px] text-gray-400 font-medium mt-0.5">Faster updates</div>
                       </div>
                     </div>
-                    <button 
-                      onClick={() => handlePreferenceChange('realTimeSync', !realTimeSync, setRealTimeSync)}
-                      className={`w-10 h-5 ${realTimeSync ? 'bg-black' : 'bg-gray-200'} rounded-full relative transition-colors active:scale-90`}
+                    <button
+                      onClick={() => updatePreference('realTimeSync', !prefs.realTimeSync)}
+                      className={`w-10 h-5 ${prefs.realTimeSync ? 'bg-black' : 'bg-gray-200'} rounded-full relative transition-colors active:scale-90`}
                     >
-                      <div className={`absolute ${realTimeSync ? 'left-[22px]' : 'left-0.5'} top-0.5 w-4 h-4 bg-white rounded-full shadow-sm transition-all`}></div>
+                      <div className={`absolute ${prefs.realTimeSync ? 'left-[22px]' : 'left-0.5'} top-0.5 w-4 h-4 bg-white rounded-full shadow-sm transition-all`}></div>
                     </button>
                   </div>
                 </div>
