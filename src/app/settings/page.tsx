@@ -1086,7 +1086,7 @@ export default function SettingsPage() {
                   </div>
 
                   {/* Access Control */}
-                  <div className="space-y-4">
+                  <div className="space-y-4 select-none">
                     <h3 className="text-[11px] font-bold text-gray-400 uppercase tracking-[0.1em] pl-1">Access Control</h3>
                     <div className="bg-gray-50/50 rounded-2xl border border-gray-100 overflow-hidden">
                       <div className="px-4 md:px-5 py-4 flex items-center justify-between border-b border-gray-100">
@@ -1104,7 +1104,7 @@ export default function SettingsPage() {
                   </div>
 
                   {/* API Management */}
-                  <div className="space-y-4">
+                  <div className="space-y-4 select-none">
                     <h3 className="text-[11px] font-bold text-gray-400 uppercase tracking-[0.1em] pl-1">API Management</h3>
                     <div className="bg-gray-50/50 rounded-2xl border border-gray-100 overflow-hidden">
                       <div className="px-4 md:px-5 py-4 flex items-center justify-between">

@@ -163,7 +163,7 @@ export default function PasskeySection({ user }: PasskeySectionProps) {
   }
 
   return (
-    <>
+    <div className="select-none">
       {/* Main Row */}
       <div className="px-4 md:px-5 py-4 flex items-center justify-between">
         <div className="flex items-center space-x-3 md:space-x-4">
@@ -193,11 +193,8 @@ export default function PasskeySection({ user }: PasskeySectionProps) {
               setError(null);
             }
           }}
-          className={`text-[12px] md:text-[13px] font-bold px-3 py-1.5 rounded-lg transition-colors shadow-sm active:scale-95 border ${
-            isEditOpen || isAddingNew
-              ? 'bg-gray-100 border-gray-200 text-gray-700'
-              : 'bg-white border-gray-100 text-black hover:bg-gray-100'
-          }`}
+          className="text-[12px] md:text-[13px] font-bold px-3 py-1.5 rounded-lg transition-colors shadow-sm active:scale-95 border bg-white border-gray-100 text-black hover:bg-gray-100 data-[active=true]:bg-gray-100 data-[active=true]:border-gray-200 data-[active=true]:text-gray-700"
+          data-active={isEditOpen || isAddingNew}
         >
           {isAddingNew ? 'Cancel' : !hasPasskeys ? 'Enable' : isEditOpen ? 'Done' : 'Edit'}
         </button>
@@ -208,7 +205,7 @@ export default function PasskeySection({ user }: PasskeySectionProps) {
         <div className="overflow-hidden">
           <div className="px-4 md:px-5 pb-4 pt-1 bg-white border-t border-gray-100/60 space-y-4">
             {error && (
-              <div className="p-3 bg-rose-50 border border-rose-100 rounded-xl flex items-start gap-3">
+              <div className="p-3 bg-rose-50 border border-rose-100 rounded-xl flex items-start gap-3 select-text">
                 <AlertCircle className="w-4 h-4 text-rose-500 shrink-0 mt-0.5" />
                 <p className="text-[13px] text-rose-600 font-medium leading-tight">{error}</p>
               </div>
@@ -224,14 +221,14 @@ export default function PasskeySection({ user }: PasskeySectionProps) {
                 onChange={(e) => setNewPasskeyName(e.target.value)}
                 onKeyDown={(e) => e.key === 'Enter' && handleRegister()}
                 placeholder="e.g., MacBook Pro, iPhone 15"
-                className="w-full px-4 py-2.5 bg-gray-50/50 rounded-xl text-[14px] text-black font-medium border border-gray-200 focus:border-black focus:ring-1 focus:ring-black outline-none transition-all placeholder:text-gray-400"
+                className="w-full px-4 py-2.5 bg-gray-50/50 rounded-xl text-[14px] text-black font-medium border border-gray-200 focus:border-black focus:ring-1 focus:ring-black outline-none transition-all placeholder:text-gray-400 select-text"
               />
             </div>
             <div className="flex gap-2">
               <button
                 onClick={handleRegister}
                 disabled={isRegistering || !newPasskeyName.trim()}
-                className="w-full bg-black text-white text-[13px] font-bold py-2.5 rounded-xl hover:bg-gray-800 transition-colors active:scale-[0.98] disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2 shadow-sm"
+                className="w-full bg-black text-white text-[13px] font-bold py-2.5 rounded-xl hover:bg-gray-800 transition-colors active:scale-[0.98] disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2 shadow-sm select-none touch-manipulation"
               >
                 {isRegistering && <Loader2 className="w-4 h-4 animate-spin" />}
                 {isRegistering ? 'Setting up...' : 'Register Passkey'}
@@ -307,7 +304,7 @@ export default function PasskeySection({ user }: PasskeySectionProps) {
                       onChange={(e) => setNewPasskeyName(e.target.value)}
                       onKeyDown={(e) => e.key === 'Enter' && handleRegister()}
                       placeholder="e.g., MacBook Pro, iPhone 15"
-                      className="w-full px-4 py-2.5 bg-gray-50/50 rounded-xl text-[14px] text-black font-medium border border-gray-200 focus:border-black focus:ring-1 focus:ring-black outline-none transition-all placeholder:text-gray-400"
+                      className="w-full px-4 py-2.5 bg-gray-50/50 rounded-xl text-[14px] text-black font-medium border border-gray-200 focus:border-black focus:ring-1 focus:ring-black outline-none transition-all placeholder:text-gray-400 select-text"
                     />
                   </div>
                   <div className="flex gap-2">
@@ -320,12 +317,11 @@ export default function PasskeySection({ user }: PasskeySectionProps) {
                     <button
                       onClick={handleRegister}
                       disabled={isRegistering || !newPasskeyName.trim()}
-                      className="flex-1 bg-black text-white text-[13px] font-bold py-2.5 rounded-xl hover:bg-gray-800 transition-colors active:scale-[0.98] disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2 shadow-sm"
+                      className="flex-1 bg-black text-white text-[13px] font-bold py-2.5 rounded-xl hover:bg-gray-800 transition-colors active:scale-[0.98] disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2 shadow-sm select-none touch-manipulation"
                     >
                       {isRegistering && <Loader2 className="w-4 h-4 animate-spin" />}
                       {isRegistering ? 'Setting up...' : 'Register Passkey'}
-                    </button>
-                  </div>
+                    </button>                  </div>
                 </div>
               )}
             </div>
@@ -333,6 +329,6 @@ export default function PasskeySection({ user }: PasskeySectionProps) {
           </div>
         </div>
       </div>
-    </>
+    </div>
   );
 }
