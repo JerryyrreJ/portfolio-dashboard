@@ -73,6 +73,10 @@ export default function SettingsPage() {
   const [isEditingTheme, setIsEditingTheme] = useState(false);
   const [isEditingChartType, setIsEditingChartType] = useState(false);
   const [isEditingColorScheme, setIsEditingColorScheme] = useState(false);
+  const [isExporting, setIsExporting] = useState(false);
+  const [exportRange, setExportRange] = useState('all');
+  const [exportFormat, setExportFormat] = useState('csv');
+  const [exportLoading, setExportLoading] = useState(false);
 
   // Sync Preferences to Backend (Placeholder)
   const syncPreference = async (key: string, value: any) => {
@@ -83,6 +87,38 @@ export default function SettingsPage() {
   const handlePreferenceChange = (key: string, value: any, setter: Function) => {
     setter(value);
     syncPreference(key, value);
+  };
+
+  const handleExport = async () => {
+    setExportLoading(true);
+    try {
+      if (exportFormat === 'pdf') {
+        // Simple print-based PDF export for now to ensure consistency
+        window.print();
+        showNotification('success', 'PDF Ready', 'Please use the print dialog to save as PDF.');
+        setIsExporting(false);
+      } else {
+        const response = await fetch(`/api/transactions/export?format=${exportFormat}&range=${exportRange}`);
+        if (!response.ok) throw new Error('Export failed');
+        
+        const blob = await response.blob();
+        const url = window.URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `portfolio_transactions_${exportRange}.${exportFormat}`;
+        document.body.appendChild(a);
+        a.click();
+        window.URL.revokeObjectURL(url);
+        document.body.removeChild(a);
+        
+        showNotification('success', 'Export Complete', `Your data has been downloaded as ${exportFormat.toUpperCase()}.`);
+        setIsExporting(false);
+      }
+    } catch (error: any) {
+      showNotification('error', 'Export Failed', error.message || 'We could not export your data.');
+    } finally {
+      setExportLoading(false);
+    }
   };
 
   // Global Notification State
@@ -561,15 +597,101 @@ export default function SettingsPage() {
               <div className="space-y-4">
                 <h3 className="text-[11px] font-bold text-gray-400 uppercase tracking-[0.1em] pl-1">Data Management</h3>
                 <div className="bg-gray-50/50 rounded-2xl border border-gray-100 overflow-hidden">
-                  <div className="px-5 py-4 flex items-center justify-between">
+                  <div className="px-5 py-4 flex items-center justify-between group/item transition-colors duration-300">
                     <div className="flex items-center space-x-4">
-                      <div className="w-8 h-8 rounded-lg bg-white border border-gray-100 shadow-sm flex items-center justify-center"><Download className="w-4 h-4 text-gray-400" /></div>
+                      <div className={`w-8 h-8 rounded-lg bg-white border border-gray-100 shadow-sm flex items-center justify-center transition-all duration-300 ${isExporting ? 'scale-110 border-gray-200 ring-4 ring-black/5' : 'group-hover/item:border-gray-200'}`}>
+                        <Download className={`w-4 h-4 transition-colors duration-300 ${isExporting ? 'text-black' : 'text-gray-400 group-hover/item:text-black'}`} />
+                      </div>
                       <div>
                         <div className="text-[14px] font-bold text-black leading-tight">Export Data</div>
-                        <div className="text-[12px] text-gray-400 font-medium mt-0.5">Download all history as CSV</div>
+                        <div className="text-[12px] text-gray-400 font-medium mt-0.5">Download your transaction history</div>
                       </div>
                     </div>
-                    <button className="text-[13px] font-bold text-black border border-gray-100 bg-white hover:bg-gray-100 px-3 py-1.5 rounded-lg transition-colors shadow-sm active:scale-95">Export</button>
+                    <button 
+                      onClick={() => setIsExporting(!isExporting)}
+                      className={`text-[13px] font-bold px-3 py-1.5 rounded-lg transition-colors shadow-sm active:scale-95 border ${
+                        isExporting
+                          ? 'bg-gray-100 border-gray-200 text-gray-700'
+                          : 'bg-white border-gray-100 text-black hover:bg-gray-100'
+                      }`}
+                    >
+                      {isExporting ? 'Cancel' : 'Export'}
+                    </button>
+                  </div>
+
+                  {/* Expandable Export Drawer */}
+                  <div className={`grid transition-all duration-300 ease-in-out ${isExporting ? 'grid-rows-[1fr] opacity-100' : 'grid-rows-[0fr] opacity-0'}`}>
+                    <div className="overflow-hidden">
+                      <div className="p-5 bg-white border-t border-gray-100/60 space-y-6">
+                        {/* Range Selection */}
+                        <div className="space-y-3">
+                          <label className="text-[11px] font-bold text-gray-400 uppercase tracking-[0.1em]">Time Range</label>
+                          <div className="grid grid-cols-3 gap-2">
+                            {[
+                              { id: 'all', label: 'All Time' },
+                              { id: 'ytd', label: 'Year to Date' },
+                              { id: '12m', label: 'Past 12M' }
+                            ].map((range) => (
+                              <button
+                                key={range.id}
+                                onClick={() => setExportRange(range.id)}
+                                className={`px-3 py-2 rounded-xl border text-[12px] font-bold transition-all ${
+                                  exportRange === range.id
+                                    ? 'border-black bg-black text-white shadow-sm'
+                                    : 'border-gray-200 bg-white text-gray-500 hover:border-gray-300 hover:bg-gray-50'
+                                }`}
+                              >
+                                {range.label}
+                              </button>
+                            ))}
+                          </div>
+                        </div>
+
+                        {/* Format Selection */}
+                        <div className="space-y-3">
+                          <label className="text-[11px] font-bold text-gray-400 uppercase tracking-[0.1em]">File Format</label>
+                          <div className="grid grid-cols-3 gap-2">
+                            {[
+                              { id: 'csv', label: 'CSV', sub: 'Excel / Sheets' },
+                              { id: 'json', label: 'JSON', sub: 'Developer' },
+                              { id: 'pdf', label: 'PDF', sub: 'Tax / Report' }
+                            ].map((format) => (
+                              <button
+                                key={format.id}
+                                onClick={() => setExportFormat(format.id)}
+                                className={`px-3 py-2 rounded-xl border text-[12px] transition-all flex flex-col items-center justify-center gap-0.5 ${
+                                  exportFormat === format.id
+                                    ? 'border-black bg-black text-white shadow-sm'
+                                    : 'border-gray-200 bg-white text-gray-500 hover:border-gray-300 hover:bg-gray-50'
+                                }`}
+                              >
+                                <span className="font-bold">{format.label}</span>
+                                <span className={`text-[9px] ${exportFormat === format.id ? 'text-gray-400' : 'text-gray-400'}`}>{format.sub}</span>
+                              </button>
+                            ))}
+                          </div>
+                        </div>
+
+                        {/* Action Button */}
+                        <button
+                          onClick={handleExport}
+                          disabled={exportLoading}
+                          className="w-full bg-black text-white text-[13px] font-bold py-2.5 rounded-xl hover:bg-gray-800 transition-colors active:scale-[0.98] disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2 shadow-sm"
+                        >
+                          {exportLoading ? (
+                            <>
+                              <Loader2 className="w-4 h-4 animate-spin" />
+                              <span>Preparing...</span>
+                            </>
+                          ) : (
+                            <>
+                              <Download className="w-4 h-4" />
+                              <span>Download {exportFormat.toUpperCase()}</span>
+                            </>
+                          )}
+                        </button>
+                      </div>
+                    </div>
                   </div>
                 </div>
               </div>
