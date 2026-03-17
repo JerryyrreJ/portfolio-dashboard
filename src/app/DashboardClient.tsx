@@ -22,7 +22,6 @@ import {
   Wallet,
   ArrowUpRight,
   ArrowDownRight,
-  User,
   History as HistoryIcon
 } from 'lucide-react';
 import AddTransactionModal from './components/AddTransactionModal';
@@ -87,6 +86,7 @@ interface DashboardClientProps {
   holdingsData: HoldingsGroup[];
   chartData: any[];
   summary: Summary;
+  userDisplayName?: string;
 }
 
 // 颜色配置 - 雅致但不沉闷的 Apple 风格色彩
@@ -97,11 +97,13 @@ const MARKET_COLORS: Record<string, { stroke: string; fill: string; dot: string 
   'Other': { stroke: '#AF52DE', fill: 'rgba(175, 82, 222, 0.1)', dot: 'bg-[#AF52DE]' }  // Apple Purple (Used sparingly)
 };
 
-export default function DashboardClient({ portfolioId, portfolioName, holdingsData, chartData, summary }: DashboardClientProps) {
+export default function DashboardClient({ portfolioId, portfolioName, holdingsData, chartData, summary, userDisplayName = '' }: DashboardClientProps) {
   const router = useRouter();
   const { symbol, convert, fmt } = useCurrency();
   const { colors } = usePreferences();
   const [isModalOpen, setIsModalOpen] = useState(false);
+  const [userInitial] = useState<string>(userDisplayName[0]?.toUpperCase() || '');
+  const [displayName] = useState<string>(userDisplayName);
 
   // 搜索栏状态
   const [showMobileSearch, setShowMobileSearch] = useState(false);
@@ -331,14 +333,14 @@ export default function DashboardClient({ portfolioId, portfolioName, holdingsDa
             </Link>
 
             {/* Account Link - Direct navigation to settings */}
-            <Link 
+            <Link
               href="/settings"
               className="flex items-center space-x-2.5 group transition-all"
             >
-              <div className="w-7 h-7 rounded-full bg-gray-100 border border-gray-200 flex items-center justify-center text-gray-500 group-hover:border-gray-400 group-hover:text-black transition-colors shadow-sm overflow-hidden">
-                <User className="w-4 h-4" />
+              <div className="w-7 h-7 rounded-full bg-black text-white flex items-center justify-center font-bold text-[12px] group-hover:bg-gray-800 transition-colors shadow-sm shrink-0">
+                {userInitial}
               </div>
-              <span className="text-[13px] font-bold text-gray-500 group-hover:text-black transition-colors hidden sm:block">Account</span>
+              <span className="text-[13px] font-bold text-gray-500 group-hover:text-black transition-colors hidden sm:block">{displayName}</span>
             </Link>
           </div>
         </div>

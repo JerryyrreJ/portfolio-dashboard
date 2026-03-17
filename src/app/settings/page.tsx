@@ -44,6 +44,10 @@ export default function SettingsPage() {
   const supabase = createClient();
   const { prefs, updatePreference } = usePreferences();
 
+  // Display name edit state
+  const [isEditingDisplayName, setIsEditingDisplayName] = useState(false);
+  const [newDisplayName, setNewDisplayName] = useState('');
+
   // Inline edit states
   const [isEditingEmail, setIsEditingEmail] = useState(false);
   const [isEditingPassword, setIsEditingPassword] = useState(false);
@@ -277,6 +281,26 @@ export default function SettingsPage() {
       showNotification('error', 'Update Failed', err.message || 'We could not save your changes.');
     } finally {
       setPortfolioActionLoading(false);
+    }
+  };
+
+  const handleUpdateDisplayName = async (e: React.FormEvent) => {
+    e.preventDefault();
+    const trimmed = newDisplayName.trim();
+    if (!trimmed || trimmed === (user?.user_metadata?.display_name || user?.email?.split('@')[0])) return;
+    setAuthActionLoading(true);
+    setAuthError(null);
+    try {
+      const { data, error } = await supabase.auth.updateUser({ data: { display_name: trimmed } });
+      if (error) throw error;
+      setUser(data.user);
+      setIsEditingDisplayName(false);
+      showNotification('success', 'Name Updated', 'Your display name has been updated.');
+    } catch (err: any) {
+      setAuthError(err.message || 'Failed to update display name');
+      showNotification('error', 'Update Failed', err.message || 'Failed to update your display name.');
+    } finally {
+      setAuthActionLoading(false);
     }
   };
 
@@ -978,14 +1002,16 @@ export default function SettingsPage() {
                       <div className="flex flex-col sm:flex-row sm:items-center justify-between p-4 bg-gray-50/50 rounded-2xl border border-gray-100 gap-4 sm:gap-0">
                         <div className="flex items-center space-x-3 md:space-x-4">
                           <div className="w-10 h-10 md:w-12 md:h-12 rounded-full bg-black text-white flex items-center justify-center font-bold text-base md:text-lg shrink-0">
-                            {user?.email?.[0].toUpperCase()}
+                            {(user?.user_metadata?.display_name || user?.email)?.[0]?.toUpperCase()}
                           </div>
                           <div className="min-w-0">
-                            <div className="text-[14px] md:text-[15px] font-bold text-black truncate">{user?.email?.split('@')[0]}</div>
+                            <div className="text-[14px] md:text-[15px] font-bold text-black truncate">
+                              {user?.user_metadata?.display_name || user?.email?.split('@')[0]}
+                            </div>
                             <div className="text-[12px] md:text-[13px] text-gray-500 font-medium truncate">{user?.email}</div>
                           </div>
                         </div>
-                        <button 
+                        <button
                           onClick={handleSignOut}
                           className="w-full sm:w-auto flex items-center justify-center space-x-2 text-[13px] font-bold text-rose-500 border border-rose-100/50 bg-rose-50/30 hover:bg-rose-50 px-4 py-2 rounded-xl transition-all shadow-sm active:scale-95 group"
                         >
@@ -1034,7 +1060,73 @@ export default function SettingsPage() {
                   <div className="space-y-4">
                     <h3 className="text-[11px] font-bold text-gray-400 uppercase tracking-[0.1em] pl-1">Login Credentials</h3>
                     <div className="bg-gray-50/50 rounded-2xl border border-gray-100 overflow-hidden transition-all duration-300">
-                      
+
+                      {/* Display Name Row */}
+                      <div className="border-b border-gray-100 bg-white sm:bg-transparent">
+                        <div className="px-4 md:px-5 py-4 flex items-center justify-between">
+                          <div className="flex items-center space-x-3 md:space-x-4 min-w-0 mr-3">
+                            <div className={`w-8 h-8 rounded-lg bg-white border border-gray-100 shadow-sm flex items-center justify-center shrink-0 transition-all duration-300 ${isEditingDisplayName ? 'scale-110 border-gray-200 ring-4 ring-black/5' : ''}`}>
+                              <UserCircle className={`w-4 h-4 transition-colors duration-300 ${isEditingDisplayName ? 'text-black' : 'text-gray-400'}`} />
+                            </div>
+                            <div className="min-w-0">
+                              <div className="text-[14px] font-bold text-black leading-tight">Display Name</div>
+                              <div className="text-[12px] md:text-[13px] text-gray-500 font-medium mt-0.5 truncate">
+                                {user?.user_metadata?.display_name || user?.email?.split('@')[0]}
+                              </div>
+                            </div>
+                          </div>
+                          <button
+                            onClick={() => {
+                              setNewDisplayName(user?.user_metadata?.display_name || user?.email?.split('@')[0] || '');
+                              setIsEditingDisplayName(!isEditingDisplayName);
+                              setIsEditingEmail(false);
+                              setIsEditingPassword(false);
+                              setAuthError(null);
+                            }}
+                            className={`shrink-0 text-[12px] md:text-[13px] font-bold px-3 py-1.5 rounded-lg transition-colors shadow-sm active:scale-95 border ${
+                              isEditingDisplayName
+                                ? 'bg-gray-100 border-gray-200 text-gray-700'
+                                : 'bg-white border-gray-100 text-black hover:bg-gray-100'
+                            }`}
+                          >
+                            {isEditingDisplayName ? 'Cancel' : 'Change'}
+                          </button>
+                        </div>
+                        <div className={`grid transition-all duration-300 ease-in-out ${isEditingDisplayName ? 'grid-rows-[1fr] opacity-100' : 'grid-rows-[0fr] opacity-0'}`}>
+                          <div className="overflow-hidden">
+                            <div className="p-4 md:p-5 bg-white border-t border-gray-100/60 space-y-4">
+                              <form onSubmit={handleUpdateDisplayName} className="space-y-4">
+                                <div>
+                                  <label className="block text-[11px] font-bold text-gray-400 uppercase tracking-wider mb-2">New Display Name</label>
+                                  <input
+                                    type="text"
+                                    required
+                                    value={newDisplayName}
+                                    onChange={(e) => setNewDisplayName(e.target.value)}
+                                    placeholder="Enter your display name"
+                                    className="w-full px-4 py-2.5 bg-gray-50/50 rounded-xl text-[14px] text-black font-medium border border-gray-200 focus:border-black focus:ring-1 focus:ring-black outline-none transition-all placeholder:text-gray-400"
+                                  />
+                                </div>
+                                {authError && isEditingDisplayName && (
+                                  <div className="p-3 bg-rose-50 border border-rose-100 rounded-xl flex items-start gap-3">
+                                    <AlertCircle className="w-4 h-4 text-rose-500 shrink-0 mt-0.5" />
+                                    <p className="text-[13px] text-rose-600 font-medium leading-tight">{authError}</p>
+                                  </div>
+                                )}
+                                <button
+                                  type="submit"
+                                  disabled={authActionLoading || !newDisplayName.trim()}
+                                  className="w-full bg-black text-white text-[13px] font-bold py-2.5 rounded-xl hover:bg-gray-800 transition-colors active:scale-[0.98] disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2 shadow-sm"
+                                >
+                                  {authActionLoading && isEditingDisplayName && <Loader2 className="w-4 h-4 animate-spin" />}
+                                  {authActionLoading && isEditingDisplayName ? 'Updating...' : 'Update Name'}
+                                </button>
+                              </form>
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+
                       {/* Email Row */}
                       <div className="border-b border-gray-100 bg-white sm:bg-transparent">
                         <div className="px-4 md:px-5 py-4 flex items-center justify-between">
@@ -1051,6 +1143,7 @@ export default function SettingsPage() {
                             onClick={() => {
                               setIsEditingEmail(!isEditingEmail);
                               setIsEditingPassword(false);
+                              setIsEditingDisplayName(false);
                               setAuthError(null);
                               setEmailSuccess(false);
                               setNewEmail('');
@@ -1117,6 +1210,7 @@ export default function SettingsPage() {
                             onClick={() => {
                               setIsEditingPassword(!isEditingPassword);
                               setIsEditingEmail(false);
+                              setIsEditingDisplayName(false);
                               setAuthError(null);
                               setPasswordSuccess(false);
                               setNewPassword('');

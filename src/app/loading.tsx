@@ -1,5 +1,5 @@
 import React from 'react';
-import { Search, User, TrendingUp, Plus, RefreshCw } from 'lucide-react';
+import { Search, TrendingUp } from 'lucide-react';
 
 export default function DashboardLoading() {
   return (
@@ -24,10 +24,8 @@ export default function DashboardLoading() {
             <div className="bg-gray-100 rounded-lg h-8 w-44"></div>
           </div>
           <div className="flex items-center space-x-2.5">
-            <div className="w-7 h-7 rounded-full bg-gray-100 border border-gray-200 flex items-center justify-center text-gray-400">
-              <User className="w-4 h-4" />
-            </div>
-            <span className="text-[13px] font-bold text-gray-400 hidden sm:block">Account</span>
+            <div className="w-7 h-7 rounded-full bg-gray-200 animate-pulse"></div>
+            <div className="h-3 w-16 bg-gray-200 rounded animate-pulse hidden sm:block"></div>
           </div>
         </div>
       </header>

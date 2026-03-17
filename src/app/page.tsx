@@ -77,6 +77,9 @@ async function fetchBatchQuotes(assets: any[]): Promise<Record<string, number>> 
 
 export default async function Page() {
   const user = await getUser()
+  const userDisplayName = user
+    ? (user.user_metadata?.display_name || user.email?.split('@')[0] || '')
+    : ''
 
   // 未登录：返回空状态，完全不查 DB
   if (!user) {
@@ -120,6 +123,7 @@ export default async function Page() {
         holdingsData={[]}
         chartData={[]}
         summary={{ totalValue: 0, totalCapGain: 0, totalCapGainPercentage: 0 }}
+        userDisplayName={userDisplayName}
       />
     )
   }
@@ -319,6 +323,7 @@ export default async function Page() {
       holdingsData={holdingsData}
       chartData={chartData}
       summary={summary}
+      userDisplayName={userDisplayName}
     />
   );
 }
