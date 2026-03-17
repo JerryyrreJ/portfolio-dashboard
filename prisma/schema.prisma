@@ -55,9 +55,9 @@ model Transaction {
   exchangeRate Float     @default(1)
   fee          Float     @default(0)
   currency     String    @default("USD")
-  notes        String?
   createdAt    DateTime  @default(now())
   updatedAt    DateTime  @updatedAt
+  notes        String?
   asset        Asset     @relation(fields: [assetId], references: [id])
   portfolio    Portfolio @relation(fields: [portfolioId], references: [id], onDelete: Cascade)
 }

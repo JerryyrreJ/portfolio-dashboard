@@ -4,7 +4,6 @@ import React, { useState, useCallback, useEffect, useRef } from 'react';
 import { X, Search as SearchIcon, Loader2, TrendingUp, TrendingDown, Calendar as CalendarIcon, DollarSign, AlertCircle, CheckCircle, ChevronRight, Hash, ChevronLeft, ChevronDown } from 'lucide-react';
 import { format, addMonths, subMonths, startOfMonth, endOfMonth, startOfWeek, endOfWeek, isSameMonth, isSameDay, addDays, eachDayOfInterval } from 'date-fns';
 import { useStock } from '@/hooks/useStock';
-import { useCurrency } from '@/lib/useCurrency';
 import { getCurrencySymbol } from '@/lib/currency';
 
 function inferCurrencyFromTicker(symbol: string): string {
@@ -58,7 +57,6 @@ export default function AddTransactionModal({
   defaultTickerName,
 }: AddTransactionModalProps) {
   const { searchStock, getQuote, getHistoricalPrice, isLoading } = useStock();
-  const { rates } = useCurrency();
   const calendarRef = useRef<HTMLDivElement>(null);
 
   // 表单状态
@@ -264,7 +262,7 @@ export default function AddTransactionModal({
             portfolioId: 'local-portfolio',
             assetId: 'local_asset_' + selectedStock.symbol,
             type: transactionType,
-            quantity: transactionType === 'SELL' ? -Math.abs(parseFloat(shares)) : parseFloat(shares),
+            quantity: Math.abs(parseFloat(shares)),
             price: parseFloat(price),
             fee: parseFloat(fees) || 0,
             date: new Date(purchaseDate).toISOString(),
@@ -316,9 +314,6 @@ export default function AddTransactionModal({
         assetId = newAsset.asset?.id ?? newAsset.id;
       }
 
-      const rate = rates[txCurrency] ?? 1;
-      const priceUSD = parseFloat(price) / rate;
-
       const response = await fetch('/api/transactions', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -326,14 +321,12 @@ export default function AddTransactionModal({
           portfolioId,
           assetId,
           type: transactionType,
-          quantity: transactionType === 'SELL' ? -Math.abs(parseFloat(shares)) : parseFloat(shares),
+          quantity: Math.abs(parseFloat(shares)),
           price: parseFloat(price),
           fee: parseFloat(fees) || 0,
           date: purchaseDate,
           notes: notes || null,
           currency: txCurrency,
-          exchangeRate: rate,
-          priceUSD,
         }),
       });
 

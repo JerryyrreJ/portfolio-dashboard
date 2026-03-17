@@ -5,7 +5,7 @@ import { format } from 'date-fns';
 import Link from 'next/link';
 import Image from 'next/image';
 import {
-  Filter, Download, TrendingUp, Search, ChevronRight, Edit2, Trash2, User, Check, X
+  Filter, Download, TrendingUp, Search, ChevronRight, Edit2, Trash2, Check, X
 } from 'lucide-react';
 import { useCurrency } from '@/lib/useCurrency';
 import { getCurrencySymbol } from '@/lib/currency';
@@ -51,6 +51,7 @@ interface TransactionsClientProps {
   buyCount: number;
   sellCount: number;
   totalVolume: number;
+  userDisplayName?: string;
 }
 
 function EmptyState() {
@@ -74,7 +75,7 @@ function formatNumber(num: number, decimals: number = 4): string {
 export default function TransactionsClient({
   transactions: initialTransactions, total, totalPages, currentPage, limit,
   portfolioName, logoMap, searchTicker, searchType,
-  buyCount, sellCount, totalVolume,
+  buyCount, sellCount, totalVolume, userDisplayName = '',
 }: TransactionsClientProps) {
   const { fmt, symbol } = useCurrency();
   const { colors } = usePreferences();
@@ -106,9 +107,7 @@ export default function TransactionsClient({
     if (!editState) return;
     setIsSaving(true);
     const prev = transactions;
-    const quantity = tx.type === 'SELL'
-      ? -Math.abs(parseFloat(editState.quantity))
-      : parseFloat(editState.quantity);
+    const quantity = parseFloat(editState.quantity);
     // Optimistic update
     setTransactions(ts => ts.map(t => t.id === tx.id
       ? { ...t, date: new Date(editState.date), quantity, price: parseFloat(editState.price), fee: parseFloat(editState.fee), notes: editState.notes || null }
@@ -182,10 +181,10 @@ export default function TransactionsClient({
             href="/settings"
             className="flex items-center space-x-2.5 group transition-all"
           >
-            <div className="w-7 h-7 rounded-full bg-gray-100 border border-gray-200 flex items-center justify-center text-gray-500 group-hover:border-gray-400 group-hover:text-black transition-colors shadow-sm overflow-hidden">
-              <User className="w-4 h-4" />
+            <div className="w-7 h-7 rounded-full bg-black text-white flex items-center justify-center font-bold text-[12px] group-hover:bg-gray-800 transition-colors shadow-sm shrink-0">
+              {userDisplayName[0]?.toUpperCase()}
             </div>
-            <span className="text-[13px] font-bold text-gray-500 group-hover:text-black transition-colors hidden sm:block">Account</span>
+            <span className="text-[13px] font-bold text-gray-500 group-hover:text-black transition-colors hidden sm:block">{userDisplayName}</span>
           </Link>
         </div>
       </header>
@@ -291,10 +290,10 @@ export default function TransactionsClient({
                           <p className="text-[13px] font-semibold text-black tabular-nums">{formatNumber(transaction.quantity)}</p>
                         </td>
                         <td className="px-6 py-4 whitespace-nowrap text-right">
-                          <p className="text-[13px] font-medium text-gray-600 tabular-nums">{fmt(transaction.priceUSD ?? transaction.price)}</p>
+                          <p className="text-[13px] font-medium text-gray-600 tabular-nums">{fmt(transaction.priceUSD || transaction.price)}</p>
                         </td>
                         <td className="px-6 py-4 whitespace-nowrap text-right">
-                          <p className="text-[14px] font-bold text-black tabular-nums">{fmt((transaction.priceUSD ?? transaction.price) * Math.abs(transaction.quantity))}</p>
+                          <p className="text-[14px] font-bold text-black tabular-nums">{fmt((transaction.priceUSD || transaction.price) * Math.abs(transaction.quantity))}</p>
                           {transaction.fee > 0 && (
                             <p className="text-[10px] text-gray-400 font-medium">Fee: {getCurrencySymbol(transaction.currency ?? 'USD')}{transaction.fee.toFixed(2)}</p>
                           )}
@@ -453,7 +452,7 @@ export default function TransactionsClient({
                         </div>
                       </div>
                       <div className="text-right">
-                        <p className="text-[15px] font-bold text-black tabular-nums">{fmt((transaction.priceUSD ?? transaction.price) * Math.abs(transaction.quantity))}</p>
+                        <p className="text-[15px] font-bold text-black tabular-nums">{fmt((transaction.priceUSD || transaction.price) * Math.abs(transaction.quantity))}</p>
                         <p className="text-[12px] text-gray-400 font-medium tabular-nums">{formatNumber(transaction.quantity)} shares</p>
                       </div>
                     </div>

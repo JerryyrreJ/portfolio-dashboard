@@ -214,8 +214,13 @@ export default function DashboardClient({ portfolioId, portfolioName, holdingsDa
           current.qty += t.quantity;
           current.cost += (t.price * t.quantity) + t.fee;
         } else if (t.type === 'SELL') {
-          current.qty -= Math.abs(t.quantity);
-          current.cost -= (t.price * Math.abs(t.quantity)) - t.fee;
+          const avgCost = current.qty > 0 ? current.cost / current.qty : 0;
+          current.qty -= t.quantity;
+          current.cost -= avgCost * t.quantity;
+          if (current.qty <= 0) {
+            current.qty = 0;
+            current.cost = 0;
+          }
         }
       }
 

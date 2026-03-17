@@ -69,11 +69,12 @@ export async function GET(request: NextRequest) {
         current.quantity += t.quantity;
         current.totalCost += (t.price * t.quantity) + t.fee;
       } else if (t.type === 'SELL') {
-        current.quantity += t.quantity; // SELL 的 quantity 已经是负数
-        // 按比例扣除成本
-        if (current.quantity + Math.abs(t.quantity) > 0) {
-          const ratio = Math.abs(t.quantity) / (current.quantity + Math.abs(t.quantity));
-          current.totalCost -= current.totalCost * ratio;
+        const avgCost = current.quantity > 0 ? current.totalCost / current.quantity : 0;
+        current.quantity -= t.quantity;
+        current.totalCost -= avgCost * t.quantity;
+        if (current.quantity <= 0) {
+          current.quantity = 0;
+          current.totalCost = 0;
         }
       }
 

@@ -120,6 +120,10 @@ export default async function TransactionsPage(props: {
   const sellCount = transactions.filter(t => t.type === 'SELL').length;
   const totalVolume = transactions.reduce((sum, t) => sum + (t.price * t.quantity), 0);
 
+  const userDisplayName = user
+    ? (user.user_metadata?.display_name || user.email?.split('@')[0] || '')
+    : ''
+
   return (
     <TransactionsClient
       transactions={transactions}
@@ -134,6 +138,7 @@ export default async function TransactionsPage(props: {
       buyCount={buyCount}
       sellCount={sellCount}
       totalVolume={totalVolume}
+      userDisplayName={userDisplayName}
     />
   );
 }
