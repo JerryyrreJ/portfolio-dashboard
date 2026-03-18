@@ -1,7 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
 import prisma from '@/lib/prisma';
-import { getQuote, getCompanyProfile, getBasicFinancials } from '@/lib/finnhub';
-import { get12MonthHistory } from '@/lib/twelvedata';
+import { getCompanyProfile, getBasicFinancials } from '@/lib/finnhub';
+import { getQuote as getTDQuote, get12MonthHistory } from '@/lib/twelvedata';
+import { getQuote as getFinnhubQuote } from '@/lib/finnhub';
 
 export async function POST(
   request: NextRequest,
@@ -11,7 +12,6 @@ export async function POST(
     const { ticker } = await params;
     const decodedTicker = decodeURIComponent(ticker).toUpperCase();
 
-    // 1. Fetch Asset from DB to confirm it exists
     const asset = await prisma.asset.findUnique({
       where: { ticker: decodedTicker }
     });
@@ -20,58 +20,60 @@ export async function POST(
       return NextResponse.json({ error: 'Asset not found' }, { status: 404 });
     }
 
-    // 2. Determine what needs syncing
     const now = new Date();
     const oneHourAgo = new Date(now.getTime() - 60 * 60 * 1000);
     const twentyFourHoursAgo = new Date(now.getTime() - 24 * 60 * 60 * 1000);
 
     const needsQuoteSync = !asset.lastPriceUpdated || asset.lastPriceUpdated < oneHourAgo;
     const needsHistorySync = !asset.historyLastUpdated || asset.historyLastUpdated < twentyFourHoursAgo;
-    const needsProfileSync = !asset.profile; // Only fetch profile if missing
-
-    const apiCalls = [];
-    
-    // Add Quote, Profile, Financials to sync if needed (Finnhub)
-    if (needsQuoteSync) apiCalls.push(getQuote(decodedTicker));
-    else apiCalls.push(Promise.resolve(null));
-
-    if (needsProfileSync) apiCalls.push(getCompanyProfile(decodedTicker));
-    else apiCalls.push(Promise.resolve(null));
-
-    if (needsQuoteSync || needsProfileSync) apiCalls.push(getBasicFinancials(decodedTicker));
-    else apiCalls.push(Promise.resolve(null));
-
-    // Add History to sync ONLY if it's older than 24 hours (Twelve Data)
-    if (needsHistorySync) apiCalls.push(get12MonthHistory(decodedTicker));
-    else apiCalls.push(Promise.resolve(null));
-
-    const [quoteResult, profileResult, financialsResult, historyResult] = await Promise.allSettled(apiCalls);
+    const needsProfileSync = !asset.profile;
 
     const updateData: any = {};
     const currentTime = new Date();
 
-    // Parse Quote (Finnhub) - ONLY IF VALID
-    // Check if current price is a positive number
-    if (quoteResult.status === 'fulfilled' && quoteResult.value) {
-      const q = quoteResult.value as any;
-      if (q.c > 0) {
-        updateData.lastPrice = q.c;
-        updateData.priceChange = q.d;
-        updateData.priceChangePercent = q.dp;
-        updateData.dayHigh = q.h;
-        updateData.dayLow = q.l;
-        updateData.dayOpen = q.o;
-        updateData.prevClose = q.pc;
+    // 1. Quote: Twelve Data first, Finnhub as fallback
+    if (needsQuoteSync) {
+      const tdQuote = await getTDQuote(decodedTicker);
+      if (tdQuote && tdQuote.price > 0) {
+        updateData.lastPrice = tdQuote.price;
+        updateData.priceChange = tdQuote.change;
+        updateData.priceChangePercent = tdQuote.changePercent;
+        updateData.dayHigh = tdQuote.high;
+        updateData.dayLow = tdQuote.low;
+        updateData.dayOpen = tdQuote.open;
+        updateData.prevClose = tdQuote.prevClose;
         updateData.lastPriceUpdated = currentTime;
-      } else if (!q.c) {
-        console.warn(`Finnhub quote returned null/zero for ${decodedTicker}, preserving old price.`);
+      } else {
+        // Fallback to Finnhub
+        const fq = await getFinnhubQuote(decodedTicker) as any;
+        if (fq && fq.c > 0) {
+          updateData.lastPrice = fq.c;
+          updateData.priceChange = fq.d;
+          updateData.priceChangePercent = fq.dp;
+          updateData.dayHigh = fq.h;
+          updateData.dayLow = fq.l;
+          updateData.dayOpen = fq.o;
+          updateData.prevClose = fq.pc;
+          updateData.lastPriceUpdated = currentTime;
+        } else {
+          // Last resort: use latest row from AssetPriceHistory
+          const latest = await prisma.assetPriceHistory.findFirst({
+            where: { ticker: decodedTicker },
+            orderBy: { date: 'desc' },
+            select: { close: true },
+          });
+          if (latest) {
+            updateData.lastPrice = latest.close;
+            updateData.lastPriceUpdated = currentTime;
+          }
+        }
       }
     }
 
-    // Parse Profile (Finnhub) - ONLY IF VALID
-    if (profileResult.status === 'fulfilled' && profileResult.value) {
-      const p = profileResult.value as any;
-      if (p.name) {
+    // 2. Profile (Finnhub only)
+    if (needsProfileSync) {
+      const p = await getCompanyProfile(decodedTicker) as any;
+      if (p?.name) {
         updateData.logo = p.logo || asset.logo;
         updateData.profile = JSON.stringify({
           finnhubIndustry: p.finnhubIndustry,
@@ -81,15 +83,15 @@ export async function POST(
           ipo: p.ipo,
           marketCapitalization: p.marketCapitalization,
           name: p.name,
-          exchange: p.exchange
+          exchange: p.exchange,
         });
       }
     }
 
-    // Parse Financials (Finnhub) - ONLY IF VALID
-    if (financialsResult.status === 'fulfilled' && financialsResult.value) {
-      const fr = financialsResult.value as any;
-      if (fr.metric) {
+    // 3. Financials (Finnhub only)
+    if (needsQuoteSync || needsProfileSync) {
+      const fr = await getBasicFinancials(decodedTicker) as any;
+      if (fr?.metric) {
         const m = fr.metric;
         updateData.metrics = JSON.stringify({
           week52High: m['52WeekHigh'] || 0,
@@ -102,12 +104,11 @@ export async function POST(
       }
     }
 
-    // Parse History (Twelve Data) - bulk upsert into AssetPriceHistory table
+    // 4. History (Twelve Data) - bulk upsert
     let historyUpserted = 0;
-    if (historyResult.status === 'fulfilled' && historyResult.value) {
-      const hv = historyResult.value as { date: string; price: number }[];
-      if (Array.isArray(hv) && hv.length > 0) {
-        // Build VALUES clause for a single bulk upsert statement
+    if (needsHistorySync) {
+      const hv = await get12MonthHistory(decodedTicker);
+      if (hv.length > 0) {
         const values = hv.map(p => `('${decodedTicker}', '${p.date}'::date, ${p.price})`).join(',');
         await prisma.$executeRawUnsafe(`
           INSERT INTO "AssetPriceHistory" (ticker, date, close)
@@ -116,17 +117,14 @@ export async function POST(
         `);
         updateData.historyLastUpdated = currentTime;
         historyUpserted = hv.length;
-      } else {
-        console.warn(`History sync returned empty for ${decodedTicker}`);
       }
     }
 
-    // 3. Update Asset metadata - only if there's something to update
     if (Object.keys(updateData).length === 0) {
       return NextResponse.json({
         success: true,
-        message: 'No new data to update, preserved existing cache',
-        ticker: decodedTicker
+        message: 'No new data to update',
+        ticker: decodedTicker,
       });
     }
 
@@ -144,9 +142,6 @@ export async function POST(
 
   } catch (error) {
     console.error('Failed to sync asset data:', error);
-    return NextResponse.json(
-      { error: 'Failed to sync asset data' },
-      { status: 500 }
-    );
+    return NextResponse.json({ error: 'Failed to sync asset data' }, { status: 500 });
   }
 }

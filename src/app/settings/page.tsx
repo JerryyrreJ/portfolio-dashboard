@@ -36,6 +36,9 @@ import { createClient } from '@/lib/supabase';
 import { User } from '@supabase/supabase-js';
 import Notification from '@/app/components/Notification';
 
+import jsPDF from 'jspdf';
+import autoTable from 'jspdf-autotable';
+
 export default function SettingsPage() {
   const [activeSection, setActiveSection] = useState('portfolio');
   const [user, setUser] = useState<User | null>(null);
@@ -82,9 +85,66 @@ export default function SettingsPage() {
     setExportLoading(true);
     try {
       if (exportFormat === 'pdf') {
-        // Simple print-based PDF export for now to ensure consistency
-        window.print();
-        showNotification('success', 'PDF Ready', 'Please use the print dialog to save as PDF.');
+        const response = await fetch(`/api/transactions/export?format=json&range=${exportRange}`);
+        if (!response.ok) throw new Error('Failed to fetch data for PDF');
+        const data = await response.json();
+
+        const doc = new jsPDF();
+        
+        // Header
+        doc.setFontSize(20);
+        doc.setFont('helvetica', 'bold');
+        doc.text('Folio Investment Report', 14, 22);
+        
+        doc.setFontSize(10);
+        doc.setFont('helvetica', 'normal');
+        doc.setTextColor(100);
+        doc.text(`Portfolio: ${data.portfolio.name} (${data.portfolio.currency})`, 14, 30);
+        doc.text(`Generated: ${new Date().toLocaleDateString()}`, 14, 35);
+        doc.text(`Range: ${exportRange.toUpperCase()}`, 14, 40);
+
+        // Transactions Table
+        const tableColumn = ['Date', 'Asset', 'Type', 'Qty', 'Price', 'Fee', 'Total'];
+        const tableRows = data.transactions.map((t: any) => [
+          t.date,
+          `${t.ticker}`,
+          t.type,
+          t.quantity,
+          `$${t.price}`,
+          `$${t.fee}`,
+          `$${t.totalValue}`
+        ]);
+
+        autoTable(doc, {
+          startY: 50,
+          head: [tableColumn],
+          body: tableRows,
+          theme: 'plain',
+          headStyles: { 
+            fillColor: [250, 250, 250], 
+            textColor: 100, 
+            fontStyle: 'bold',
+            fontSize: 9,
+            cellPadding: 6
+          },
+          bodyStyles: {
+            fontSize: 9,
+            cellPadding: 6,
+            textColor: 40
+          },
+          alternateRowStyles: {
+            fillColor: [252, 252, 252]
+          },
+          styles: {
+            font: 'helvetica',
+            lineColor: [240, 240, 240],
+            lineWidth: 0.1
+          },
+          margin: { top: 50 },
+        });
+
+        doc.save(`portfolio_report_${exportRange}.pdf`);
+        showNotification('success', 'PDF Downloaded', 'Your investment report is ready.');
         setIsExporting(false);
       } else {
         const response = await fetch(`/api/transactions/export?format=${exportFormat}&range=${exportRange}`);

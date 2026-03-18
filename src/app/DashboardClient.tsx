@@ -92,6 +92,32 @@ interface DashboardClientProps {
 }
 
 
+const CustomXAxisTick = (props: any) => {
+  const { x, y, payload, visibleTicksCount, index } = props;
+  
+  let dateText = payload.value;
+  if (dateText === 'Today') {
+    dateText = 'Today';
+  } else if (dateText) {
+    const d = new Date(dateText);
+    if (!isNaN(d.getTime())) {
+      dateText = d.toLocaleDateString('en-US', { month: 'short', year: '2-digit' });
+    }
+  }
+
+  let textAnchor = 'middle';
+  if (index === 0) textAnchor = 'start';
+  else if (index === visibleTicksCount - 1) textAnchor = 'end';
+
+  return (
+    <g transform={`translate(${x},${y})`}>
+      <text x={0} y={0} dy={15} textAnchor={textAnchor} fill="#a1a1aa" fontSize={10} fontWeight={500}>
+        {dateText}
+      </text>
+    </g>
+  );
+};
+
 export default function DashboardClient({ portfolioId, portfolioName, holdingsData, chartData, summary, userDisplayName = '' }: DashboardClientProps) {
   const router = useRouter();
   const { symbol, convert, fmt } = useCurrency();
@@ -551,12 +577,12 @@ export default function DashboardClient({ portfolioId, portfolioName, holdingsDa
                       : <p className="text-[12px] text-gray-400 font-medium mt-1">Total portfolio value</p>;
                   })()}
                 </div>
-                <div className="flex bg-gray-50 rounded-lg p-0.5 border border-gray-100 w-full sm:w-auto overflow-x-auto no-scrollbar">
+                <div className="flex bg-gray-50 rounded-lg p-0.5 border border-gray-100 w-full sm:w-auto overflow-x-auto no-scrollbar justify-between sm:justify-start">
                   {(['1M', '3M', '6M', '1Y', 'All'] as const).map((range) => (
                     <button
                       key={range}
                       onClick={() => setChartTimeRange(range)}
-                      className={`flex-1 sm:flex-none px-3 py-1.5 sm:py-1 text-[11px] font-bold rounded-md transition-all whitespace-nowrap ${
+                      className={`flex-1 sm:flex-none px-3 py-1.5 sm:py-1 text-[11px] font-bold rounded-md transition-all whitespace-nowrap text-center ${
                         chartTimeRange === range
                           ? 'bg-white text-black shadow-sm'
                           : 'text-gray-400 hover:text-black'
@@ -568,9 +594,9 @@ export default function DashboardClient({ portfolioId, portfolioName, holdingsDa
                 </div>
               </div>
 
-              <div className="flex-1 min-h-[300px] w-full">
+              <div className="flex-1 min-h-[300px] w-full -ml-3 sm:ml-0">
                 <ResponsiveContainer width="100%" height="100%">
-                  <AreaChart data={filteredChartData} margin={{ top: 5, right: 0, left: -25, bottom: 0 }}>
+                  <AreaChart data={filteredChartData} margin={{ top: 10, right: 0, left: -25, bottom: 0 }}>
                     <defs>
                       <linearGradient id="colorTotal" x1="0" y1="0" x2="0" y2="1">
                         <stop offset="5%" stopColor="#000000" stopOpacity={0.08}/>
@@ -582,19 +608,17 @@ export default function DashboardClient({ portfolioId, portfolioName, holdingsDa
                       dataKey="date"
                       axisLine={false}
                       tickLine={false}
-                      tick={{ fontSize: 10, fill: '#a1a1aa', fontWeight: 500 }}
-                      dy={8}
-                      tickFormatter={(dateStr) => {
-                        if (dateStr === 'Today') return 'Today';
-                        const d = new Date(dateStr);
-                        if (isNaN(d.getTime())) return '';
-                        // Only show label on the 1st of each month
-                        return d.getDate() === 1
-                          ? d.toLocaleDateString('en-US', { month: 'short' })
-                          : '';
-                      }}
+                      tick={<CustomXAxisTick />}
+                      interval="equidistantPreserveStart"
+                      minTickGap={20}
                     />
-                    <YAxis axisLine={false} tickLine={false} tick={{ fontSize: 10, fill: '#a1a1aa', fontWeight: 500 }} width={60} />
+                    <YAxis 
+                      axisLine={false} 
+                      tickLine={false} 
+                      tick={{ fontSize: 10, fill: '#a1a1aa', fontWeight: 500 }} 
+                      width={50}
+                      tickFormatter={(value) => value >= 1000 ? `${(value / 1000).toFixed(1)}k` : value}
+                    />
                     <Tooltip
                       contentStyle={{ borderRadius: '12px', border: 'none', boxShadow: '0 8px 20px -5px rgb(0 0 0 / 0.1)', backgroundColor: 'rgba(255, 255, 255, 0.95)', backdropFilter: 'blur(8px)', padding: '10px' }}
                       itemStyle={{ fontSize: '11px', fontWeight: 'bold', padding: '2px 0' }}

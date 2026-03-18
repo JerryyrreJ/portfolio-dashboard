@@ -172,6 +172,49 @@ const ChartTooltip = ({ active, payload, label, fmt }: {
 
 const TIME_RANGES = ['1D', '1W', '1M', '3M', '1Y', 'All'];
 
+const CustomXAxisTick = (props: any) => {
+  const { x, y, payload, visibleTicksCount, index } = props;
+  
+  // Custom format the date
+  let dateText = payload.value;
+  if (dateText && dateText !== 'Today') {
+    const d = new Date(dateText);
+    if (!isNaN(d.getTime())) {
+      dateText = d.toLocaleDateString('en-US', { month: 'short', year: '2-digit' });
+    }
+  }
+
+  // Determine text alignment based on position
+  let textAnchor = 'middle';
+  let dx = 0;
+  
+  // If it's the very first tick rendered, align it to the start (left)
+  if (index === 0) {
+    textAnchor = 'start';
+  } 
+  // If it's the very last tick rendered, align it to the end (right)
+  else if (index === visibleTicksCount - 1) {
+    textAnchor = 'end';
+  }
+
+  return (
+    <g transform={`translate(${x},${y})`}>
+      <text
+        x={0}
+        y={0}
+        dy={15}
+        dx={dx}
+        textAnchor={textAnchor}
+        fill="#94a3b8"
+        fontSize={10}
+        fontWeight={600}
+      >
+        {dateText}
+      </text>
+    </g>
+  );
+};
+
 // ─── Main Component ───────────────────────────────────────────────────────────
 
 export default function StockDetailClient({ stockData }: { stockData: StockData }) {
@@ -439,7 +482,7 @@ export default function StockDetailClient({ stockData }: { stockData: StockData 
                 </div>
               </div>
               
-              <div className="h-[280px] sm:h-[340px] w-full -ml-4 sm:-ml-6 relative">
+              <div className="h-[280px] sm:h-[340px] w-full relative">
                 {isChartLoading && (
                   <div className="absolute inset-0 flex items-center justify-center bg-white/40 backdrop-blur-[2px] z-20 transition-all duration-500">
                     <div className="flex flex-col items-center gap-3">
@@ -449,7 +492,7 @@ export default function StockDetailClient({ stockData }: { stockData: StockData 
                   </div>
                 )}
                 <ResponsiveContainer width="100%" height="100%">
-                  <AreaChart data={chartData} margin={{ top: 10, right: 10, left: 0, bottom: 0 }}>
+                  <AreaChart data={chartData} margin={{ top: 10, right: 0, left: 0, bottom: 0 }}>
                     <defs>
                       <linearGradient id="colorPrice" x1="0" y1="0" x2="0" y2="1">
                         <stop offset="5%" stopColor={upColor.hex} stopOpacity={0.12}/>
@@ -457,13 +500,13 @@ export default function StockDetailClient({ stockData }: { stockData: StockData 
                       </linearGradient>
                     </defs>
                     <CartesianGrid strokeDasharray="0" vertical={false} stroke="#f8f8f8" strokeWidth={1} />
-                    <XAxis 
-                      dataKey="date" 
-                      axisLine={false} 
-                      tickLine={false} 
-                      tick={{ fontSize: 10, fill: '#94a3b8', fontWeight: 600 }} 
-                      dy={15}
-                      interval="preserveStartEnd"
+                    <XAxis
+                      dataKey="date"
+                      axisLine={false}
+                      tickLine={false}
+                      tick={<CustomXAxisTick />}
+                      interval="equidistantPreserveStart"
+                      minTickGap={20}
                     />
                     <YAxis 
                       hide={true}

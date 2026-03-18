@@ -258,7 +258,6 @@ export default async function Page() {
   }
 
   const calculatedHoldings = Array.from(holdingsMap.values()).filter(h => h.totalQty > 0).map(h => {
-    // 使用数据库缓存的价格，如果没有则用 fallback
     const currentPrice = h.asset.lastPrice || 0;
     const value = currentPrice * h.totalQty;
     const capGain = value - h.totalCost;

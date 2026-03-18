@@ -115,15 +115,33 @@ export async function getCandles(
 }
 
 /**
- * 获取股票报价，包含 currency 字段
+ * 获取股票实时报价
  * @param symbol 股票代码
  */
-export async function getQuote(symbol: string): Promise<{ currency: string } | null> {
+export async function getQuote(symbol: string): Promise<{
+  currency: string;
+  price: number;
+  change: number;
+  changePercent: number;
+  high: number;
+  low: number;
+  open: number;
+  prevClose: number;
+} | null> {
   const data = await fetchTwelveData('/quote', {
     symbol: symbol.toUpperCase(),
   });
-  if (!data?.currency) return null;
-  return { currency: data.currency };
+  if (!data?.currency || !data?.close) return null;
+  return {
+    currency: data.currency,
+    price: parseFloat(data.close),
+    change: parseFloat(data.change ?? '0'),
+    changePercent: parseFloat(data.percent_change ?? '0'),
+    high: parseFloat(data.fifty_two_week?.high ?? data.high ?? '0'),
+    low: parseFloat(data.fifty_two_week?.low ?? data.low ?? '0'),
+    open: parseFloat(data.open ?? '0'),
+    prevClose: parseFloat(data.previous_close ?? '0'),
+  };
 }
 
 /**
