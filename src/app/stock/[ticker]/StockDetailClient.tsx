@@ -93,6 +93,8 @@ interface StockData {
   portfolioName: string;
   profile: CompanyProfile | null;
   metrics: StockMetrics | null;
+  userDisplayName: string;
+  userInitial: string;
 }
 
 // ─── Helper Components ────────────────────────────────────────────────────────
@@ -199,6 +201,7 @@ export default function StockDetailClient({ stockData }: { stockData: StockData 
     avgBuyPrice, totalFees,
     transactions, portfolioId, portfolioName,
     profile, metrics,
+    userDisplayName, userInitial
   } = stockData;
 
   const lastUpdatedMs = lastUpdated instanceof Date ? lastUpdated.getTime() : Number(lastUpdated);
@@ -327,16 +330,28 @@ export default function StockDetailClient({ stockData }: { stockData: StockData 
               <Search className="w-3.5 h-3.5" />
             </button>
 
-            <Link 
+            <Link
               href="/settings"
-              className="flex items-center space-x-2.5 group transition-all shrink-0"
+              className="flex items-center space-x-2.5 group transition-all"
             >
-              <div className="w-7 h-7 rounded-full bg-gray-100 border border-gray-200 flex items-center justify-center text-gray-500 group-hover:border-gray-400 group-hover:text-black transition-colors shadow-sm overflow-hidden">
-                <User className="w-4 h-4" />
-              </div>
-              <span className="text-[13px] font-bold text-gray-500 group-hover:text-black transition-colors hidden sm:block">Account</span>
-            </Link>
-          </div>
+              {userInitial ? (
+                <>
+                  <div className="w-7 h-7 rounded-full bg-black text-white flex items-center justify-center font-bold text-[12px] group-hover:bg-gray-800 transition-colors shadow-sm shrink-0">
+                    {userInitial}
+                  </div>
+                  <span className="text-[13px] font-bold text-gray-500 group-hover:text-black transition-colors hidden sm:block">
+                    {userDisplayName}
+                  </span>
+                </>
+              ) : (
+                <>
+                  <div className="w-7 h-7 rounded-full bg-gray-100 border border-gray-200 flex items-center justify-center text-gray-500 group-hover:bg-gray-200 transition-colors shadow-sm shrink-0">
+                    <User className="w-3.5 h-3.5" />
+                  </div>
+                  <span className="text-[13px] font-bold text-gray-500 group-hover:text-black transition-colors hidden sm:block">Guest</span>
+                </>
+              )}
+            </Link>          </div>
         </div>
       </header>
 

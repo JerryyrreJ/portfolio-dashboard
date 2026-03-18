@@ -69,6 +69,11 @@ if (user) {
   }
 }
 
+    const userDisplayName = user
+      ? (user.user_metadata?.display_name || user.email?.split('@')[0] || '')
+      : ''
+    const userInitial = userDisplayName ? userDisplayName[0].toUpperCase() : ''
+
     const stockData = {
       ticker: decodedTicker,
       name: companyProfile?.name || decodedTicker,
@@ -105,9 +110,11 @@ if (user) {
         marketCapitalization: companyProfile?.marketCapitalization || 0,
       },
       metrics: null,
+      userDisplayName,
+      userInitial
     }
 
-    return <StockDetailClient stockData={stockData} />
+    return <StockDetailClient stockData={stockData as any} />
   }
 
   // 2. Compute position data (process in chronological order)
@@ -140,15 +147,17 @@ if (user) {
     }
   })
 
-  // 3. Parse cached JSON data
+  // 3. Read daily price history from AssetPriceHistory table
   let chartData: { date: string; price: number }[] = []
-  if (asset.priceHistory) {
-    try {
-      chartData = JSON.parse(asset.priceHistory)
-    } catch (e) {
-      console.error('Failed to parse persistent price history:', e)
-    }
-  }
+  const priceRows = await prisma.assetPriceHistory.findMany({
+    where: { ticker: decodedTicker },
+    orderBy: { date: 'asc' },
+    select: { date: true, close: true },
+  })
+  chartData = priceRows.map(r => ({
+    date: r.date.toISOString().split('T')[0],
+    price: r.close,
+  }))
 
   let profile: any = {
     name: asset.name,
@@ -202,6 +211,11 @@ if (user) {
     }
   }
 
+  const userDisplayName = user
+    ? (user.user_metadata?.display_name || user.email?.split('@')[0] || '')
+    : ''
+  const userInitial = userDisplayName ? userDisplayName[0].toUpperCase() : ''
+
   const stockData = {
     ticker: decodedTicker,
     name: asset.name,
@@ -227,7 +241,9 @@ if (user) {
     portfolioName: defaultPortfolioName,
     profile,
     metrics,
+    userDisplayName,
+    userInitial
   }
 
-  return <StockDetailClient stockData={stockData} />
-}
+  return <StockDetailClient stockData={stockData as any} />
+  }

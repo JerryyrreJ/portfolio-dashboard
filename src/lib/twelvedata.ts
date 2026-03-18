@@ -152,7 +152,7 @@ export async function getPriceOnDate(symbol: string, date: string | Date): Promi
 }
 
 /**
- * 获取过去 12 个月的每月价格历史
+ * 获取过去 12 个月的每日价格历史
  * @param symbol 股票代码
  */
 export async function get12MonthHistory(symbol: string): Promise<{ date: string; price: number }[]> {
@@ -162,31 +162,21 @@ export async function get12MonthHistory(symbol: string): Promise<{ date: string;
 
   const data = await fetchTwelveData('/time_series', {
     symbol: symbol.toUpperCase(),
-    interval: '1week',
+    interval: '1day',
     start_date: from.toISOString().split('T')[0],
     end_date: to.toISOString().split('T')[0],
-    outputsize: '60',
+    outputsize: '365',
   });
 
   if (!data || !data.values || data.values.length === 0) {
     return [];
   }
 
-  // values 是倒序（最新在前），按月分组，取每月最后一条（即 values 里最后出现的那条）
-  const monthlyPoints: Record<string, { date: string; price: number }> = {};
-
-  for (const v of data.values) {
-    const dateObj = new Date(v.datetime);
-    const monthKey = `${dateObj.getFullYear()}-${String(dateObj.getMonth() + 1).padStart(2, '0')}`;
-    // 倒序遍历时，后面出现的是更早的数据，所以始终覆盖 → 最终保留的是最早的周数据点
-    monthlyPoints[monthKey] = {
-      date: dateObj.toLocaleDateString('en-US', { month: 'short', year: 'numeric' }),
+  // values 是倒序（最新在前），反转为正序后返回每日数据
+  return ([...data.values] as TDValue[])
+    .reverse()
+    .map(v => ({
+      date: v.datetime.split(' ')[0], // 取 YYYY-MM-DD 部分
       price: parseFloat(v.close),
-    };
-  }
-
-  return Object.entries(monthlyPoints)
-    .sort(([a], [b]) => a.localeCompare(b))
-    .map(([, v]) => v)
-    .slice(-12);
+    }));
 }

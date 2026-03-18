@@ -8,6 +8,7 @@ export interface Preferences {
   theme: 'Light' | 'Dark' | 'System';
   hideSmallBalances: boolean;
   realTimeSync: boolean;
+  costBasisMethod: 'FIFO' | 'AVCO';
 }
 
 const DEFAULT_PREFERENCES: Preferences = {
@@ -16,6 +17,7 @@ const DEFAULT_PREFERENCES: Preferences = {
   theme: 'System',
   hideSmallBalances: false,
   realTimeSync: true,
+  costBasisMethod: 'FIFO',
 };
 
 const LOCAL_KEY = 'user_preferences';

@@ -21,13 +21,12 @@ model Portfolio {
 }
 
 model Asset {
-  id                 String        @id @default(cuid())
-  ticker             String        @unique
+  id                 String               @id @default(cuid())
+  ticker             String               @unique
   name               String
   market             String
-  type               String        @default("STOCK")
-  currency           String        @default("USD")
-  priceHistory       String?
+  type               String               @default("STOCK")
+  currency           String               @default("USD")
   historyLastUpdated DateTime?
   logo               String?
   lastPrice          Float?
@@ -41,6 +40,18 @@ model Asset {
   priceChangePercent Float?
   profile            String?
   transactions       Transaction[]
+  priceHistory       AssetPriceHistory[]
+}
+
+model AssetPriceHistory {
+  id     Int      @id @default(autoincrement())
+  ticker String
+  date   DateTime @db.Date
+  close  Float
+  asset  Asset    @relation(fields: [ticker], references: [ticker])
+
+  @@unique([ticker, date])
+  @@index([ticker, date])
 }
 
 model Transaction {

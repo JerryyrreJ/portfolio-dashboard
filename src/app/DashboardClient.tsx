@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect, useRef, useCallback } from 'react';
+import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { useRouter } from 'next/navigation';
 import Image from 'next/image';
 import {
@@ -22,7 +22,8 @@ import {
   Wallet,
   ArrowUpRight,
   ArrowDownRight,
-  History as HistoryIcon
+  History as HistoryIcon,
+  User
 } from 'lucide-react';
 import AddTransactionModal from './components/AddTransactionModal';
 import GlobalSearch from './components/GlobalSearch';
@@ -78,6 +79,7 @@ interface Summary {
   totalValue: number;
   totalCapGain: number;
   totalCapGainPercentage: number;
+  totalRealizedGain: number;
 }
 
 interface DashboardClientProps {
@@ -89,18 +91,11 @@ interface DashboardClientProps {
   userDisplayName?: string;
 }
 
-// 颜色配置 - 雅致但不沉闷的 Apple 风格色彩
-const MARKET_COLORS: Record<string, { stroke: string; fill: string; dot: string }> = {
-  'NASDAQ': { stroke: '#34C759', fill: 'rgba(52, 199, 89, 0.1)', dot: 'bg-[#34C759]' }, // Apple Green
-  'NYSE': { stroke: '#007AFF', fill: 'rgba(0, 122, 255, 0.1)', dot: 'bg-[#007AFF]' },   // Apple Blue
-  'OTC': { stroke: '#FF9500', fill: 'rgba(255, 149, 0, 0.1)', dot: 'bg-[#FF9500]' },    // Apple Orange
-  'Other': { stroke: '#AF52DE', fill: 'rgba(175, 82, 222, 0.1)', dot: 'bg-[#AF52DE]' }  // Apple Purple (Used sparingly)
-};
 
 export default function DashboardClient({ portfolioId, portfolioName, holdingsData, chartData, summary, userDisplayName = '' }: DashboardClientProps) {
   const router = useRouter();
   const { symbol, convert, fmt } = useCurrency();
-  const { colors } = usePreferences();
+  const { prefs, colors } = usePreferences();
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [userInitial] = useState<string>(userDisplayName[0]?.toUpperCase() || '');
   const [displayName] = useState<string>(userDisplayName);
@@ -171,11 +166,12 @@ export default function DashboardClient({ portfolioId, portfolioName, holdingsDa
           }));
 
           setLocalHoldings(updatedHoldings);
-          setLocalSummary({
+          setLocalSummary(prev => ({
             totalValue: newTotalValue,
             totalCapGain: newTotalValue - newTotalCost,
-            totalCapGainPercentage: newTotalCost > 0 ? ((newTotalValue - newTotalCost) / newTotalCost) * 100 : 0
-          });
+            totalCapGainPercentage: newTotalCost > 0 ? ((newTotalValue - newTotalCost) / newTotalCost) * 100 : 0,
+            totalRealizedGain: prev.totalRealizedGain,
+          }));
         }
       } catch (err) {
         console.error("Failed to fetch live prices silently:", err);
@@ -197,8 +193,8 @@ export default function DashboardClient({ portfolioId, portfolioName, holdingsDa
       if (!storedTransactions) return;
 
       const txs = JSON.parse(storedTransactions);
-      
-      // 简单计算逻辑
+      const method = prefs.costBasisMethod ?? 'FIFO';
+
       const holdingsMap = new Map<string, any>();
       let totalValue = 0;
       let totalCost = 0;
@@ -206,20 +202,46 @@ export default function DashboardClient({ portfolioId, portfolioName, holdingsDa
       for (const t of txs) {
         const ticker = t.asset.ticker;
         if (!holdingsMap.has(ticker)) {
-          holdingsMap.set(ticker, { asset: t.asset, qty: 0, cost: 0, price: t.price });
+          holdingsMap.set(ticker, { asset: t.asset, qty: 0, cost: 0, price: t.price, realizedGain: 0, lots: [] as { qty: number; unitCost: number }[] });
         }
         const current = holdingsMap.get(ticker);
-        
+
         if (t.type === 'BUY') {
-          current.qty += t.quantity;
-          current.cost += (t.price * t.quantity) + t.fee;
+          const qty = Number(t.quantity);
+          const unitCost = Number(t.price) + Number(t.fee) / qty;
+          current.qty += qty;
+          current.cost += qty * unitCost;
+          if (method === 'FIFO') current.lots.push({ qty, unitCost });
         } else if (t.type === 'SELL') {
-          const avgCost = current.qty > 0 ? current.cost / current.qty : 0;
-          current.qty -= t.quantity;
-          current.cost -= avgCost * t.quantity;
+          const sellQty = Number(t.quantity);
+          const sellPrice = Number(t.price);
+          const sellFee = Number(t.fee);
+
+          if (method === 'FIFO') {
+            let remaining = sellQty;
+            let costOfSold = 0;
+            while (remaining > 0 && current.lots.length > 0) {
+              const lot = current.lots[0];
+              const consumed = Math.min(remaining, lot.qty);
+              costOfSold += consumed * lot.unitCost;
+              lot.qty -= consumed;
+              remaining -= consumed;
+              if (lot.qty <= 0) current.lots.shift();
+            }
+            current.realizedGain += (sellPrice * sellQty - sellFee) - costOfSold;
+            current.qty -= sellQty;
+            current.cost = current.lots.reduce((s: number, l: { qty: number; unitCost: number }) => s + l.qty * l.unitCost, 0);
+          } else {
+            const avgCost = current.qty > 0 ? current.cost / current.qty : 0;
+            current.realizedGain += (sellPrice - avgCost) * sellQty - sellFee;
+            current.qty -= sellQty;
+            current.cost -= avgCost * sellQty;
+          }
+
           if (current.qty <= 0) {
             current.qty = 0;
             current.cost = 0;
+            current.lots = [];
           }
         }
       }
@@ -245,11 +267,17 @@ export default function DashboardClient({ portfolioId, portfolioName, holdingsDa
         });
 
       const totalCapGain = totalValue - totalCost;
-      
+
+      let totalRealizedGain = 0;
+      for (const h of holdingsMap.values()) {
+        totalRealizedGain += h.realizedGain;
+      }
+
       setLocalSummary({
         totalValue,
         totalCapGain,
-        totalCapGainPercentage: totalCost > 0 ? (totalCapGain / totalCost) * 100 : 0
+        totalCapGainPercentage: totalCost > 0 ? (totalCapGain / totalCost) * 100 : 0,
+        totalRealizedGain,
       });
 
       const markets = Array.from(new Set(calculatedHoldings.map(h => h.market)));
@@ -269,7 +297,7 @@ export default function DashboardClient({ portfolioId, portfolioName, holdingsDa
     const handleLocalUpdate = () => loadLocalData();
     window.addEventListener('localTransactionsUpdated', handleLocalUpdate);
     return () => window.removeEventListener('localTransactionsUpdated', handleLocalUpdate);
-  }, [portfolioId]);
+  }, [portfolioId, prefs.costBasisMethod]);
 
   useEffect(() => {
     if (chartTimeRange === 'All') {
@@ -284,7 +312,10 @@ export default function DashboardClient({ portfolioId, portfolioName, holdingsDa
       case '6M': startDate.setMonth(now.getMonth() - 6); break;
       case '1Y': startDate.setFullYear(now.getFullYear() - 1); break;
     }
-    const filtered = localChartData.filter(item => new Date(item.date) >= startDate);
+    const filtered = localChartData.filter(item => {
+      if (item.date === 'Today') return true; // always include today
+      return new Date(item.date) >= startDate;
+    });
     setFilteredChartData(filtered);
   }, [chartTimeRange, localChartData]);
 
@@ -295,6 +326,11 @@ export default function DashboardClient({ portfolioId, portfolioName, holdingsDa
 
   const isUp = localSummary.totalCapGain >= 0;
   const upColor = isUp ? colors.gain : colors.loss;
+  const isUnrealizedUp = localSummary.totalCapGain >= 0;
+  const unrealizedColor = isUnrealizedUp ? colors.gain : colors.loss;
+  const safeRealizedGain = isNaN(localSummary.totalRealizedGain) ? 0 : localSummary.totalRealizedGain;
+  const isRealizedUp = safeRealizedGain >= 0;
+  const realizedColor = isRealizedUp ? colors.gain : colors.loss;
   const totalHoldingsCount = localHoldings.reduce((sum: number, g: HoldingsGroup) => sum + g.holdings.length, 0);
 
   return (
@@ -342,10 +378,25 @@ export default function DashboardClient({ portfolioId, portfolioName, holdingsDa
               href="/settings"
               className="flex items-center space-x-2.5 group transition-all"
             >
-              <div className="w-7 h-7 rounded-full bg-black text-white flex items-center justify-center font-bold text-[12px] group-hover:bg-gray-800 transition-colors shadow-sm shrink-0">
-                {userInitial}
-              </div>
-              <span className="text-[13px] font-bold text-gray-500 group-hover:text-black transition-colors hidden sm:block">{displayName}</span>
+              {userInitial ? (
+                <>
+                  <div className="w-7 h-7 rounded-full bg-black text-white flex items-center justify-center font-bold text-[12px] group-hover:bg-gray-800 transition-colors shadow-sm shrink-0">
+                    {userInitial}
+                  </div>
+                  <span className="text-[13px] font-bold text-gray-500 group-hover:text-black transition-colors hidden sm:block">
+                    {displayName}
+                  </span>
+                </>
+              ) : (
+                <>
+                  <div className="w-7 h-7 rounded-full bg-gray-100 border border-gray-200 text-gray-500 flex items-center justify-center group-hover:bg-gray-200 transition-colors shadow-sm shrink-0">
+                    <User className="w-3.5 h-3.5" />
+                  </div>
+                  <span className="text-[13px] font-bold text-gray-500 group-hover:text-black transition-colors hidden sm:block">
+                    Guest
+                  </span>
+                </>
+              )}
             </Link>
           </div>
         </div>
@@ -426,14 +477,26 @@ export default function DashboardClient({ portfolioId, portfolioName, holdingsDa
               </div>
             </div>
 
-            <div className="bg-white rounded-2xl p-5 border border-gray-100 shadow-sm">
-              <p className="text-[11px] text-gray-400 font-bold uppercase tracking-wider mb-1">Total Gain</p>
-              <div className="flex items-baseline">
-                <span className={`text-[22px] font-bold tracking-tight tabular-nums ${upColor.tailwind.text}`}>
-                  {isUp ? '+' : '-'}{fmt(Math.abs(localSummary.totalCapGain))}
-                </span>
+            <div className="bg-white rounded-2xl p-5 border border-gray-100 shadow-sm space-y-4">
+              <div>
+                <p className="text-[11px] text-gray-400 font-bold uppercase tracking-wider mb-1">Unrealized P&L</p>
+                <div className="flex items-baseline">
+                  <span className={`text-[20px] font-bold tracking-tight tabular-nums ${unrealizedColor.tailwind.text}`}>
+                    {isUnrealizedUp ? '+' : '-'}{fmt(Math.abs(localSummary.totalCapGain))}
+                  </span>
+                </div>
+                <p className="text-gray-400 text-[11px] font-medium mt-0.5">Open positions</p>
               </div>
-              <p className="text-gray-400 text-[11px] font-medium mt-1">Net profit/loss</p>
+              <div className="border-t border-gray-100" />
+              <div>
+                <p className="text-[11px] text-gray-400 font-bold uppercase tracking-wider mb-1">Realized P&L</p>
+                <div className="flex items-baseline">
+                  <span className={`text-[20px] font-bold tracking-tight tabular-nums ${safeRealizedGain === 0 ? 'text-gray-400' : realizedColor.tailwind.text}`}>
+                    {safeRealizedGain === 0 ? '' : (isRealizedUp ? '+' : '-')}{fmt(Math.abs(safeRealizedGain))}
+                  </span>
+                </div>
+                <p className="text-gray-400 text-[11px] font-medium mt-0.5">Closed positions</p>
+              </div>
             </div>
 
             <div className="bg-white rounded-2xl p-5 border border-gray-100 shadow-sm flex items-center justify-between">
@@ -464,11 +527,29 @@ export default function DashboardClient({ portfolioId, portfolioName, holdingsDa
 
           {/* 右侧：图表占据大块空间 */}
           <div className="col-span-12 lg:col-span-9">
-            <div className="bg-white rounded-2xl p-6 border border-gray-100 shadow-sm h-full">
+            <div className="bg-white rounded-2xl p-6 border border-gray-100 shadow-sm h-full flex flex-col">
               <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 sm:gap-0 mb-6">
                 <div>
                   <h2 className="text-[15px] font-bold text-black tracking-tight leading-none">Performance History</h2>
-                  <p className="text-[12px] text-gray-400 font-medium mt-1">Value stacked by market</p>
+                  {(() => {
+                    const first = filteredChartData.find(d => d.date !== 'Today');
+                    if (!first || chartTimeRange === 'All') return <p className="text-[12px] text-gray-400 font-medium mt-1">Total portfolio value</p>;
+                    const now = new Date();
+                    const cutoff = new Date();
+                    switch (chartTimeRange) {
+                      case '1M': cutoff.setMonth(now.getMonth() - 1); break;
+                      case '3M': cutoff.setMonth(now.getMonth() - 3); break;
+                      case '6M': cutoff.setMonth(now.getMonth() - 6); break;
+                      case '1Y': cutoff.setFullYear(now.getFullYear() - 1); break;
+                    }
+                    const firstDate = new Date(first.date);
+                    const isConstrained = firstDate > cutoff;
+                    return isConstrained
+                      ? <p className="text-[12px] text-gray-400 font-medium mt-1">
+                          Showing data since {firstDate.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
+                        </p>
+                      : <p className="text-[12px] text-gray-400 font-medium mt-1">Total portfolio value</p>;
+                  })()}
                 </div>
                 <div className="flex bg-gray-50 rounded-lg p-0.5 border border-gray-100 w-full sm:w-auto overflow-x-auto no-scrollbar">
                   {(['1M', '3M', '6M', '1Y', 'All'] as const).map((range) => (
@@ -487,65 +568,54 @@ export default function DashboardClient({ portfolioId, portfolioName, holdingsDa
                 </div>
               </div>
 
-              <div className="h-[200px] min-h-[200px] w-full">
+              <div className="flex-1 min-h-[300px] w-full">
                 <ResponsiveContainer width="100%" height="100%">
                   <AreaChart data={filteredChartData} margin={{ top: 5, right: 0, left: -25, bottom: 0 }}>
                     <defs>
-                      {Object.keys(MARKET_COLORS).map(market => (
-                        <linearGradient key={market} id={`color${market}`} x1="0" y1="0" x2="0" y2="1">
-                          <stop offset="5%" stopColor={MARKET_COLORS[market]?.stroke || '#000'} stopOpacity={0.15}/>
-                          <stop offset="95%" stopColor={MARKET_COLORS[market]?.stroke || '#000'} stopOpacity={0}/>
-                        </linearGradient>
-                      ))}
+                      <linearGradient id="colorTotal" x1="0" y1="0" x2="0" y2="1">
+                        <stop offset="5%" stopColor="#000000" stopOpacity={0.08}/>
+                        <stop offset="95%" stopColor="#000000" stopOpacity={0}/>
+                      </linearGradient>
                     </defs>
                     <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f0f0f0" />
-                    <XAxis dataKey="date" axisLine={false} tickLine={false} tick={{ fontSize: 10, fill: '#a1a1aa', fontWeight: 500 }} dy={8} />
+                    <XAxis
+                      dataKey="date"
+                      axisLine={false}
+                      tickLine={false}
+                      tick={{ fontSize: 10, fill: '#a1a1aa', fontWeight: 500 }}
+                      dy={8}
+                      tickFormatter={(dateStr) => {
+                        if (dateStr === 'Today') return 'Today';
+                        const d = new Date(dateStr);
+                        if (isNaN(d.getTime())) return '';
+                        // Only show label on the 1st of each month
+                        return d.getDate() === 1
+                          ? d.toLocaleDateString('en-US', { month: 'short' })
+                          : '';
+                      }}
+                    />
                     <YAxis axisLine={false} tickLine={false} tick={{ fontSize: 10, fill: '#a1a1aa', fontWeight: 500 }} width={60} />
                     <Tooltip
                       contentStyle={{ borderRadius: '12px', border: 'none', boxShadow: '0 8px 20px -5px rgb(0 0 0 / 0.1)', backgroundColor: 'rgba(255, 255, 255, 0.95)', backdropFilter: 'blur(8px)', padding: '10px' }}
                       itemStyle={{ fontSize: '11px', fontWeight: 'bold', padding: '2px 0' }}
                       labelStyle={{ marginBottom: '4px', color: '#888', fontSize: '10px', fontWeight: '600' }}
+                      labelFormatter={(dateStr) => {
+                        if (dateStr === 'Today') return 'Today';
+                        const d = new Date(dateStr);
+                        if (isNaN(d.getTime())) return dateStr;
+                        return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+                      }}
                       formatter={(value: any) => [`${fmt(Number(value))}`, undefined as any]}
-                    />                    {Array.from(new Set(localHoldings.map(g => g.market))).map((market) => {
-                      const color = MARKET_COLORS[market] || MARKET_COLORS['Other'];
-                      return (
-                        <Area 
-                          key={market} 
-                          type="monotone" 
-                          dataKey={market} 
-                          stackId="1" 
-                          stroke={color.stroke} 
-                          strokeWidth={2} 
-                          fill={`url(#color${market})`} 
-                          activeDot={{ r: 4, strokeWidth: 0 }}
-                        />
-                      )
-                    })}
-                    {/* 添加本地数据的特殊曲线呈现 */}
-                    {portfolioId === 'local-portfolio' && (
-                        <Area type="monotone" dataKey="Local" stackId="1" stroke="#000" fill="#f3f4f6" fillOpacity={1} strokeWidth={2} />
+                    />
+                    {portfolioId === 'local-portfolio' ? (
+                      <Area type="monotone" dataKey="Local" stroke="#000" strokeWidth={2} fill="#f3f4f6" fillOpacity={1} activeDot={{ r: 4, strokeWidth: 0, fill: '#000' }} />
+                    ) : (
+                      <Area type="monotone" dataKey="Total" stroke="#000000" strokeWidth={2} fill="url(#colorTotal)" activeDot={{ r: 4, strokeWidth: 0, fill: '#000' }} />
                     )}
                   </AreaChart>
                 </ResponsiveContainer>
               </div>
               
-              <div className="flex justify-start items-center space-x-4 mt-4">
-                {Array.from(new Set(localHoldings.map(g => g.market))).map((market) => {
-                  const color = MARKET_COLORS[market] || MARKET_COLORS['Other'];
-                  return (
-                    <div key={market} className="flex items-center space-x-1.5">
-                      <div className={`w-2 h-2 rounded-full ${color.dot}`}></div>
-                      <span className="text-[10px] font-bold text-gray-500 uppercase tracking-wide">{market}</span>
-                    </div>
-                  )
-                })}
-                {portfolioId === 'local-portfolio' && (
-                    <div className="flex items-center space-x-1.5">
-                      <div className="w-2 h-2 rounded-full bg-gray-300"></div>
-                      <span className="text-[10px] font-bold text-gray-500 uppercase tracking-wide">LOCAL</span>
-                    </div>
-                )}
-              </div>
             </div>
           </div>
         </div>

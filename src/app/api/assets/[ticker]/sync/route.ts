@@ -102,23 +102,26 @@ export async function POST(
       }
     }
 
-    // Parse History (Twelve Data) - ONLY IF FETCHED AND VALID
-    // Defensive check: only update if we got a non-empty array
+    // Parse History (Twelve Data) - bulk upsert into AssetPriceHistory table
+    let historyUpserted = 0;
     if (historyResult.status === 'fulfilled' && historyResult.value) {
-      const hv = historyResult.value as any;
+      const hv = historyResult.value as { date: string; price: number }[];
       if (Array.isArray(hv) && hv.length > 0) {
-        updateData.priceHistory = JSON.stringify(hv);
+        // Build VALUES clause for a single bulk upsert statement
+        const values = hv.map(p => `('${decodedTicker}', '${p.date}'::date, ${p.price})`).join(',');
+        await prisma.$executeRawUnsafe(`
+          INSERT INTO "AssetPriceHistory" (ticker, date, close)
+          VALUES ${values}
+          ON CONFLICT (ticker, date) DO UPDATE SET close = EXCLUDED.close
+        `);
         updateData.historyLastUpdated = currentTime;
-      } else if (!hv || hv.length === 0) {
+        historyUpserted = hv.length;
+      } else {
         console.warn(`History sync returned empty for ${decodedTicker}`);
       }
-    } else if (historyResult.status === 'fulfilled' && (!historyResult.value || (historyResult.value as any).length === 0)) {
-      // If we got an empty result or error from API, we DO NOT update priceHistory
-      // This preserves the old valid data in the database
-      console.warn(`Twelve Data returned empty/error for ${decodedTicker}, preserving old cache.`);
     }
 
-    // 3. Update DB - only if there's something to update
+    // 3. Update Asset metadata - only if there's something to update
     if (Object.keys(updateData).length === 0) {
       return NextResponse.json({
         success: true,
@@ -135,7 +138,8 @@ export async function POST(
     return NextResponse.json({
       success: true,
       ticker: decodedTicker,
-      updatedAt: currentTime.toISOString()
+      updatedAt: currentTime.toISOString(),
+      historyUpserted,
     });
 
   } catch (error) {

@@ -24,10 +24,10 @@ export default function TransactionsLoading() {
             <div className="bg-gray-100 rounded-lg h-8 w-44"></div>
           </div>
           <div className="flex items-center space-x-2.5">
-            <div className="w-7 h-7 rounded-full bg-gray-100 border border-gray-200 flex items-center justify-center text-gray-400">
-              <User className="w-4 h-4" />
+            <div className="w-7 h-7 rounded-full bg-gray-100 border border-gray-200 flex items-center justify-center text-gray-500 shadow-sm shrink-0">
+              <User className="w-3.5 h-3.5" />
             </div>
-            <span className="text-[13px] font-bold text-gray-400 hidden sm:block">Account</span>
+            <span className="text-[13px] font-bold text-gray-500 hidden sm:block">Guest</span>
           </div>
         </div>
       </header>

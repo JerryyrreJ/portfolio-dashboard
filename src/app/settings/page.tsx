@@ -72,6 +72,7 @@ export default function SettingsPage() {
   const [isEditingTheme, setIsEditingTheme] = useState(false);
   const [isEditingChartType, setIsEditingChartType] = useState(false);
   const [isEditingColorScheme, setIsEditingColorScheme] = useState(false);
+  const [isEditingCostBasis, setIsEditingCostBasis] = useState(false);
   const [isExporting, setIsExporting] = useState(false);
   const [exportRange, setExportRange] = useState('all');
   const [exportFormat, setExportFormat] = useState('csv');
@@ -925,6 +926,65 @@ export default function SettingsPage() {
                     >
                       <div className={`absolute ${prefs.realTimeSync ? 'left-[22px]' : 'left-0.5'} top-0.5 w-4 h-4 bg-white rounded-full shadow-sm transition-all`}></div>
                     </button>
+                  </div>
+                </div>
+              </div>
+
+              {/* Tax & Accounting Group */}
+              <div className="space-y-4">
+                <h3 className="text-[11px] font-bold text-gray-400 uppercase tracking-[0.1em] pl-1">Tax & Accounting</h3>
+                <div className="bg-gray-50/50 rounded-2xl border border-gray-100 overflow-hidden">
+                  <div className="px-4 md:px-5 py-4 flex items-center justify-between group/item">
+                    <div className="flex items-center space-x-3 md:space-x-4">
+                      <div className={`w-8 h-8 rounded-lg bg-white border border-gray-100 shadow-sm flex items-center justify-center transition-all duration-300 ${isEditingCostBasis ? 'scale-110 border-gray-200 ring-4 ring-black/5' : 'group-hover/item:border-gray-200'}`}>
+                        <FileText className={`w-4 h-4 transition-colors duration-300 ${isEditingCostBasis ? 'text-black' : 'text-gray-400 group-hover/item:text-black'}`} />
+                      </div>
+                      <div>
+                        <div className="text-[14px] font-bold text-black leading-tight">Cost Basis Method</div>
+                        <div className="text-[13px] text-gray-500 font-medium mt-0.5">
+                          {prefs.costBasisMethod === 'FIFO' ? 'First In, First Out' : 'Average Cost'}
+                        </div>
+                      </div>
+                    </div>
+                    <button
+                      onClick={() => setIsEditingCostBasis(!isEditingCostBasis)}
+                      className={`text-[12px] md:text-[13px] font-bold px-3 py-1.5 rounded-lg transition-colors shadow-sm active:scale-95 border ${
+                        isEditingCostBasis
+                          ? 'bg-gray-100 border-gray-200 text-gray-700'
+                          : 'bg-white border-gray-100 text-black hover:bg-gray-100'
+                      }`}
+                    >
+                      {isEditingCostBasis ? 'Cancel' : 'Change'}
+                    </button>
+                  </div>
+                  {/* Expandable Cost Basis Drawer */}
+                  <div className={`grid transition-all duration-300 ease-in-out ${isEditingCostBasis ? 'grid-rows-[1fr] opacity-100' : 'grid-rows-[0fr] opacity-0'}`}>
+                    <div className="overflow-hidden">
+                      <div className="p-4 md:p-5 bg-white border-t border-gray-100/60 flex gap-2">
+                        {([
+                          { id: 'FIFO', label: 'FIFO', desc: 'First In, First Out' },
+                          { id: 'AVCO', label: 'AVCO', desc: 'Average Cost' },
+                        ] as const).map((method) => (
+                          <button
+                            key={method.id}
+                            onClick={() => {
+                              updatePreference('costBasisMethod', method.id);
+                              setIsEditingCostBasis(false);
+                            }}
+                            className={`flex-1 flex flex-col items-start px-4 py-3 rounded-xl transition-all active:scale-[0.98] border ${
+                              prefs.costBasisMethod === method.id
+                                ? 'bg-black border-black text-white shadow-sm'
+                                : 'bg-gray-50 border-gray-100 text-black hover:border-gray-200 hover:bg-gray-100'
+                            }`}
+                          >
+                            <span className="text-[13px] font-bold">{method.label}</span>
+                            <span className={`text-[11px] font-medium mt-0.5 ${prefs.costBasisMethod === method.id ? 'text-gray-400' : 'text-gray-400'}`}>
+                              {method.desc}
+                            </span>
+                          </button>
+                        ))}
+                      </div>
+                    </div>
                   </div>
                 </div>
               </div>

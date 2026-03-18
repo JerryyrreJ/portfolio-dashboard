@@ -89,7 +89,7 @@ export default async function Page() {
         portfolioName="My Portfolio"
         holdingsData={[]}
         chartData={[]}
-        summary={{ totalValue: 0, totalCapGain: 0, totalCapGainPercentage: 0 }}
+        summary={{ totalValue: 0, totalCapGain: 0, totalCapGainPercentage: 0, totalRealizedGain: 0 }}
       />
     );
   }
@@ -99,7 +99,8 @@ export default async function Page() {
     where: { userId: user.id },
     include: {
       transactions: {
-        include: { asset: true }
+        include: { asset: true },
+        orderBy: { date: 'asc' }
       }
     }
   }))
@@ -109,7 +110,8 @@ export default async function Page() {
       data: { userId: user.id, name: 'My Portfolio' },
       include: {
         transactions: {
-          include: { asset: true }
+          include: { asset: true },
+          orderBy: { date: 'asc' }
         }
       }
     }))
@@ -122,13 +124,22 @@ export default async function Page() {
         portfolioName={portfolio.name}
         holdingsData={[]}
         chartData={[]}
-        summary={{ totalValue: 0, totalCapGain: 0, totalCapGainPercentage: 0 }}
+        summary={{ totalValue: 0, totalCapGain: 0, totalCapGainPercentage: 0, totalRealizedGain: 0 }}
         userDisplayName={userDisplayName}
       />
     )
   }
 
-  // 2. 核心财务逻辑：通过历史交易流水计算实时持仓 (Holdings)
+  // 2. 读取用户偏好的成本计算方式
+  let costBasisMethod: 'FIFO' | 'AVCO' = 'FIFO';
+  if (portfolio.preferences) {
+    try {
+      const parsed = JSON.parse(portfolio.preferences);
+      if (parsed.costBasisMethod === 'AVCO') costBasisMethod = 'AVCO';
+    } catch { /* 忽略解析错误，使用默认值 */ }
+  }
+
+  // 3. 核心财务逻辑：通过历史交易流水计算实时持仓 (Holdings)
   const holdingsMap = new Map<string, any>();
 
   for (const t of portfolio.transactions) {
@@ -137,21 +148,56 @@ export default async function Page() {
       holdingsMap.set(ticker, {
         asset: t.asset,
         totalQty: 0,
-        totalCost: 0, 
+        totalCost: 0,
+        realizedGain: 0,
+        // FIFO 专用：买入批次队列 [{ qty, unitCost }]
+        lots: [] as { qty: number; unitCost: number }[],
       })
     }
     const current = holdingsMap.get(ticker);
-    
+
     if (t.type === 'BUY') {
-      current.totalQty += t.quantity;
-      current.totalCost += (t.price * t.quantity) + t.fee;
+      const qty = Number(t.quantity);
+      const unitCost = Number(t.price) + Number(t.fee) / qty;
+      current.totalQty += qty;
+      current.totalCost += qty * unitCost;
+      if (costBasisMethod === 'FIFO') {
+        current.lots.push({ qty, unitCost });
+      }
     } else if (t.type === 'SELL') {
-      const avgCost = current.totalQty > 0 ? current.totalCost / current.totalQty : 0;
-      current.totalQty -= t.quantity;
-      current.totalCost -= avgCost * t.quantity;
+      const sellQty = Number(t.quantity);
+      const sellPrice = Number(t.price);
+      const sellFee = Number(t.fee);
+
+      if (costBasisMethod === 'FIFO') {
+        // FIFO：从最早的批次开始消耗
+        let remaining = sellQty;
+        let costOfSold = 0;
+        while (remaining > 0 && current.lots.length > 0) {
+          const lot = current.lots[0];
+          const consumed = Math.min(remaining, lot.qty);
+          costOfSold += consumed * lot.unitCost;
+          lot.qty -= consumed;
+          remaining -= consumed;
+          if (lot.qty <= 0) current.lots.shift();
+        }
+        current.realizedGain += (sellPrice * sellQty - sellFee) - costOfSold;
+        current.totalQty -= sellQty;
+        current.totalCost = current.lots.reduce(
+          (s: number, l: { qty: number; unitCost: number }) => s + l.qty * l.unitCost, 0
+        );
+      } else {
+        // AVCO：加权平均成本
+        const avgCost = current.totalQty > 0 ? current.totalCost / current.totalQty : 0;
+        current.realizedGain += (sellPrice - avgCost) * sellQty - sellFee;
+        current.totalQty -= sellQty;
+        current.totalCost -= avgCost * sellQty;
+      }
+
       if (current.totalQty <= 0) {
         current.totalQty = 0;
         current.totalCost = 0;
+        current.lots = [];
       }
     }
   }
@@ -172,9 +218,11 @@ export default async function Page() {
   
   // 提取需要更新的资源，后台触发，不 await
   const missingLogos = assetsWithLogo.filter(a => !a.logo);
-  const missingHistories = assetsWithLogo.filter(a => !a.priceHistory);
+  const assetsNeedingHistorySync = assetsWithLogo.filter(
+    a => !a.historyLastUpdated || a.historyLastUpdated < new Date(Date.now() - 24 * 60 * 60 * 1000)
+  );
 
-  if (missingLogos.length > 0 || missingHistories.length > 0) {
+  if (missingLogos.length > 0 || assetsNeedingHistorySync.length > 0) {
     // 异步闭包，在后台运行
     (async () => {
       try {
@@ -184,12 +232,18 @@ export default async function Page() {
             await prisma.asset.update({ where: { id: asset.id }, data: { logo: profile.logo } });
           }
         }
-        for (const asset of missingHistories) {
+        for (const asset of assetsNeedingHistorySync) {
           const history = await get12MonthHistory(asset.ticker);
           if (history && history.length > 0) {
+            const values = history.map(p => `('${asset.ticker}', '${p.date}'::date, ${p.price})`).join(',');
+            await prisma.$executeRawUnsafe(`
+              INSERT INTO "AssetPriceHistory" (ticker, date, close)
+              VALUES ${values}
+              ON CONFLICT (ticker, date) DO UPDATE SET close = EXCLUDED.close
+            `);
             await prisma.asset.update({
               where: { id: asset.id },
-              data: { priceHistory: JSON.stringify(history), historyLastUpdated: new Date() }
+              data: { historyLastUpdated: new Date() }
             });
           }
         }
@@ -203,7 +257,7 @@ export default async function Page() {
     logoMap[asset.ticker] = asset.logo;
   }
 
-  const calculatedHoldings = Array.from(holdingsMap.values()).map(h => {
+  const calculatedHoldings = Array.from(holdingsMap.values()).filter(h => h.totalQty > 0).map(h => {
     // 使用数据库缓存的价格，如果没有则用 fallback
     const currentPrice = h.asset.lastPrice || 0;
     const value = currentPrice * h.totalQty;
@@ -236,83 +290,86 @@ export default async function Page() {
   const totalCapGain = totalValue - totalCostBase;
   const totalCapGainPercentage = totalCostBase > 0 ? (totalCapGain / totalCostBase) * 100 : 0;
 
-  // 5. 时间轴走势数据 (给折线图)
-
-  // 5a. 确保每个 Asset 都有 priceHistory 缓存（没有就拉取并存入 DB）
-  // 已经移至后台异步更新 (第4步)，不在此处阻塞页面加载
-
-  // 5b. 解析各 Asset 的历史价格
-  const priceHistories: Record<string, { date: string; price: number }[]> = {};
-  for (const asset of assetsWithLogo) {
-    if (asset.priceHistory) {
-      try {
-        priceHistories[asset.ticker] = JSON.parse(asset.priceHistory);
-      } catch { /* ignore */ }
-    }
+  let totalRealizedGain = 0;
+  for (const h of holdingsMap.values()) {
+    totalRealizedGain += h.realizedGain;
   }
 
-  // 5c. 收集所有 Asset 历史中出现过的月份标签，按时间排序
+  // 5. 时间轴走势数据 (给折线图)
+
+  // 5a. 从 AssetPriceHistory 表读取所有持仓的日度价格（过去1年）
+  const tickers = Array.from(holdingsMap.keys());
+  const oneYearAgo = new Date();
+  oneYearAgo.setFullYear(oneYearAgo.getFullYear() - 1);
+
+  const priceRows = await prisma.assetPriceHistory.findMany({
+    where: {
+      ticker: { in: tickers },
+      date: { gte: oneYearAgo },
+    },
+    orderBy: { date: 'asc' },
+    select: { ticker: true, date: true, close: true },
+  });
+
+  // 5b. 按 ticker 分组，date 转为 YYYY-MM-DD 字符串
+  const priceHistories: Record<string, { date: string; price: number }[]> = {};
+  for (const row of priceRows) {
+    const dateStr = row.date.toISOString().split('T')[0];
+    if (!priceHistories[row.ticker]) priceHistories[row.ticker] = [];
+    priceHistories[row.ticker].push({ date: dateStr, price: row.close });
+  }
+
+  // 5c. 收集所有出现过的日期标签，按时间排序
   const allDateLabels = Array.from(
     new Set(Object.values(priceHistories).flatMap(h => h.map(p => p.date)))
-  ).sort((a, b) => new Date(a).getTime() - new Date(b).getTime());
+  ).sort();
 
-  // 5d. 将交易记录按时间排序，用于逐月回放
+  // 5d. 将交易记录按时间排序，用于逐日回放
   const sortedTransactions = [...portfolio.transactions].sort(
     (a, b) => new Date(a.date).getTime() - new Date(b.date).getTime()
   );
 
-  // 5e. 对每个月份标签，回放交易 → 算持仓 → 乘以当月价格 → 得出该月组合市值
+  // 5e. 对每个日期，回放交易 → 算持仓 → 乘以当日价格 → 得出该日组合市值
+  const holdingsAtDate = new Map<string, number>(); // ticker → qty
+  let txIndex = 0;
+
   const historicalChartData = allDateLabels.map(dateLabel => {
-    // "Mar 2025" → 该月月底，确保当月内的所有交易都被计入
-    const labelDate = new Date(dateLabel);
-    const endOfMonth = new Date(labelDate.getFullYear(), labelDate.getMonth() + 1, 0, 23, 59, 59);
+    const dayEnd = new Date(dateLabel + 'T23:59:59Z');
 
-    const holdingsAtDate = new Map<string, { qty: number; market: string }>();
-    for (const t of sortedTransactions) {
-      if (new Date(t.date) > endOfMonth) break;
+    // 推进交易回放：把截止当天的所有交易都计入
+    while (txIndex < sortedTransactions.length && new Date(sortedTransactions[txIndex].date) <= dayEnd) {
+      const t = sortedTransactions[txIndex];
       const ticker = t.asset.ticker;
-      if (!holdingsAtDate.has(ticker)) {
-        holdingsAtDate.set(ticker, { qty: 0, market: t.asset.market });
-      }
-      const h = holdingsAtDate.get(ticker)!;
-      if (t.type === 'BUY') h.qty += t.quantity;
-      else if (t.type === 'SELL') h.qty -= t.quantity;
+      const qty = holdingsAtDate.get(ticker) ?? 0;
+      if (t.type === 'BUY') holdingsAtDate.set(ticker, qty + t.quantity);
+      else if (t.type === 'SELL') holdingsAtDate.set(ticker, qty - t.quantity);
+      txIndex++;
     }
 
-    let nasdaq = 0, nyse = 0, otc = 0;
-    for (const [ticker, holding] of holdingsAtDate) {
-      if (holding.qty <= 0) continue;
-      const assetHistory = priceHistories[ticker] ?? [];
-      const pricePoint = assetHistory.find(p => p.date === dateLabel);
-      if (!pricePoint) continue;
-      const value = holding.qty * pricePoint.price;
-      if (holding.market === 'NASDAQ') nasdaq += value;
-      else if (holding.market === 'NYSE') nyse += value;
-      else if (holding.market === 'OTC') otc += value;
+    let total = 0;
+    for (const [ticker, qty] of holdingsAtDate) {
+      if (qty <= 0) continue;
+      const dayPrices = priceHistories[ticker];
+      if (!dayPrices) continue;
+      const point = dayPrices.find(p => p.date === dateLabel);
+      if (!point) continue;
+      total += qty * point.price;
     }
 
-    return {
-      date: dateLabel,
-      NASDAQ: Math.round(nasdaq),
-      NYSE: Math.round(nyse),
-      OTC: Math.round(otc),
-    };
-  });
+    return { date: dateLabel, Total: Math.round(total * 100) / 100 };
+  }).filter(p => p.Total > 0);
 
   // 5f. 末尾追加 Today 实时数据
-  const todayOTC = calculatedHoldings.filter(h=>h.market==='OTC').reduce((s,h)=>s+h.value,0);
-  const todayNASDAQ = calculatedHoldings.filter(h=>h.market==='NASDAQ').reduce((s,h)=>s+h.value,0);
-  const todayNYSE = calculatedHoldings.filter(h=>h.market==='NYSE').reduce((s,h)=>s+h.value,0);
-
   const chartData = [
     ...historicalChartData,
-    { date: 'Today', OTC: Math.round(todayOTC), NASDAQ: Math.round(todayNASDAQ), NYSE: Math.round(todayNYSE) },
+    { date: 'Today', Total: Math.round(totalValue * 100) / 100 },
   ];
 
   const summary = {
     totalValue,
     totalCapGain,
-    totalCapGainPercentage
+    totalCapGainPercentage,
+    totalRealizedGain,
   };
 
   // 6. 将所有算好的数据作为 Props 传递给客户端组件渲染
