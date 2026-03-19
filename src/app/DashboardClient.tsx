@@ -80,6 +80,7 @@ interface Summary {
   totalCapGain: number;
   totalCapGainPercentage: number;
   totalRealizedGain: number;
+  totalDividendIncome: number;
 }
 
 interface DashboardClientProps {
@@ -105,7 +106,7 @@ const CustomXAxisTick = (props: any) => {
     }
   }
 
-  let textAnchor = 'middle';
+  let textAnchor: 'start' | 'middle' | 'end' = 'middle';
   if (index === 0) textAnchor = 'start';
   else if (index === visibleTicksCount - 1) textAnchor = 'end';
 
@@ -197,6 +198,7 @@ export default function DashboardClient({ portfolioId, portfolioName, holdingsDa
             totalCapGain: newTotalValue - newTotalCost,
             totalCapGainPercentage: newTotalCost > 0 ? ((newTotalValue - newTotalCost) / newTotalCost) * 100 : 0,
             totalRealizedGain: prev.totalRealizedGain,
+            totalDividendIncome: prev.totalDividendIncome,
           }));
         }
       } catch (err) {
@@ -228,7 +230,7 @@ export default function DashboardClient({ portfolioId, portfolioName, holdingsDa
       for (const t of txs) {
         const ticker = t.asset.ticker;
         if (!holdingsMap.has(ticker)) {
-          holdingsMap.set(ticker, { asset: t.asset, qty: 0, cost: 0, price: t.price, realizedGain: 0, lots: [] as { qty: number; unitCost: number }[] });
+          holdingsMap.set(ticker, { asset: t.asset, qty: 0, cost: 0, price: t.price, realizedGain: 0, dividendIncome: 0, lots: [] as { qty: number; unitCost: number }[] });
         }
         const current = holdingsMap.get(ticker);
 
@@ -269,6 +271,8 @@ export default function DashboardClient({ portfolioId, portfolioName, holdingsDa
             current.cost = 0;
             current.lots = [];
           }
+        } else if (t.type === 'DIVIDEND') {
+          current.dividendIncome += Number(t.price) * Number(t.quantity);
         }
       }
 
@@ -295,8 +299,10 @@ export default function DashboardClient({ portfolioId, portfolioName, holdingsDa
       const totalCapGain = totalValue - totalCost;
 
       let totalRealizedGain = 0;
+      let totalDividendIncome = 0;
       for (const h of holdingsMap.values()) {
         totalRealizedGain += h.realizedGain;
+        totalDividendIncome += h.dividendIncome || 0;
       }
 
       setLocalSummary({
@@ -304,6 +310,7 @@ export default function DashboardClient({ portfolioId, portfolioName, holdingsDa
         totalCapGain,
         totalCapGainPercentage: totalCost > 0 ? (totalCapGain / totalCost) * 100 : 0,
         totalRealizedGain,
+        totalDividendIncome,
       });
 
       const markets = Array.from(new Set(calculatedHoldings.map(h => h.market)));
@@ -350,7 +357,11 @@ export default function DashboardClient({ portfolioId, portfolioName, holdingsDa
     window.location.reload();
   };
 
-  const isUp = localSummary.totalCapGain >= 0;
+  const totalReturnAbs = localSummary.totalCapGain + (localSummary.totalDividendIncome || 0);
+  const totalCostBase = localSummary.totalValue - localSummary.totalCapGain;
+  const totalReturnPct = totalCostBase > 0 ? (totalReturnAbs / totalCostBase) * 100 : 0;
+
+  const isUp = totalReturnAbs >= 0;
   const upColor = isUp ? colors.gain : colors.loss;
   const isUnrealizedUp = localSummary.totalCapGain >= 0;
   const unrealizedColor = isUnrealizedUp ? colors.gain : colors.loss;
@@ -494,11 +505,11 @@ export default function DashboardClient({ portfolioId, portfolioName, holdingsDa
                 </span>
               </div>
               <div className="mt-2 flex items-center space-x-2">
-                <span className={`text-[12px] font-bold px-1.5 py-0.5 rounded ${upColor.tailwind.bgLight} ${upColor.tailwind.text}`}>
-                  {isUp ? '+' : ''}{localSummary.totalCapGainPercentage.toFixed(2)}%
+                <span className={`text-[12px] font-bold px-1.5 py-0.5 rounded ${upColor.tailwind.bgLight} ${upColor.tailwind.text}`} title="Total Return (Including Dividends)">
+                  {isUp ? '+' : ''}{totalReturnPct.toFixed(2)}%
                 </span>
                 <span className="text-[12px] font-medium text-gray-400 tabular-nums">
-                  ({isUp ? '+' : '-'}{fmt(Math.abs(localSummary.totalCapGain))})
+                  ({isUp ? '+' : '-'}{fmt(Math.abs(totalReturnAbs))})
                 </span>
               </div>
             </div>
@@ -522,6 +533,16 @@ export default function DashboardClient({ portfolioId, portfolioName, holdingsDa
                   </span>
                 </div>
                 <p className="text-gray-400 text-[11px] font-medium mt-0.5">Closed positions</p>
+              </div>
+              <div className="border-t border-gray-100" />
+              <div>
+                <p className="text-[11px] text-gray-400 font-bold uppercase tracking-wider mb-1">Dividends Collected</p>
+                <div className="flex items-baseline">
+                  <span className={`text-[20px] font-bold tracking-tight tabular-nums ${localSummary.totalDividendIncome > 0 ? colors.gain.tailwind.text : 'text-gray-400'}`}>
+                    {localSummary.totalDividendIncome > 0 ? '+' : ''}{fmt(localSummary.totalDividendIncome || 0)}
+                  </span>
+                </div>
+                <p className="text-gray-400 text-[11px] font-medium mt-0.5">Cash reinvested or withdrawn</p>
               </div>
             </div>
 

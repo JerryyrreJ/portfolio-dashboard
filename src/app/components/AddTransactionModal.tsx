@@ -60,16 +60,20 @@ export default function AddTransactionModal({
   const calendarRef = useRef<HTMLDivElement>(null);
 
   // 表单状态
-  const [transactionType, setTransactionType] = useState<'BUY' | 'SELL'>('BUY');
+  const [transactionType, setTransactionType] = useState<'BUY' | 'SELL' | 'DIVIDEND'>('BUY');
   const [symbol, setSymbol] = useState('');
   const [searchQuery, setSearchQuery] = useState('');
   const [searchResults, setSearchResults] = useState<SearchResult[]>([]);
-  const [showSearchResults, setShowSearchResults] = useState(false);
+  const [isSearchFocused, setIsSearchFocused] = useState(false);
   const [selectedStock, setSelectedStock] = useState<SearchResult | null>(null);
 
-  // 货币
+  const txTypeRef = useRef(transactionType);
+  txTypeRef.current = transactionType;
+
+  // 货币与Logo
   const [txCurrency, setTxCurrency] = useState('USD');
   const [showCurrencyPicker, setShowCurrencyPicker] = useState(false);
+  const [txLogo, setTxLogo] = useState<string | null>(null);
 
   // 日期相关
   const [purchaseDate, setPurchaseDate] = useState(new Date().toISOString().split('T')[0]);
@@ -85,7 +89,7 @@ export default function AddTransactionModal({
   // 状态
   const [isFetchingPrice, setIsFetchingPrice] = useState(false);
   const [priceSource, setPriceSource] = useState<'api' | 'manual'>('manual');
-  const [holdings, setHoldings] = useState<Array<{ ticker: string; quantity: number }>>([]);
+  const [holdings, setHoldings] = useState<Array<{ ticker: string; name: string; quantity: number }>>([]);
 
   // 点击外部关闭日历
   useEffect(() => {
@@ -141,10 +145,8 @@ export default function AddTransactionModal({
       if (searchQuery.length >= 1 && !selectedStock) {
         const results = await searchStock(searchQuery);
         setSearchResults(results.slice(0, 8));
-        setShowSearchResults(true);
       } else {
         setSearchResults([]);
-        setShowSearchResults(false);
       }
     }, 300);
     return () => clearTimeout(timer);
@@ -154,13 +156,15 @@ export default function AddTransactionModal({
     setSelectedStock(stock);
     setSymbol(stock.symbol);
     setSearchQuery(stock.symbol);
-    setShowSearchResults(false);
+    setIsSearchFocused(false);
 
     setIsFetchingPrice(true);
     const today = new Date().toISOString().split('T')[0];
 
     // 并行：获取价格 + 自动检测货币
     const pricePromise = (async () => {
+      if (txTypeRef.current === 'DIVIDEND') return; // Do not fetch market price for dividends
+
       if (purchaseDate && purchaseDate !== today) {
         const historical = await getHistoricalPrice(stock.symbol, purchaseDate);
         if (historical && historical.price > 0) {
@@ -181,12 +185,14 @@ export default function AddTransactionModal({
       const lookupRes = await fetch(`/api/assets/lookup?ticker=${encodeURIComponent(stock.symbol)}`);
       if (lookupRes.ok) {
         const data = await lookupRes.json();
+        if (data.logo) setTxLogo(data.logo);
         if (data.currency && data.currency !== 'USD') { setTxCurrency(data.currency); return; }
       }
-      // 从 Twelve Data / Finnhub 获取货币（免费套餐仅支持美股）
+      // 从 Twelve Data / Finnhub 获取货币和Logo
       const profileRes = await fetch(`/api/stock/profile?symbol=${encodeURIComponent(stock.symbol)}`);
       if (profileRes.ok) {
         const data = await profileRes.json();
+        if (data.logo) setTxLogo(data.logo);
         if (data.currency) { setTxCurrency(data.currency); return; }
       }
       // 最终 fallback：根据交易所后缀推断（适用于 API 不支持的非美股）
@@ -202,7 +208,7 @@ export default function AddTransactionModal({
     setPurchaseDate(dateStr);
     setShowCalendar(false);
 
-    if (selectedStock) {
+    if (selectedStock && txTypeRef.current !== 'DIVIDEND') {
       setIsFetchingPrice(true);
       const historical = await getHistoricalPrice(selectedStock.symbol, dateStr);
       if (historical && historical.price > 0) {
@@ -225,6 +231,7 @@ export default function AddTransactionModal({
     setPriceSource('manual');
     setTxCurrency('USD');
     setShowCurrencyPicker(false);
+    setTxLogo(null);
     setSubmitStatus('idle');
   };
 
@@ -262,9 +269,9 @@ export default function AddTransactionModal({
             portfolioId: 'local-portfolio',
             assetId: 'local_asset_' + selectedStock.symbol,
             type: transactionType,
-            quantity: Math.abs(parseFloat(shares)),
+            quantity: transactionType === 'DIVIDEND' ? 1 : Math.abs(parseFloat(shares)),
             price: parseFloat(price),
-            fee: parseFloat(fees) || 0,
+            fee: transactionType === 'DIVIDEND' ? 0 : (parseFloat(fees) || 0),
             date: new Date(purchaseDate).toISOString(),
             notes: notes || null,
             asset: {
@@ -321,9 +328,9 @@ export default function AddTransactionModal({
           portfolioId,
           assetId,
           type: transactionType,
-          quantity: Math.abs(parseFloat(shares)),
+          quantity: transactionType === 'DIVIDEND' ? 1 : Math.abs(parseFloat(shares)),
           price: parseFloat(price),
-          fee: parseFloat(fees) || 0,
+          fee: transactionType === 'DIVIDEND' ? 0 : (parseFloat(fees) || 0),
           date: purchaseDate,
           notes: notes || null,
           currency: txCurrency,
@@ -454,26 +461,32 @@ export default function AddTransactionModal({
         <form onSubmit={handleSubmit} className="p-6 pt-2 sm:p-8 sm:pt-2 space-y-5 sm:space-y-6">
           
           {/* Side Switch - Full Width Colorful Toggle */}
-          <div className="bg-gray-100 p-1.5 rounded-2xl flex relative h-12">
-            <div 
-              className={`absolute inset-1.5 w-[calc(50%-6px)] rounded-xl shadow-sm transition-all duration-300 ease-out ${
-                transactionType === 'BUY' ? 'bg-emerald-500 translate-x-0' : 'bg-rose-500 translate-x-[100%]'
-              }`}
-            />
-            <button 
-              type="button" 
-              onClick={() => setTransactionType('BUY')} 
-              className={`flex-1 text-[14px] font-bold relative z-10 transition-colors duration-200 ${transactionType === 'BUY' ? 'text-white' : 'text-gray-400 hover:text-gray-600'}`}
-            >
-              BUY
-            </button>
-            <button 
-              type="button" 
-              onClick={() => setTransactionType('SELL')} 
-              className={`flex-1 text-[14px] font-bold relative z-10 transition-colors duration-200 ${transactionType === 'SELL' ? 'text-white' : 'text-gray-400 hover:text-gray-600'}`}
-            >
-              SELL
-            </button>
+          <div className="bg-gray-100 p-1.5 rounded-2xl relative h-12">
+            <div className="absolute inset-0 p-1.5 flex transition-all duration-300 pointer-events-none">
+              <div 
+                className={`h-full w-1/3 rounded-xl shadow-sm transition-all duration-300 ease-out
+                ${transactionType === 'BUY' ? 'bg-emerald-500 translate-x-0' : ''}
+                ${transactionType === 'SELL' ? 'bg-rose-500 translate-x-full' : ''}
+                ${transactionType === 'DIVIDEND' ? 'bg-indigo-500 translate-x-[200%]' : ''}`}
+              />
+            </div>
+            <div className="flex h-full relative z-10">
+              <button 
+                type="button" 
+                onClick={() => { setTransactionType('BUY'); if (transactionType === 'DIVIDEND') setPrice(''); }} 
+                className={`flex-1 text-[14px] font-bold transition-colors duration-200 ${transactionType === 'BUY' ? 'text-white' : 'text-gray-400 hover:text-gray-600'}`}
+              >BUY</button>
+              <button 
+                type="button" 
+                onClick={() => { setTransactionType('SELL'); if (transactionType === 'DIVIDEND') setPrice(''); }} 
+                className={`flex-1 text-[14px] font-bold transition-colors duration-200 ${transactionType === 'SELL' ? 'text-white' : 'text-gray-400 hover:text-gray-600'}`}
+              >SELL</button>
+              <button 
+                type="button" 
+                onClick={() => { setTransactionType('DIVIDEND'); setPrice(''); }} 
+                className={`flex-1 text-[14px] font-bold transition-colors duration-200 ${transactionType === 'DIVIDEND' ? 'text-white' : 'text-gray-400 hover:text-gray-600'}`}
+              >DIVIDEND</button>
+            </div>
           </div>
 
           {/* Search Box */}
@@ -484,6 +497,8 @@ export default function AddTransactionModal({
               <input
                 type="text"
                 value={searchQuery}
+                onFocus={() => setIsSearchFocused(true)}
+                onBlur={() => setTimeout(() => setIsSearchFocused(false), 200)}
                 onChange={(e) => { setSearchQuery(e.target.value); if (selectedStock) setSelectedStock(null); }}
                 placeholder="Search symbol (e.g. AAPL)"
                 className="w-full pl-11 pr-10 py-3.5 bg-gray-50 border-none rounded-[18px] text-[15px] font-semibold focus:ring-2 focus:ring-black/5 focus:bg-white transition-all outline-none"
@@ -492,10 +507,35 @@ export default function AddTransactionModal({
               {isLoading && <Loader2 className="absolute right-4 top-1/2 -translate-y-1/2 w-4 h-4 animate-spin text-gray-300" />}
             </div>
 
-            {/* Suggestions */}
-            {showSearchResults && searchResults.length > 0 && (
+            {/* Suggestions & Quick Select */}
+            {isSearchFocused && !selectedStock && (
               <div className="absolute z-50 w-full mt-2 bg-white/95 backdrop-blur-xl border border-gray-100 rounded-2xl shadow-[0_10px_40px_-10px_rgba(0,0,0,0.1)] max-h-60 overflow-y-auto p-2">
-                {searchResults.map((stock) => (
+                
+                {searchQuery === '' && holdings.length > 0 && (
+                  <div className="mb-1 px-1 pt-1 pb-1">
+                    <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-2 px-2">Current Holdings</p>
+                    {holdings.map((h) => (
+                      <button 
+                        key={h.ticker} 
+                        type="button" 
+                        onClick={() => handleSelectStock({ symbol: h.ticker, displaySymbol: h.ticker, description: h.name, type: 'Common Stock' })} 
+                        className="w-full p-2 text-left hover:bg-gray-50 rounded-xl flex items-center justify-between group transition-colors"
+                      >
+                        <div className="flex-1 min-w-0 pr-3">
+                          <span className="font-bold text-black block truncate">{h.ticker}</span>
+                          <p className="text-[11px] text-gray-400 font-medium truncate mt-0.5">{h.name}</p>
+                        </div>
+                        <div className="shrink-0">
+                           <span className="inline-block text-[11px] font-bold text-gray-500 bg-gray-100/80 px-2 py-1 rounded-md whitespace-nowrap tabular-nums">
+                             {h.quantity.toLocaleString(undefined, { maximumFractionDigits: 4 })}
+                           </span>
+                        </div>
+                      </button>
+                    ))}
+                  </div>
+                )}
+
+                {searchQuery !== '' && searchResults.length > 0 && searchResults.map((stock) => (
                   <button key={stock.symbol} type="button" onClick={() => handleSelectStock(stock)} className="w-full p-3 text-left hover:bg-gray-50 rounded-xl flex items-center justify-between group transition-colors">
                     <div>
                       <span className="font-bold text-black">{stock.symbol}</span>
@@ -504,15 +544,30 @@ export default function AddTransactionModal({
                     <ChevronRight className="w-4 h-4 text-gray-200 opacity-0 group-hover:opacity-100 transition-all -translate-x-2 group-hover:translate-x-0" />
                   </button>
                 ))}
+
+                {searchQuery !== '' && searchResults.length === 0 && !isLoading && (
+                  <div className="p-4 text-center text-gray-400 text-[13px] font-medium">No results found for &quot;{searchQuery}&quot;</div>
+                )}
               </div>
             )}
           </div>
 
           {/* Selected Info Summary */}
           {selectedStock && (
-            <div className={`p-4 rounded-2xl border flex items-center justify-between ${transactionType === 'BUY' ? 'bg-emerald-50/30 border-emerald-100/50' : 'bg-rose-50/30 border-rose-100/50'}`}>
+            <div className="space-y-3">
+              <div className={`p-4 rounded-2xl border flex items-center justify-between ${
+              transactionType === 'BUY' ? 'bg-emerald-50/30 border-emerald-100/50' : 
+              transactionType === 'SELL' ? 'bg-rose-50/30 border-rose-100/50' :
+              'bg-indigo-50/30 border-indigo-100/50'
+            }`}>
               <div className="flex items-center gap-3">
-                <div className="w-10 h-10 rounded-xl bg-white shadow-sm flex items-center justify-center font-bold text-gray-800 border border-gray-100">{selectedStock.symbol.charAt(0)}</div>
+                <div className="w-10 h-10 rounded-xl bg-white shadow-sm flex items-center justify-center font-bold text-gray-800 border border-gray-100 overflow-hidden">
+                  {txLogo ? (
+                    <img src={txLogo} alt={selectedStock.symbol} className="w-full h-full object-cover" />
+                  ) : (
+                    selectedStock.symbol.charAt(0)
+                  )}
+                </div>
                 <div>
                   <p className="font-bold text-black leading-tight">{selectedStock.symbol}</p>
                   <p className="text-[11px] text-gray-400 font-medium">{selectedStock.description}</p>
@@ -522,6 +577,17 @@ export default function AddTransactionModal({
                 <div className="text-right">
                   <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">Available</p>
                   <p className="font-bold text-black tabular-nums">{getAvailableShares(selectedStock.symbol).toLocaleString()}</p>
+                </div>
+              )}
+              </div>
+              
+              {/* Warning for unowned Dividend */}
+              {transactionType === 'DIVIDEND' && getAvailableShares(selectedStock.symbol) === 0 && (
+                <div className="flex items-start gap-2.5 p-3 sm:px-4 bg-amber-50 rounded-xl border border-amber-100/60 animate-in fade-in slide-in-from-top-1">
+                  <AlertCircle className="w-4 h-4 text-amber-500 shrink-0 mt-0.5" />
+                  <p className="text-[12px] font-semibold text-amber-700 leading-snug">
+                    You don&apos;t currently hold this asset. It is uncommon to receive a dividend, but you can still record it.
+                  </p>
                 </div>
               )}
             </div>
@@ -589,63 +655,89 @@ export default function AddTransactionModal({
           </div>
 
           {/* Inputs Grid: Shares & Unit Price */}
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-5 sm:gap-6">
-            <div className="space-y-2">
-              <label className="text-[11px] font-bold text-gray-400 uppercase tracking-widest px-1">Shares</label>
-              <div className="relative">
-                <Hash className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-300" />
-                <input 
-                  type="number" 
-                  step="0.0001" 
-                  value={shares} 
-                  onChange={(e) => setShares(e.target.value)} 
-                  onWheel={(e) => (e.target as HTMLInputElement).blur()}
-                  placeholder="0.00" 
-                  className="w-full pl-11 pr-4 py-3.5 bg-gray-50 border-none rounded-[18px] text-[15px] font-bold tabular-nums outline-none focus:ring-2 focus:ring-black/5 [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none" 
-                />
+          {transactionType !== 'DIVIDEND' ? (
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-5 sm:gap-6">
+              <div className="space-y-2">
+                <label className="text-[11px] font-bold text-gray-400 uppercase tracking-widest px-1">Shares</label>
+                <div className="relative">
+                  <Hash className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-300" />
+                  <input 
+                    type="number" 
+                    step="0.0001" 
+                    value={shares} 
+                    onChange={(e) => setShares(e.target.value)} 
+                    onWheel={(e) => (e.target as HTMLInputElement).blur()}
+                    placeholder="0.00" 
+                    className="w-full pl-11 pr-4 py-3.5 bg-gray-50 border-none rounded-[18px] text-[15px] font-bold tabular-nums outline-none focus:ring-2 focus:ring-black/5 [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none" 
+                  />
+                </div>
+              </div>
+              <div className="space-y-2">
+                <label className="text-[11px] font-bold text-gray-400 uppercase tracking-widest px-1 flex items-center gap-1.5">
+                  Unit Price
+                  <span className="text-gray-300">·</span>
+                  <span>{getCurrencySymbol(txCurrency)}</span>
+                </label>
+                <div className="relative">
+                  <DollarSign className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-300" />
+                  <input 
+                    type="number" 
+                    step="0.01" 
+                    value={price} 
+                    onChange={(e) => { setPrice(e.target.value); setPriceSource('manual'); }} 
+                    onWheel={(e) => (e.target as HTMLInputElement).blur()}
+                    placeholder="0.00" 
+                    className={`w-full pl-11 pr-4 py-3.5 border-none rounded-[18px] text-[15px] font-bold tabular-nums outline-none focus:ring-2 focus:ring-black/5 transition-colors [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none ${priceSource === 'api' ? 'bg-blue-50/50 text-blue-900 ring-1 ring-blue-100' : 'bg-gray-50 text-black'}`} 
+                  />
+                </div>
               </div>
             </div>
-            <div className="space-y-2">
-              <label className="text-[11px] font-bold text-gray-400 uppercase tracking-widest px-1 flex items-center gap-1.5">
-                Unit Price
-                <span className="text-gray-300">·</span>
-                <span>{getCurrencySymbol(txCurrency)}</span>
-              </label>
-              <div className="relative">
-                <DollarSign className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-300" />
-                <input 
-                  type="number" 
-                  step="0.01" 
-                  value={price} 
-                  onChange={(e) => { setPrice(e.target.value); setPriceSource('manual'); }} 
-                  onWheel={(e) => (e.target as HTMLInputElement).blur()}
-                  placeholder="0.00" 
-                  className={`w-full pl-11 pr-4 py-3.5 border-none rounded-[18px] text-[15px] font-bold tabular-nums outline-none focus:ring-2 focus:ring-black/5 transition-colors [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none ${priceSource === 'api' ? 'bg-blue-50/50 text-blue-900 ring-1 ring-blue-100' : 'bg-gray-50 text-black'}`} 
-                />
+          ) : (
+            <div className="grid grid-cols-1 gap-5">
+              <div className="space-y-2">
+                <label className="text-[11px] font-bold text-gray-400 uppercase tracking-widest px-1 flex items-center gap-1.5">
+                  Total Payout Amount
+                  <span className="text-gray-300">·</span>
+                  <span>{getCurrencySymbol(txCurrency)}</span>
+                </label>
+                <div className="relative">
+                  <DollarSign className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-300" />
+                  <input 
+                    type="number" 
+                    step="0.01" 
+                    value={price} 
+                    onChange={(e) => { setPrice(e.target.value); setPriceSource('manual'); }} 
+                    onWheel={(e) => (e.target as HTMLInputElement).blur()}
+                    placeholder="0.00" 
+                    className="w-full pl-11 pr-4 py-3.5 bg-gray-50 border-none rounded-[18px] text-[15px] font-bold tabular-nums outline-none focus:ring-2 focus:ring-black/5 transition-colors [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none text-black" 
+                  />
+                </div>
               </div>
             </div>
-          </div>
+          )}
 
           {/* Fee & Optional Notes Grid */}
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-5 sm:gap-6">
-            <div className="space-y-2">
-              <label className="text-[11px] font-bold text-gray-400 uppercase tracking-widest px-1 flex items-center gap-1.5">
-                Fee (Optional)
-                <span className="text-gray-300">·</span>
-                <span>{getCurrencySymbol(txCurrency)}</span>
-              </label>
-              <div className="relative">
-                <DollarSign className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-300" />
-                <input 
-                  type="number" 
-                  step="0.01" 
-                  value={fees} 
-                  onChange={(e) => setFees(e.target.value)} 
-                  onWheel={(e) => (e.target as HTMLInputElement).blur()}
-                  className="w-full pl-11 pr-4 py-3.5 bg-gray-50 border-none rounded-[18px] text-[15px] font-bold outline-none focus:ring-2 focus:ring-black/5 [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none" 
-                />
+            {transactionType !== 'DIVIDEND' ? (
+              <div className="space-y-2">
+                <label className="text-[11px] font-bold text-gray-400 uppercase tracking-widest px-1 flex items-center gap-1.5">
+                  Fee (Optional)
+                  <span className="text-gray-300">·</span>
+                  <span>{getCurrencySymbol(txCurrency)}</span>
+                </label>
+                <div className="relative">
+                  <DollarSign className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-300" />
+                  <input 
+                    type="number" 
+                    step="0.01" 
+                    value={fees} 
+                    onChange={(e) => setFees(e.target.value)} 
+                    onWheel={(e) => (e.target as HTMLInputElement).blur()}
+                    className="w-full pl-11 pr-4 py-3.5 bg-gray-50 border-none rounded-[18px] text-[15px] font-bold outline-none focus:ring-2 focus:ring-black/5 [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none" 
+                  />
+                </div>
               </div>
-            </div>
+            ) : <div className="hidden sm:block"></div>}
             <div className="space-y-2">
               <label className="text-[11px] font-bold text-gray-400 uppercase tracking-widest px-1">Notes</label>
               <input type="text" value={notes} onChange={(e) => setNotes(e.target.value)} placeholder="Optional" className="w-full px-4 py-3.5 bg-gray-50 border-none rounded-[18px] text-[13px] font-medium outline-none focus:ring-2 focus:ring-black/5" />
@@ -670,7 +762,7 @@ export default function AddTransactionModal({
           <div className="pt-2">
             <button
               type="submit"
-              disabled={!selectedStock || !price || !shares || submitStatus !== 'idle'}
+              disabled={!selectedStock || !price || (transactionType !== 'DIVIDEND' && !shares) || submitStatus !== 'idle'}
               className="w-full py-4 bg-black text-white text-[16px] font-bold rounded-[20px] shadow-lg shadow-black/10 hover:bg-gray-800 active:scale-[0.98] disabled:bg-gray-200 disabled:shadow-none transition-all flex items-center justify-center gap-2"
             >
               {submitStatus === 'loading' ? <Loader2 className="w-5 h-5 animate-spin" /> : <span>Confirm Transaction</span>}

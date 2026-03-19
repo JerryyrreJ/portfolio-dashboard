@@ -85,6 +85,7 @@ interface StockData {
   costBasis: number;
   totalReturn: number;
   totalReturnPercent: number;
+  totalDividend: number;
   avgBuyPrice: number;
   totalFees: number;
   chartData: ChartPoint[];
@@ -185,7 +186,7 @@ const CustomXAxisTick = (props: any) => {
   }
 
   // Determine text alignment based on position
-  let textAnchor = 'middle';
+  let textAnchor: 'start' | 'middle' | 'end' = 'middle';
   let dx = 0;
   
   // If it's the very first tick rendered, align it to the start (left)
@@ -240,7 +241,7 @@ export default function StockDetailClient({ stockData }: { stockData: StockData 
     ticker, name, market,
     currentPrice, priceChange, priceChangePercent,
     dayHigh, dayLow, dayOpen, prevClose, lastUpdated,
-    totalQty, currentValue, costBasis, totalReturn, totalReturnPercent,
+    totalQty, currentValue, costBasis, totalReturn, totalReturnPercent, totalDividend,
     avgBuyPrice, totalFees,
     transactions, portfolioId, portfolioName,
     profile, metrics,
@@ -626,11 +627,21 @@ export default function StockDetailClient({ stockData }: { stockData: StockData 
                           <tr key={tx.id} className="hover:bg-gray-50/50">
                             <td className="px-4 sm:px-6 py-4 font-semibold">{new Date(tx.date).toLocaleDateString()}</td>
                             <td className="px-4 sm:px-6 py-4">
-                              <span className={`px-1.5 py-0.5 rounded text-[10px] font-bold uppercase ${tx.type === 'BUY' ? `bg-${colors.gain.tw}-50 text-${colors.gain.tw}-700` : `bg-${colors.loss.tw}-50 text-${colors.loss.tw}-700`}`}>{tx.type}</span>
+                              <span className={`px-1.5 py-0.5 rounded text-[10px] font-bold uppercase ${
+                                tx.type === 'BUY' ? `bg-${colors.gain.tw}-50 text-${colors.gain.tw}-700` : 
+                                tx.type === 'SELL' ? `bg-${colors.loss.tw}-50 text-${colors.loss.tw}-700` :
+                                'bg-indigo-50 text-indigo-700'
+                              }`}>{tx.type}</span>
                             </td>
-                            <td className="px-4 sm:px-6 py-4 text-right font-medium tabular-nums">{tx.quantity.toLocaleString()}</td>
-                            <td className="px-4 sm:px-6 py-4 text-right font-medium tabular-nums">{fmt(tx.price)}</td>
-                            <td className="px-4 sm:px-6 py-4 text-right font-bold tabular-nums">{fmt(tx.price * tx.quantity)}</td>
+                            <td className="px-4 sm:px-6 py-4 text-right font-medium tabular-nums">
+                              {tx.type === 'DIVIDEND' ? '--' : tx.quantity.toLocaleString()}
+                            </td>
+                            <td className="px-4 sm:px-6 py-4 text-right font-medium tabular-nums">
+                              {tx.type === 'DIVIDEND' ? '--' : fmt(tx.price)}
+                            </td>
+                            <td className="px-4 sm:px-6 py-4 text-right font-bold tabular-nums">
+                              {fmt(tx.type === 'DIVIDEND' ? tx.price : tx.price * tx.quantity)}
+                            </td>
                           </tr>
                         ))}
                       </tbody>
@@ -687,6 +698,7 @@ export default function StockDetailClient({ stockData }: { stockData: StockData 
               <h4 className="text-[11px] font-bold text-gray-400 uppercase tracking-widest">Investment Details</h4>
               <StatRow label="Cost Basis" value={fmt(costBasis)} />
               <StatRow label="Brokerage" value={fmt(totalFees)} />
+              <StatRow label="Dividends" value={totalDividend > 0 ? `+${fmt(totalDividend)}` : '--'} highlight={totalDividend > 0 ? 'green' : undefined} />
               {metrics && <StatRow label="Dividend Yield" value={`${metrics.dividendYield.toFixed(2)}%`} />}
             </div>
 

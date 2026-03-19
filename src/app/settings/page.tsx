@@ -666,19 +666,19 @@ export default function SettingsPage() {
               <div className="space-y-4">
                 <h3 className="text-[11px] font-bold text-gray-400 uppercase tracking-[0.1em] pl-1">Data Management</h3>
                 <div className="bg-gray-50/50 rounded-2xl border border-gray-100 overflow-hidden">
-                  <div className="px-5 py-4 flex items-center justify-between group/item transition-colors duration-300">
-                    <div className="flex items-center space-x-4">
-                      <div className={`w-8 h-8 rounded-lg bg-white border border-gray-100 shadow-sm flex items-center justify-center transition-all duration-300 ${isExporting ? 'scale-110 border-gray-200 ring-4 ring-black/5' : 'group-hover/item:border-gray-200'}`}>
+                  <div className="px-5 py-4 flex items-center justify-between group/item transition-colors duration-300 gap-3">
+                    <div className="flex items-center space-x-4 flex-1 min-w-0">
+                      <div className={`flex-shrink-0 w-8 h-8 rounded-lg bg-white border border-gray-100 shadow-sm flex items-center justify-center transition-all duration-300 ${isExporting ? 'scale-110 border-gray-200 ring-4 ring-black/5' : 'group-hover/item:border-gray-200'}`}>
                         <Download className={`w-4 h-4 transition-colors duration-300 ${isExporting ? 'text-black' : 'text-gray-400 group-hover/item:text-black'}`} />
                       </div>
-                      <div>
-                        <div className="text-[14px] font-bold text-black leading-tight">Export Data</div>
-                        <div className="text-[12px] text-gray-400 font-medium mt-0.5">Download your transaction history</div>
+                      <div className="flex-1 min-w-0 pr-2">
+                        <div className="text-[14px] font-bold text-black leading-tight truncate">Export Data</div>
+                        <div className="text-[12px] text-gray-400 font-medium mt-0.5 leading-snug truncate sm:whitespace-normal">Download your transaction history</div>
                       </div>
                     </div>
                     <button 
                       onClick={() => setIsExporting(!isExporting)}
-                      className={`text-[13px] font-bold px-3 py-1.5 rounded-lg transition-colors shadow-sm active:scale-95 border ${
+                      className={`flex-shrink-0 text-[13px] font-bold px-3 py-1.5 rounded-lg transition-colors shadow-sm active:scale-95 border ${
                         isExporting
                           ? 'bg-gray-100 border-gray-200 text-gray-700'
                           : 'bg-white border-gray-100 text-black hover:bg-gray-100'
@@ -695,7 +695,7 @@ export default function SettingsPage() {
                         {/* Range Selection */}
                         <div className="space-y-3">
                           <label className="text-[11px] font-bold text-gray-400 uppercase tracking-[0.1em]">Time Range</label>
-                          <div className="grid grid-cols-3 gap-2">
+                          <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 sm:gap-3">
                             {[
                               { id: 'all', label: 'All Time' },
                               { id: 'ytd', label: 'Year to Date' },
@@ -704,7 +704,7 @@ export default function SettingsPage() {
                               <button
                                 key={range.id}
                                 onClick={() => setExportRange(range.id)}
-                                className={`px-3 py-2 rounded-xl border text-[12px] font-bold transition-all ${
+                                className={`px-4 py-3 sm:py-2 rounded-xl border text-[13px] sm:text-[12px] font-bold transition-all active:scale-[0.98] ${
                                   exportRange === range.id
                                     ? 'border-black bg-black text-white shadow-sm'
                                     : 'border-gray-200 bg-white text-gray-500 hover:border-gray-300 hover:bg-gray-50'
@@ -719,7 +719,7 @@ export default function SettingsPage() {
                         {/* Format Selection */}
                         <div className="space-y-3">
                           <label className="text-[11px] font-bold text-gray-400 uppercase tracking-[0.1em]">File Format</label>
-                          <div className="grid grid-cols-3 gap-2">
+                          <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 sm:gap-3">
                             {[
                               { id: 'csv', label: 'CSV', sub: 'Excel / Sheets' },
                               { id: 'json', label: 'JSON', sub: 'Developer' },
@@ -728,14 +728,14 @@ export default function SettingsPage() {
                               <button
                                 key={format.id}
                                 onClick={() => setExportFormat(format.id)}
-                                className={`px-3 py-2 rounded-xl border text-[12px] transition-all flex flex-col items-center justify-center gap-0.5 ${
+                                className={`px-4 py-3 sm:py-2 rounded-xl border transition-all flex sm:flex-col items-center justify-between sm:justify-center gap-1 sm:gap-0.5 active:scale-[0.98] ${
                                   exportFormat === format.id
                                     ? 'border-black bg-black text-white shadow-sm'
                                     : 'border-gray-200 bg-white text-gray-500 hover:border-gray-300 hover:bg-gray-50'
                                 }`}
                               >
-                                <span className="font-bold">{format.label}</span>
-                                <span className={`text-[9px] ${exportFormat === format.id ? 'text-gray-400' : 'text-gray-400'}`}>{format.sub}</span>
+                                <span className="text-[13px] sm:text-[12px] font-bold">{format.label}</span>
+                                <span className={`text-[11px] sm:text-[9px] font-medium ${exportFormat === format.id ? 'text-gray-300' : 'text-gray-400'}`}>{format.sub}</span>
                               </button>
                             ))}
                           </div>
@@ -1118,10 +1118,12 @@ export default function SettingsPage() {
                   {/* Profile Block */}
                   <div className="space-y-4">
                     <h3 className="text-[11px] font-bold text-gray-400 uppercase tracking-[0.1em] pl-1">Profile</h3>
-                    <div className="space-y-4">
-                      <div className="flex flex-col sm:flex-row sm:items-center justify-between p-4 bg-gray-50/50 rounded-2xl border border-gray-100 gap-4 sm:gap-0">
+                    
+                    <div className="bg-gray-50/50 rounded-2xl border border-gray-100 overflow-hidden">
+                      {/* Name & Avatar */}
+                      <div className="flex items-center justify-between p-4 md:p-5 bg-transparent border-b border-gray-100">
                         <div className="flex items-center space-x-3 md:space-x-4">
-                          <div className="w-10 h-10 md:w-12 md:h-12 rounded-full bg-black text-white flex items-center justify-center font-bold text-base md:text-lg shrink-0">
+                          <div className="w-10 h-10 md:w-12 md:h-12 rounded-full bg-black text-white flex items-center justify-center font-bold text-base md:text-lg shrink-0 shadow-sm">
                             {(user?.user_metadata?.display_name || user?.email)?.[0]?.toUpperCase()}
                           </div>
                           <div className="min-w-0">
@@ -1131,28 +1133,20 @@ export default function SettingsPage() {
                             <div className="text-[12px] md:text-[13px] text-gray-500 font-medium truncate">{user?.email}</div>
                           </div>
                         </div>
-                        <button
-                          onClick={handleSignOut}
-                          className="w-full sm:w-auto flex items-center justify-center space-x-2 text-[13px] font-bold text-rose-500 border border-rose-100/50 bg-rose-50/30 hover:bg-rose-50 px-4 py-2 rounded-xl transition-all shadow-sm active:scale-95 group"
-                        >
-                          <LogOut className="w-3.5 h-3.5 group-hover:-translate-x-0.5 transition-transform" />
-                          <span>Sign Out</span>
-                        </button>
                       </div>
 
-                      {/* Device Context Info */}
+                      {/* Device Context */}
                       {user?.last_sign_in_at && (
-                        <div className="px-4 py-2.5 bg-gray-50/30 rounded-2xl border border-gray-100/60 flex items-center justify-between">
+                        <div className="px-4 py-3.5 bg-transparent border-b border-gray-100 flex flex-col sm:flex-row sm:items-center justify-between gap-1.5 sm:gap-0">
                           <div className="flex items-center space-x-2.5">
-                            <div className="w-6 h-6 rounded-lg bg-white border border-gray-100 flex items-center justify-center">
-                              <Monitor className="w-3.5 h-3.5 text-gray-400" />
-                            </div>
-                            <span className="text-[11px] font-medium text-gray-400 uppercase tracking-wider">
-                              Last Session: {new Date(user.last_sign_in_at).toLocaleDateString()} at {new Date(user.last_sign_in_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                            <Monitor className="w-3.5 h-3.5 text-gray-400 shrink-0" />
+                            <span className="text-[11px] font-medium text-gray-400 uppercase tracking-wider truncate sm:whitespace-normal">
+                              Last Session: {new Date(user.last_sign_in_at).toLocaleDateString()}
+                              <span className="hidden sm:inline"> at {new Date(user.last_sign_in_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
                             </span>
                           </div>
-                          <div className="flex items-center space-x-1.5 opacity-60">
-                            <div className="w-1.5 h-1.5 bg-emerald-500 rounded-full animate-pulse"></div>
+                          <div className="flex items-center space-x-1.5 opacity-60 ml-6 sm:ml-0 shrink-0">
+                            <div className="w-1.5 h-1.5 bg-emerald-500 rounded-full animate-pulse shrink-0"></div>
                             <span className="text-[11px] font-bold text-gray-500">
                               {typeof window !== 'undefined' && (
                                 <>
@@ -1166,13 +1160,25 @@ export default function SettingsPage() {
                         </div>
                       )}
 
-                      <div className="p-4 bg-emerald-50/30 rounded-2xl border border-emerald-100 flex items-start space-x-3">
-                        <ShieldCheck className="w-5 h-5 text-emerald-500 mt-0.5 shrink-0" />
+                      {/* Account Verified Status */}
+                      <div className="px-4 py-3.5 bg-transparent border-b border-gray-100 flex items-start space-x-2.5">
+                        <ShieldCheck className="w-4 h-4 text-emerald-500 mt-[1px] shrink-0" />
                         <div>
                           <div className="text-[13px] font-bold text-emerald-700">Account Verified</div>
                           <div className="text-[12px] text-emerald-600/80 font-medium mt-0.5">Your data is securely synchronized with Supabase Cloud.</div>
                         </div>
                       </div>
+
+                      {/* Sign Out Action */}
+                      <button
+                        onClick={handleSignOut}
+                        className="w-full flex items-center justify-between px-4 py-3.5 bg-transparent hover:bg-gray-100 transition-colors active:bg-gray-200 group"
+                      >
+                        <div className="flex items-center space-x-2.5">
+                          <LogOut className="w-3.5 h-3.5 text-rose-500 group-hover:-translate-x-0.5 transition-transform shrink-0" />
+                          <span className="text-[13px] font-bold text-rose-500">Sign Out</span>
+                        </div>
+                      </button>
                     </div>
                   </div>
 

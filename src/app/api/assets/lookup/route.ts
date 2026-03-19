@@ -34,6 +34,7 @@ export async function GET(request: NextRequest) {
       name: asset.name,
       market: asset.market,
       currency: asset.currency,
+      logo: asset.logo,
     });
 
   } catch (error) {

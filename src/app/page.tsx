@@ -89,7 +89,7 @@ export default async function Page() {
         portfolioName="My Portfolio"
         holdingsData={[]}
         chartData={[]}
-        summary={{ totalValue: 0, totalCapGain: 0, totalCapGainPercentage: 0, totalRealizedGain: 0 }}
+        summary={{ totalValue: 0, totalCapGain: 0, totalCapGainPercentage: 0, totalRealizedGain: 0, totalDividendIncome: 0 }}
       />
     );
   }
@@ -124,7 +124,7 @@ export default async function Page() {
         portfolioName={portfolio.name}
         holdingsData={[]}
         chartData={[]}
-        summary={{ totalValue: 0, totalCapGain: 0, totalCapGainPercentage: 0, totalRealizedGain: 0 }}
+        summary={{ totalValue: 0, totalCapGain: 0, totalCapGainPercentage: 0, totalRealizedGain: 0, totalDividendIncome: 0 }}
         userDisplayName={userDisplayName}
       />
     )
@@ -150,6 +150,7 @@ export default async function Page() {
         totalQty: 0,
         totalCost: 0,
         realizedGain: 0,
+        dividendIncome: 0,
         // FIFO 专用：买入批次队列 [{ qty, unitCost }]
         lots: [] as { qty: number; unitCost: number }[],
       })
@@ -199,6 +200,9 @@ export default async function Page() {
         current.totalCost = 0;
         current.lots = [];
       }
+    } else if (t.type === 'DIVIDEND') {
+      const payout = Number(t.price) * Number(t.quantity);
+      current.dividendIncome += payout;
     }
   }
 
@@ -275,6 +279,7 @@ export default async function Page() {
       value: value,
       capGain: capGain,
       return: returnPct,
+      dividendIncome: h.dividendIncome,
       logo: logoMap[h.asset.ticker],
     }
   });
@@ -290,8 +295,10 @@ export default async function Page() {
   const totalCapGainPercentage = totalCostBase > 0 ? (totalCapGain / totalCostBase) * 100 : 0;
 
   let totalRealizedGain = 0;
+  let totalDividendIncome = 0;
   for (const h of holdingsMap.values()) {
     totalRealizedGain += h.realizedGain;
+    totalDividendIncome += h.dividendIncome;
   }
 
   // 5. 时间轴走势数据 (给折线图)
@@ -369,6 +376,7 @@ export default async function Page() {
     totalCapGain,
     totalCapGainPercentage,
     totalRealizedGain,
+    totalDividendIncome,
   };
 
   // 6. 将所有算好的数据作为 Props 传递给客户端组件渲染

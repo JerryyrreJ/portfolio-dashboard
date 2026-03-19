@@ -91,6 +91,7 @@ if (user) {
       costBasis: 0,
       totalReturn: 0,
       totalReturnPercent: 0,
+      totalDividend: 0,
       avgBuyPrice: 0,
       totalFees: 0,
       chartData,
@@ -122,6 +123,7 @@ if (user) {
   let totalQty = 0
   let totalCost = 0
   let totalFees = 0
+  let totalDividend = 0
 
   const transactions = chronoTx.map((t) => {
     if (t.type === 'BUY') {
@@ -133,6 +135,8 @@ if (user) {
         totalCost -= avgCost * t.quantity
       }
       totalQty -= t.quantity
+    } else if (t.type === 'DIVIDEND') {
+      totalDividend += t.price * t.quantity
     }
     totalFees += t.fee
 
@@ -233,6 +237,7 @@ if (user) {
     costBasis,
     totalReturn,
     totalReturnPercent,
+    totalDividend,
     avgBuyPrice,
     totalFees,
     chartData,
