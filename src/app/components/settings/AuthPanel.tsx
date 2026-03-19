@@ -35,7 +35,7 @@ export default function AuthPanel({ onLogin }: AuthPanelProps) {
   };
 
   const strength = getPasswordStrength(password);
-  const strengthColors = ['bg-gray-100', 'bg-rose-400', 'bg-amber-400', 'bg-emerald-400', 'bg-emerald-600'];
+  const strengthColors = ['bg-element-hover', 'bg-rose-400', 'bg-amber-400', 'bg-emerald-400', 'bg-emerald-600'];
 
   // Load remembered email on mount
   React.useEffect(() => {
@@ -165,10 +165,10 @@ export default function AuthPanel({ onLogin }: AuthPanelProps) {
         autoClose={6000}
       />
       <div className="text-center md:text-left">
-        <h3 className="text-[20px] font-bold text-black tracking-tight leading-tight">
+        <h3 className="text-[20px] font-bold text-primary tracking-tight leading-tight">
           {mode === 'login' ? 'Welcome Back' : 'Create an Account'}
         </h3>
-        <p className="text-[13px] text-gray-400 font-medium mt-1">
+        <p className="text-[13px] text-secondary font-medium mt-1">
           {mode === 'login' 
             ? 'Sign in to sync your folio across devices.' 
             : 'Start managing your investments with cloud backup.'}
@@ -185,7 +185,7 @@ export default function AuthPanel({ onLogin }: AuthPanelProps) {
 
         <div className="space-y-3">
           <div className="relative group">
-            <div className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400 group-focus-within:text-black transition-colors">
+            <div className="absolute left-4 top-1/2 -translate-y-1/2 text-secondary group-focus-within:text-primary transition-colors">
               <Mail className="w-4 h-4" />
             </div>
             <input
@@ -197,12 +197,12 @@ export default function AuthPanel({ onLogin }: AuthPanelProps) {
               value={email}
               onChange={(e) => setEmail(e.target.value)}
               required
-              className="w-full bg-gray-50 border border-gray-100 rounded-2xl py-3.5 pl-11 pr-4 text-[14px] font-medium focus:bg-white focus:ring-1 focus:ring-black/5 transition-all outline-none"
+              className="w-full bg-element border border-border rounded-2xl py-3.5 pl-11 pr-4 text-[14px] font-medium focus:bg-card focus:ring-1 focus:ring-black/5 transition-all outline-none"
             />
           </div>
 
           <div className="relative group">
-            <div className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400 group-focus-within:text-black transition-colors">
+            <div className="absolute left-4 top-1/2 -translate-y-1/2 text-secondary group-focus-within:text-primary transition-colors">
               <Lock className="w-4 h-4" />
             </div>
             <input
@@ -214,7 +214,7 @@ export default function AuthPanel({ onLogin }: AuthPanelProps) {
               value={password}
               onChange={(e) => setPassword(e.target.value)}
               required
-              className="w-full bg-gray-50 border border-gray-100 rounded-2xl py-3.5 pl-11 pr-4 text-[14px] font-medium focus:bg-white focus:ring-1 focus:ring-black/5 transition-all outline-none"
+              className="w-full bg-element border border-border rounded-2xl py-3.5 pl-11 pr-4 text-[14px] font-medium focus:bg-card focus:ring-1 focus:ring-black/5 transition-all outline-none"
             />
           </div>
 
@@ -225,12 +225,12 @@ export default function AuthPanel({ onLogin }: AuthPanelProps) {
                   <div 
                     key={step} 
                     className={`h-full flex-1 rounded-full transition-all duration-500 ${
-                      step <= strength ? strengthColors[strength] : 'bg-gray-100'
+                      step <= strength ? strengthColors[strength] : 'bg-element-hover'
                     }`}
                   />
                 ))}
               </div>
-              <p className="text-[10px] font-bold text-gray-400 mt-1.5 uppercase tracking-wider">
+              <p className="text-[10px] font-bold text-secondary mt-1.5 uppercase tracking-wider">
                 {strength === 1 && 'Weak'}
                 {strength === 2 && 'Fair'}
                 {strength === 3 && 'Good'}
@@ -241,7 +241,7 @@ export default function AuthPanel({ onLogin }: AuthPanelProps) {
 
           {mode === 'signup' && (
             <div className="relative group animate-in fade-in slide-in-from-top-2 duration-300">
-              <div className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400 group-focus-within:text-black transition-colors">
+              <div className="absolute left-4 top-1/2 -translate-y-1/2 text-secondary group-focus-within:text-primary transition-colors">
                 <Shield className="w-4 h-4" />
               </div>
               <input
@@ -253,7 +253,7 @@ export default function AuthPanel({ onLogin }: AuthPanelProps) {
                 value={confirmPassword}
                 onChange={(e) => setConfirmPassword(e.target.value)}
                 required
-                className="w-full bg-gray-50 border border-gray-100 rounded-2xl py-3.5 pl-11 pr-4 text-[14px] font-medium focus:bg-white focus:ring-1 focus:ring-black/5 transition-all outline-none"
+                className="w-full bg-element border border-border rounded-2xl py-3.5 pl-11 pr-4 text-[14px] font-medium focus:bg-card focus:ring-1 focus:ring-black/5 transition-all outline-none"
               />
             </div>
           )}
@@ -269,18 +269,18 @@ export default function AuthPanel({ onLogin }: AuthPanelProps) {
                   onChange={(e) => setRememberMe(e.target.checked)}
                   className="peer sr-only"
                 />
-                <div className="w-4 h-4 border border-gray-200 rounded-md bg-gray-50 peer-checked:bg-black peer-checked:border-black transition-all duration-200"></div>
-                <svg className="absolute w-2.5 h-2.5 text-white opacity-0 peer-checked:opacity-100 left-[3px] pointer-events-none transition-opacity duration-200" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="4">
+                <div className="w-4 h-4 border border-border rounded-md bg-element peer-checked:bg-primary peer-checked:border-primary transition-all duration-200"></div>
+                <svg className="absolute w-2.5 h-2.5 text-on-primary opacity-0 peer-checked:opacity-100 left-[3px] pointer-events-none transition-opacity duration-200" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="4">
                   <path d="M5 13l4 4L19 7" />
                 </svg>
               </div>
-              <span className="text-[12px] font-medium text-gray-400 group-hover:text-black transition-colors">Remember me</span>
+              <span className="text-[12px] font-medium text-secondary group-hover:text-primary transition-colors">Remember me</span>
             </label>
             
             <button 
               type="button"
               onClick={handleForgotPassword}
-              className="text-[12px] font-medium text-gray-400 hover:text-black transition-colors"
+              className="text-[12px] font-medium text-secondary hover:text-primary transition-colors"
             >
               Forgot password?
             </button>
@@ -290,7 +290,7 @@ export default function AuthPanel({ onLogin }: AuthPanelProps) {
         <button
           type="submit"
           disabled={loading}
-          className="w-full bg-black text-white rounded-2xl py-3.5 text-[14px] font-bold hover:bg-gray-900 transition-all flex items-center justify-center space-x-2 disabled:opacity-50 disabled:cursor-not-allowed shadow-sm active:scale-[0.98]"
+          className="w-full bg-primary text-on-primary rounded-2xl py-3.5 text-[14px] font-bold hover:bg-gray-900 transition-all flex items-center justify-center space-x-2 disabled:opacity-50 disabled:cursor-not-allowed shadow-sm active:scale-[0.98]"
         >
           {loading ? (
             <div className="w-4 h-4 border-2 border-white/20 border-t-white rounded-full animate-spin" />
@@ -306,15 +306,15 @@ export default function AuthPanel({ onLogin }: AuthPanelProps) {
       {mode === 'login' && (
         <>
           <div className="flex items-center gap-3">
-            <div className="flex-1 h-px bg-gray-100" />
-            <span className="text-[11px] font-bold text-gray-300 uppercase tracking-wider">or</span>
-            <div className="flex-1 h-px bg-gray-100" />
+            <div className="flex-1 h-px bg-element-hover" />
+            <span className="text-[11px] font-bold text-secondary uppercase tracking-wider">or</span>
+            <div className="flex-1 h-px bg-element-hover" />
           </div>
           <button
             type="button"
             onClick={handlePasskeyLogin}
             disabled={passkeyLoading}
-            className="w-full border border-gray-100 bg-gray-50 hover:bg-gray-100 text-black rounded-2xl py-3.5 text-[14px] font-bold transition-all flex items-center justify-center gap-2.5 disabled:opacity-50 disabled:cursor-not-allowed active:scale-[0.98]"
+            className="w-full border border-border bg-element hover:bg-element-hover text-primary rounded-2xl py-3.5 text-[14px] font-bold transition-all flex items-center justify-center gap-2.5 disabled:opacity-50 disabled:cursor-not-allowed active:scale-[0.98]"
           >
             {passkeyLoading ? (
               <Loader2 className="w-4 h-4 animate-spin" />
@@ -332,7 +332,7 @@ export default function AuthPanel({ onLogin }: AuthPanelProps) {
             setMode(mode === 'login' ? 'signup' : 'login');
             setError(null);
           }}
-          className="text-[13px] font-medium text-gray-500 hover:text-black transition-colors"
+          className="text-[13px] font-medium text-secondary hover:text-primary transition-colors"
         >
           {mode === 'login' ? "Don't have an account? " : "Already have an account? "}
           <span className="font-bold underline decoration-gray-200 underline-offset-4 hover:decoration-black transition-all">

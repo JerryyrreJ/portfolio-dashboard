@@ -3,6 +3,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import { usePreferences } from '@/lib/usePreferences';
+import { useTheme } from 'next-themes';
 import Link from 'next/link';
 import { 
   ChevronLeft, 
@@ -46,6 +47,12 @@ export default function SettingsPage() {
 
   const supabase = createClient();
   const { prefs, updatePreference } = usePreferences();
+  const { theme, setTheme } = useTheme();
+  const [mounted, setMounted] = useState(false);
+
+  useEffect(() => {
+    setMounted(true);
+  }, []);
 
   // Display name edit state
   const [isEditingDisplayName, setIsEditingDisplayName] = useState(false);
@@ -448,13 +455,13 @@ export default function SettingsPage() {
   };
 
   const renderToggle = (enabled: boolean = false) => (
-    <button className={`w-10 h-5 ${enabled ? 'bg-black' : 'bg-gray-200'} rounded-full relative transition-colors`}>
-      <div className={`absolute ${enabled ? 'left-[22px]' : 'left-0.5'} top-0.5 w-4 h-4 bg-white rounded-full shadow-sm transition-all`}></div>
+    <button className={`w-10 h-5 ${enabled ? 'bg-primary' : 'bg-gray-200'} rounded-full relative transition-colors`}>
+      <div className={`absolute ${enabled ? 'left-[22px]' : 'left-0.5'} top-0.5 w-4 h-4 bg-card rounded-full shadow-sm transition-all`}></div>
     </button>
   );
 
   return (
-    <div className="min-h-screen bg-[#FBFBFD] text-[#1D1D1F] font-sans antialiased flex flex-col">
+    <div className="min-h-screen bg-page text-primary font-sans antialiased flex flex-col">
       <Notification 
         show={notification.show} 
         type={notification.type} 
@@ -463,10 +470,10 @@ export default function SettingsPage() {
         onClose={() => setNotification({ ...notification, show: false })} 
       />
       {/* Header */}
-      <header className="bg-white/80 backdrop-blur-xl border-b border-gray-100 px-4 sm:px-6 h-[56px] flex items-center sticky top-0 z-50 transition-all">
-        <Link href="/" className="flex items-center space-x-2 text-[14px] font-semibold text-gray-500 hover:text-black transition-colors group">
-          <div className="w-6 h-6 rounded-full bg-gray-100 flex items-center justify-center group-hover:bg-gray-200 transition-colors">
-            <ChevronLeft className="w-3.5 h-3.5 text-gray-600 group-hover:text-black" />
+      <header className="bg-card/80 backdrop-blur-xl border-b border-border px-4 sm:px-6 h-[56px] flex items-center sticky top-0 z-50 transition-all">
+        <Link href="/" className="flex items-center space-x-2 text-[14px] font-semibold text-secondary hover:text-primary transition-colors group">
+          <div className="w-6 h-6 rounded-full bg-element-hover flex items-center justify-center group-hover:bg-gray-200 transition-colors">
+            <ChevronLeft className="w-3.5 h-3.5 text-secondary group-hover:text-primary" />
           </div>
           <span>Back to Dashboard</span>
         </Link>
@@ -477,7 +484,7 @@ export default function SettingsPage() {
         
         {/* Sidebar Navigation - Hidden on Mobile */}
         <aside className="hidden md:block w-64 flex-shrink-0 md:sticky md:top-28">
-          <h1 className="text-[24px] md:text-[28px] font-bold text-black tracking-tight mb-6 md:mb-8 pl-4">Settings</h1>
+          <h1 className="text-[24px] md:text-[28px] font-bold text-primary tracking-tight mb-6 md:mb-8 pl-4">Settings</h1>
           <nav className="flex flex-col space-y-1.5">
             {navItems.map((item) => {
               const isActive = activeSection === item.id;
@@ -487,11 +494,11 @@ export default function SettingsPage() {
                   onClick={() => scrollToSection(item.id, item.ref)}
                   className={`flex items-center space-x-3 px-4 py-3.5 rounded-[14px] text-[14px] font-semibold transition-all group w-full text-left ${
                     isActive 
-                      ? 'bg-white shadow-sm text-black border border-gray-100/50' 
-                      : 'text-gray-500 hover:bg-gray-100/50 hover:text-gray-900 border border-transparent'
+                      ? 'bg-card shadow-sm text-primary border border-border/50' 
+                      : 'text-secondary hover:bg-element-hover/50 hover:text-primary border border-transparent'
                   }`}
                 >
-                  <div className={`${isActive ? 'text-black' : 'text-gray-400 group-hover:text-gray-600'} transition-colors`}>
+                  <div className={`${isActive ? 'text-primary' : 'text-secondary group-hover:text-secondary'} transition-colors`}>
                     {item.icon}
                   </div>
                   <span>{item.name}</span>
@@ -505,30 +512,30 @@ export default function SettingsPage() {
         <div className="w-full max-w-[720px] pb-32">
           {/* Mobile Title - Only visible on small screens */}
           <div className="md:hidden mb-8 px-1">
-            <h1 className="text-[32px] font-bold text-black tracking-tight">Settings</h1>
+            <h1 className="text-[32px] font-bold text-primary tracking-tight">Settings</h1>
           </div>
           
           {/* SECTION: PORTFOLIO */}
           <div id="portfolio" ref={portfolioRef} className="scroll-mt-24 md:scroll-mt-32">
             <div className="mb-6">
-              <h2 className="text-[18px] md:text-[20px] font-bold text-black tracking-tight">Portfolio Settings</h2>
-              <p className="text-[13px] text-gray-400 font-medium mt-1">Manage your core portfolio configuration and data.</p>
+              <h2 className="text-[18px] md:text-[20px] font-bold text-primary tracking-tight">Portfolio Settings</h2>
+              <p className="text-[13px] text-secondary font-medium mt-1">Manage your core portfolio configuration and data.</p>
             </div>
             
-            <div className="space-y-6 bg-white rounded-2xl md:rounded-[32px] p-5 md:p-8 shadow-sm border border-gray-100 mb-12 md:mb-16">
+            <div className="space-y-6 bg-card rounded-2xl md:rounded-[32px] p-5 md:p-8 shadow-sm border border-border mb-12 md:mb-16">
               {/* General Group */}
               <div className="space-y-4">
-                <h3 className="text-[11px] font-bold text-gray-400 uppercase tracking-[0.1em] pl-1">General</h3>
-                <div className="bg-gray-50/50 rounded-2xl border border-gray-100 overflow-hidden transition-all duration-300">
-                  <div className="border-b border-gray-100 bg-white sm:bg-transparent">
+                <h3 className="text-[11px] font-bold text-secondary uppercase tracking-[0.1em] pl-1">General</h3>
+                <div className="bg-element/50 rounded-2xl border border-border overflow-hidden transition-all duration-300">
+                  <div className="border-b border-border bg-card sm:bg-transparent">
                     <div className="px-5 py-4 flex items-center justify-between">
                       <div className="flex items-center space-x-4">
-                        <div className={`w-8 h-8 rounded-lg bg-white border border-gray-100 shadow-sm flex items-center justify-center transition-all duration-300 ${isEditingPortfolioName ? 'scale-110 border-gray-200 ring-4 ring-black/5' : ''}`}>
-                          <Wallet className={`w-4 h-4 transition-colors duration-300 ${isEditingPortfolioName ? 'text-black' : 'text-gray-400'}`} />
+                        <div className={`w-8 h-8 rounded-lg bg-card border border-border shadow-sm flex items-center justify-center transition-all duration-300 ${isEditingPortfolioName ? 'scale-110 border-border ring-4 ring-black/5' : ''}`}>
+                          <Wallet className={`w-4 h-4 transition-colors duration-300 ${isEditingPortfolioName ? 'text-primary' : 'text-secondary'}`} />
                         </div>
                         <div>
-                          <div className="text-[14px] font-bold text-black leading-tight">Portfolio Name</div>
-                          <div className="text-[13px] text-gray-500 font-medium mt-0.5">
+                          <div className="text-[14px] font-bold text-primary leading-tight">Portfolio Name</div>
+                          <div className="text-[13px] text-secondary font-medium mt-0.5">
                             {portfolioName}
                           </div>
                         </div>
@@ -541,8 +548,8 @@ export default function SettingsPage() {
                         }}
                         className={`text-[13px] font-bold px-3 py-1.5 rounded-lg transition-colors shadow-sm active:scale-95 border ${
                           isEditingPortfolioName 
-                            ? 'bg-gray-100 border-gray-200 text-gray-700' 
-                            : 'bg-white border-gray-100 text-black hover:bg-gray-100'
+                            ? 'bg-element-hover border-border text-gray-700' 
+                            : 'bg-card border-border text-primary hover:bg-element-hover'
                         }`}
                       >
                         {isEditingPortfolioName ? 'Cancel' : 'Edit'}
@@ -551,23 +558,23 @@ export default function SettingsPage() {
                     {/* Expandable Portfolio Name Editor */}
                     <div className={`grid transition-all duration-300 ease-in-out ${isEditingPortfolioName ? 'grid-rows-[1fr] opacity-100' : 'grid-rows-[0fr] opacity-0'}`}>
                       <div className="overflow-hidden">
-                        <div className="p-5 bg-white border-t border-gray-100/60 space-y-4">
+                        <div className="p-5 bg-card border-t border-border/60 space-y-4">
                           <form onSubmit={(e) => handleUpdatePortfolio(e, 'name')} className="space-y-4">
                             <div>
-                              <label className="block text-[11px] font-bold text-gray-400 uppercase tracking-wider mb-2">Portfolio Name</label>
+                              <label className="block text-[11px] font-bold text-secondary uppercase tracking-wider mb-2">Portfolio Name</label>
                               <input 
                                 type="text" 
                                 required
                                 value={portfolioName}
                                 onChange={(e) => setPortfolioName(e.target.value)}
                                 placeholder="Enter portfolio name"
-                                className="w-full px-4 py-2.5 bg-gray-50/50 rounded-xl text-[14px] text-black font-medium border border-gray-200 focus:border-black focus:ring-1 focus:ring-black outline-none transition-all placeholder:text-gray-400"
+                                className="w-full px-4 py-2.5 bg-element/50 rounded-xl text-[14px] text-primary font-medium border border-border focus:border-primary focus:ring-1 focus:ring-black outline-none transition-all placeholder:text-secondary"
                               />
                             </div>
                             <button 
                               type="submit"
                               disabled={portfolioActionLoading || !portfolioName.trim()}
-                              className="w-full bg-black text-white text-[13px] font-bold py-2.5 rounded-xl hover:bg-gray-800 transition-colors active:scale-[0.98] disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2 shadow-sm"
+                              className="w-full bg-primary text-on-primary text-[13px] font-bold py-2.5 rounded-xl hover:bg-primary-hover transition-colors active:scale-[0.98] disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2 shadow-sm"
                             >
                               {portfolioActionLoading && isEditingPortfolioName && <Loader2 className="w-4 h-4 animate-spin" />}
                               {portfolioActionLoading && isEditingPortfolioName ? 'Updating...' : 'Save Name'}
@@ -578,15 +585,15 @@ export default function SettingsPage() {
                     </div>
                   </div>
 
-                  <div className="bg-white sm:bg-transparent">
+                  <div className="bg-card sm:bg-transparent">
                     <div className="px-5 py-4 flex items-center justify-between">
                       <div className="flex items-center space-x-4">
-                        <div className={`w-8 h-8 rounded-lg bg-white border border-gray-100 shadow-sm flex items-center justify-center transition-all duration-300 ${isEditingBaseCurrency ? 'scale-110 border-gray-200 ring-4 ring-black/5' : ''}`}>
-                          <Globe className={`w-4 h-4 transition-colors duration-300 ${isEditingBaseCurrency ? 'text-black' : 'text-gray-400'}`} />
+                        <div className={`w-8 h-8 rounded-lg bg-card border border-border shadow-sm flex items-center justify-center transition-all duration-300 ${isEditingBaseCurrency ? 'scale-110 border-border ring-4 ring-black/5' : ''}`}>
+                          <Globe className={`w-4 h-4 transition-colors duration-300 ${isEditingBaseCurrency ? 'text-primary' : 'text-secondary'}`} />
                         </div>
                         <div>
-                          <div className="text-[14px] font-bold text-black leading-tight">Base Currency</div>
-                          <div className="text-[13px] text-gray-500 font-medium mt-0.5">{baseCurrency}</div>
+                          <div className="text-[14px] font-bold text-primary leading-tight">Base Currency</div>
+                          <div className="text-[13px] text-secondary font-medium mt-0.5">{baseCurrency}</div>
                         </div>
                       </div>
                       <button 
@@ -597,8 +604,8 @@ export default function SettingsPage() {
                         }}
                         className={`text-[13px] font-bold px-3 py-1.5 rounded-lg transition-colors shadow-sm active:scale-95 border ${
                           isEditingBaseCurrency 
-                            ? 'bg-gray-100 border-gray-200 text-gray-700' 
-                            : 'bg-white border-gray-100 text-black hover:bg-gray-100'
+                            ? 'bg-element-hover border-border text-gray-700' 
+                            : 'bg-card border-border text-primary hover:bg-element-hover'
                         }`}
                       >
                         {isEditingBaseCurrency ? 'Cancel' : 'Change'}
@@ -607,10 +614,10 @@ export default function SettingsPage() {
                     {/* Expandable Base Currency Editor */}
                     <div className={`grid transition-all duration-300 ease-in-out ${isEditingBaseCurrency ? 'grid-rows-[1fr] opacity-100' : 'grid-rows-[0fr] opacity-0'}`}>
                       <div className="overflow-hidden">
-                        <div className="p-5 bg-white border-t border-gray-100/60 space-y-4">
+                        <div className="p-5 bg-card border-t border-border/60 space-y-4">
                           <form onSubmit={(e) => handleUpdatePortfolio(e, 'currency')} className="space-y-4">
                             <div>
-                              <label className="block text-[11px] font-bold text-gray-400 uppercase tracking-wider mb-3">Select Currency</label>
+                              <label className="block text-[11px] font-bold text-secondary uppercase tracking-wider mb-3">Select Currency</label>
                               <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
                                 {[
                                   { code: 'USD', name: 'US Dollar', symbol: '$' },
@@ -629,17 +636,17 @@ export default function SettingsPage() {
                                     onClick={() => setBaseCurrency(currency.code)}
                                     className={`flex items-center justify-between px-4 py-3 rounded-xl border text-[13px] transition-all active:scale-95 ${
                                       baseCurrency === currency.code
-                                        ? 'border-black bg-black text-white shadow-sm'
-                                        : 'border-gray-200 bg-white text-black hover:border-gray-300 hover:bg-gray-50'
+                                        ? 'border-primary bg-primary text-on-primary shadow-sm'
+                                        : 'border-border bg-card text-primary hover:border-border hover:bg-element'
                                     }`}
                                   >
                                     <div className="flex flex-col items-start">
                                       <span className="font-bold leading-none">{currency.code}</span>
-                                      <span className={`text-[10px] mt-1 font-medium ${baseCurrency === currency.code ? 'text-gray-300' : 'text-gray-400'}`}>
+                                      <span className={`text-[10px] mt-1 font-medium ${baseCurrency === currency.code ? 'text-secondary' : 'text-secondary'}`}>
                                         {currency.name}
                                       </span>
                                     </div>
-                                    <span className={`text-[14px] font-medium ${baseCurrency === currency.code ? 'text-gray-300' : 'text-gray-400'}`}>
+                                    <span className={`text-[14px] font-medium ${baseCurrency === currency.code ? 'text-secondary' : 'text-secondary'}`}>
                                       {currency.symbol}
                                     </span>
                                   </button>
@@ -649,7 +656,7 @@ export default function SettingsPage() {
                             <button 
                               type="submit"
                               disabled={portfolioActionLoading}
-                              className="w-full bg-black text-white text-[13px] font-bold py-2.5 rounded-xl hover:bg-gray-800 transition-colors active:scale-[0.98] disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2 shadow-sm mt-4"
+                              className="w-full bg-primary text-on-primary text-[13px] font-bold py-2.5 rounded-xl hover:bg-primary-hover transition-colors active:scale-[0.98] disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2 shadow-sm mt-4"
                             >
                               {portfolioActionLoading && isEditingBaseCurrency && <Loader2 className="w-4 h-4 animate-spin" />}
                               {portfolioActionLoading && isEditingBaseCurrency ? 'Updating...' : 'Save Currency'}
@@ -664,24 +671,24 @@ export default function SettingsPage() {
 
               {/* Data Group */}
               <div className="space-y-4">
-                <h3 className="text-[11px] font-bold text-gray-400 uppercase tracking-[0.1em] pl-1">Data Management</h3>
-                <div className="bg-gray-50/50 rounded-2xl border border-gray-100 overflow-hidden">
+                <h3 className="text-[11px] font-bold text-secondary uppercase tracking-[0.1em] pl-1">Data Management</h3>
+                <div className="bg-element/50 rounded-2xl border border-border overflow-hidden">
                   <div className="px-5 py-4 flex items-center justify-between group/item transition-colors duration-300 gap-3">
                     <div className="flex items-center space-x-4 flex-1 min-w-0">
-                      <div className={`flex-shrink-0 w-8 h-8 rounded-lg bg-white border border-gray-100 shadow-sm flex items-center justify-center transition-all duration-300 ${isExporting ? 'scale-110 border-gray-200 ring-4 ring-black/5' : 'group-hover/item:border-gray-200'}`}>
-                        <Download className={`w-4 h-4 transition-colors duration-300 ${isExporting ? 'text-black' : 'text-gray-400 group-hover/item:text-black'}`} />
+                      <div className={`flex-shrink-0 w-8 h-8 rounded-lg bg-card border border-border shadow-sm flex items-center justify-center transition-all duration-300 ${isExporting ? 'scale-110 border-border ring-4 ring-black/5' : 'group-hover/item:border-border'}`}>
+                        <Download className={`w-4 h-4 transition-colors duration-300 ${isExporting ? 'text-primary' : 'text-secondary group-hover/item:text-primary'}`} />
                       </div>
                       <div className="flex-1 min-w-0 pr-2">
-                        <div className="text-[14px] font-bold text-black leading-tight truncate">Export Data</div>
-                        <div className="text-[12px] text-gray-400 font-medium mt-0.5 leading-snug truncate sm:whitespace-normal">Download your transaction history</div>
+                        <div className="text-[14px] font-bold text-primary leading-tight truncate">Export Data</div>
+                        <div className="text-[12px] text-secondary font-medium mt-0.5 leading-snug truncate sm:whitespace-normal">Download your transaction history</div>
                       </div>
                     </div>
                     <button 
                       onClick={() => setIsExporting(!isExporting)}
                       className={`flex-shrink-0 text-[13px] font-bold px-3 py-1.5 rounded-lg transition-colors shadow-sm active:scale-95 border ${
                         isExporting
-                          ? 'bg-gray-100 border-gray-200 text-gray-700'
-                          : 'bg-white border-gray-100 text-black hover:bg-gray-100'
+                          ? 'bg-element-hover border-border text-gray-700'
+                          : 'bg-card border-border text-primary hover:bg-element-hover'
                       }`}
                     >
                       {isExporting ? 'Cancel' : 'Export'}
@@ -691,10 +698,10 @@ export default function SettingsPage() {
                   {/* Expandable Export Drawer */}
                   <div className={`grid transition-all duration-300 ease-in-out ${isExporting ? 'grid-rows-[1fr] opacity-100' : 'grid-rows-[0fr] opacity-0'}`}>
                     <div className="overflow-hidden">
-                      <div className="p-5 bg-white border-t border-gray-100/60 space-y-6">
+                      <div className="p-5 bg-card border-t border-border/60 space-y-6">
                         {/* Range Selection */}
                         <div className="space-y-3">
-                          <label className="text-[11px] font-bold text-gray-400 uppercase tracking-[0.1em]">Time Range</label>
+                          <label className="text-[11px] font-bold text-secondary uppercase tracking-[0.1em]">Time Range</label>
                           <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 sm:gap-3">
                             {[
                               { id: 'all', label: 'All Time' },
@@ -706,8 +713,8 @@ export default function SettingsPage() {
                                 onClick={() => setExportRange(range.id)}
                                 className={`px-4 py-3 sm:py-2 rounded-xl border text-[13px] sm:text-[12px] font-bold transition-all active:scale-[0.98] ${
                                   exportRange === range.id
-                                    ? 'border-black bg-black text-white shadow-sm'
-                                    : 'border-gray-200 bg-white text-gray-500 hover:border-gray-300 hover:bg-gray-50'
+                                    ? 'border-primary bg-primary text-on-primary shadow-sm'
+                                    : 'border-border bg-card text-secondary hover:border-border hover:bg-element'
                                 }`}
                               >
                                 {range.label}
@@ -718,7 +725,7 @@ export default function SettingsPage() {
 
                         {/* Format Selection */}
                         <div className="space-y-3">
-                          <label className="text-[11px] font-bold text-gray-400 uppercase tracking-[0.1em]">File Format</label>
+                          <label className="text-[11px] font-bold text-secondary uppercase tracking-[0.1em]">File Format</label>
                           <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 sm:gap-3">
                             {[
                               { id: 'csv', label: 'CSV', sub: 'Excel / Sheets' },
@@ -730,12 +737,12 @@ export default function SettingsPage() {
                                 onClick={() => setExportFormat(format.id)}
                                 className={`px-4 py-3 sm:py-2 rounded-xl border transition-all flex sm:flex-col items-center justify-between sm:justify-center gap-1 sm:gap-0.5 active:scale-[0.98] ${
                                   exportFormat === format.id
-                                    ? 'border-black bg-black text-white shadow-sm'
-                                    : 'border-gray-200 bg-white text-gray-500 hover:border-gray-300 hover:bg-gray-50'
+                                    ? 'border-primary bg-primary text-on-primary shadow-sm'
+                                    : 'border-border bg-card text-secondary hover:border-border hover:bg-element'
                                 }`}
                               >
                                 <span className="text-[13px] sm:text-[12px] font-bold">{format.label}</span>
-                                <span className={`text-[11px] sm:text-[9px] font-medium ${exportFormat === format.id ? 'text-gray-300' : 'text-gray-400'}`}>{format.sub}</span>
+                                <span className={`text-[11px] sm:text-[9px] font-medium ${exportFormat === format.id ? 'text-secondary' : 'text-secondary'}`}>{format.sub}</span>
                               </button>
                             ))}
                           </div>
@@ -745,7 +752,7 @@ export default function SettingsPage() {
                         <button
                           onClick={handleExport}
                           disabled={exportLoading}
-                          className="w-full bg-black text-white text-[13px] font-bold py-2.5 rounded-xl hover:bg-gray-800 transition-colors active:scale-[0.98] disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2 shadow-sm"
+                          className="w-full bg-primary text-on-primary text-[13px] font-bold py-2.5 rounded-xl hover:bg-primary-hover transition-colors active:scale-[0.98] disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2 shadow-sm"
                         >
                           {exportLoading ? (
                             <>
@@ -770,23 +777,25 @@ export default function SettingsPage() {
           {/* SECTION: PREFERENCES */}
           <div id="preferences" ref={preferencesRef} className="scroll-mt-24 md:scroll-mt-32">
             <div className="mb-6 flex items-center gap-3">
-              <h2 className="text-[18px] md:text-[20px] font-bold text-black tracking-tight">Preferences</h2>
+              <h2 className="text-[18px] md:text-[20px] font-bold text-primary tracking-tight">Preferences</h2>
             </div>
             
-            <div className="space-y-6 bg-white rounded-2xl md:rounded-[32px] p-5 md:p-8 shadow-sm border border-gray-100 mb-12 md:mb-16">
+            <div className="space-y-6 bg-card rounded-2xl md:rounded-[32px] p-5 md:p-8 shadow-sm border border-border mb-12 md:mb-16">
               <div className="space-y-4">
-                <h3 className="text-[11px] font-bold text-gray-400 uppercase tracking-[0.1em] pl-1">Appearance</h3>
-                <div className="bg-gray-50/50 rounded-2xl border border-gray-100 overflow-hidden">
+                <h3 className="text-[11px] font-bold text-secondary uppercase tracking-[0.1em] pl-1">Appearance</h3>
+                <div className="bg-element/50 rounded-2xl border border-border overflow-hidden">
                   {/* Theme Row */}
-                  <div className="border-b border-gray-100 bg-white sm:bg-transparent">
+                  <div className="border-b border-border bg-card sm:bg-transparent">
                     <div className="px-4 md:px-5 py-4 flex items-center justify-between group/item">
                       <div className="flex items-center space-x-3 md:space-x-4">
-                        <div className={`w-8 h-8 rounded-lg bg-white border border-gray-100 shadow-sm flex items-center justify-center transition-all duration-300 ${isEditingTheme ? 'scale-110 border-gray-200 ring-4 ring-black/5' : 'group-hover/item:border-gray-200'}`}>
-                          <Monitor className={`w-4 h-4 transition-colors duration-300 ${isEditingTheme ? 'text-black' : 'text-gray-400 group-hover/item:text-black'}`} />
+                        <div className={`w-8 h-8 rounded-lg bg-card border border-border shadow-sm flex items-center justify-center transition-all duration-300 ${isEditingTheme ? 'scale-110 border-border ring-4 ring-black/5' : 'group-hover/item:border-border'}`}>
+                          <Monitor className={`w-4 h-4 transition-colors duration-300 ${isEditingTheme ? 'text-primary' : 'text-secondary group-hover/item:text-primary'}`} />
                         </div>
                         <div>
-                          <div className="text-[14px] font-bold text-black leading-tight">Theme</div>
-                          <div className="text-[13px] text-gray-500 font-medium mt-0.5">{prefs.theme}</div>
+                          <div className="text-[14px] font-bold text-primary leading-tight">Theme</div>
+                          <div className="text-[13px] text-secondary font-medium mt-0.5">
+                            {mounted && theme ? (theme.charAt(0).toUpperCase() + theme.slice(1)) : 'System'}
+                          </div>
                         </div>
                       </div>
                       <button 
@@ -796,8 +805,8 @@ export default function SettingsPage() {
                         }}
                         className={`text-[12px] md:text-[13px] font-bold px-3 py-1.5 rounded-lg transition-colors shadow-sm active:scale-95 border ${
                           isEditingTheme 
-                            ? 'bg-gray-100 border-gray-200 text-gray-700' 
-                            : 'bg-white border-gray-100 text-black hover:bg-gray-100'
+                            ? 'bg-element-hover border-border text-gray-700' 
+                            : 'bg-card border-border text-primary hover:bg-element-hover'
                         }`}
                       >
                         {isEditingTheme ? 'Cancel' : 'Select'}
@@ -806,38 +815,42 @@ export default function SettingsPage() {
                     {/* Expandable Theme Drawer */}
                     <div className={`grid transition-all duration-300 ease-in-out ${isEditingTheme ? 'grid-rows-[1fr] opacity-100' : 'grid-rows-[0fr] opacity-0'}`}>
                       <div className="overflow-hidden">
-                        <div className="p-4 md:p-5 bg-white border-t border-gray-100/60 flex flex-wrap gap-2">
-                          {['Light', 'Dark', 'System'].map((t) => (
-                            <button
-                              key={t}
-                              onClick={() => {
-                                updatePreference('theme', t as 'Light' | 'Dark' | 'System');
-                                setIsEditingTheme(false);
-                              }}
-                              className={`flex-1 min-w-[80px] text-[12px] font-bold py-2.5 rounded-xl transition-all active:scale-95 border ${
-                                prefs.theme === t
-                                  ? 'bg-black border-black text-white shadow-sm'
-                                  : 'bg-gray-50 border-gray-100 text-black hover:border-gray-200 hover:bg-gray-100'
-                              }`}
-                            >
-                              {t}
-                            </button>
-                          ))}
+                        <div className="p-4 md:p-5 bg-card border-t border-border/60 flex flex-wrap gap-2">
+                          {['Light', 'Dark', 'System'].map((t) => {
+                            const isSelected = mounted && theme === t.toLowerCase();
+                            return (
+                              <button
+                                key={t}
+                                onClick={() => {
+                                  setTheme(t.toLowerCase());
+                                  updatePreference('theme', t as 'Light' | 'Dark' | 'System');
+                                  setIsEditingTheme(false);
+                                }}
+                                className={`flex-1 min-w-[80px] text-[12px] font-bold py-2.5 rounded-xl transition-all active:scale-95 border ${
+                                  isSelected
+                                    ? 'bg-primary border-primary text-on-primary shadow-sm'
+                                    : 'bg-element border-border text-primary hover:border-border hover:bg-element-hover'
+                                }`}
+                              >
+                                {t}
+                              </button>
+                            );
+                          })}
                         </div>
                       </div>
                     </div>
                   </div>
 
                   {/* Market Colors Row */}
-                  <div className="border-b border-gray-100 bg-white sm:bg-transparent">
+                  <div className="border-b border-border bg-card sm:bg-transparent">
                     <div className="px-4 md:px-5 py-4 flex items-center justify-between group/item">
                       <div className="flex items-center space-x-3 md:space-x-4">
-                        <div className={`w-8 h-8 rounded-lg bg-white border border-gray-100 shadow-sm flex items-center justify-center transition-all duration-300 ${isEditingColorScheme ? 'scale-110 border-gray-200 ring-4 ring-black/5' : 'group-hover/item:border-gray-200'}`}>
-                          <TrendingUp className={`w-4 h-4 transition-colors duration-300 ${isEditingColorScheme ? 'text-black' : 'text-gray-400 group-hover/item:text-black'}`} />
+                        <div className={`w-8 h-8 rounded-lg bg-card border border-border shadow-sm flex items-center justify-center transition-all duration-300 ${isEditingColorScheme ? 'scale-110 border-border ring-4 ring-black/5' : 'group-hover/item:border-border'}`}>
+                          <TrendingUp className={`w-4 h-4 transition-colors duration-300 ${isEditingColorScheme ? 'text-primary' : 'text-secondary group-hover/item:text-primary'}`} />
                         </div>
                         <div>
-                          <div className="text-[14px] font-bold text-black leading-tight">Market Colors</div>
-                          <div className="text-[13px] text-gray-500 font-medium mt-0.5">
+                          <div className="text-[14px] font-bold text-primary leading-tight">Market Colors</div>
+                          <div className="text-[13px] text-secondary font-medium mt-0.5">
                             {prefs.colorScheme === 'Emerald' ? 'Emerald Gains / Rose Losses' : 'Rose Gains / Emerald Losses'}
                           </div>
                         </div>
@@ -850,8 +863,8 @@ export default function SettingsPage() {
                         }}
                         className={`text-[12px] md:text-[13px] font-bold px-3 py-1.5 rounded-lg transition-colors shadow-sm active:scale-95 border ${
                           isEditingColorScheme 
-                            ? 'bg-gray-100 border-gray-200 text-gray-700' 
-                            : 'bg-white border-gray-100 text-black hover:bg-gray-100'
+                            ? 'bg-element-hover border-border text-gray-700' 
+                            : 'bg-card border-border text-primary hover:bg-element-hover'
                         }`}
                       >
                         {isEditingColorScheme ? 'Cancel' : 'Change'}
@@ -860,7 +873,7 @@ export default function SettingsPage() {
                     {/* Expandable Color Scheme Drawer */}
                     <div className={`grid transition-all duration-300 ease-in-out ${isEditingColorScheme ? 'grid-rows-[1fr] opacity-100' : 'grid-rows-[0fr] opacity-0'}`}>
                       <div className="overflow-hidden">
-                        <div className="p-4 md:p-5 bg-white border-t border-gray-100/60 flex flex-col space-y-2">
+                        <div className="p-4 md:p-5 bg-card border-t border-border/60 flex flex-col space-y-2">
                           {[
                             { id: 'Emerald', label: 'Emerald Gains', desc: 'Green for growth, Red for decline' },
                             { id: 'Rose', label: 'Rose Gains', desc: 'Red for growth, Green for decline' }
@@ -873,13 +886,13 @@ export default function SettingsPage() {
                               }}
                               className={`flex items-center justify-between px-4 py-3 rounded-xl transition-all active:scale-[0.98] border ${
                                 prefs.colorScheme === scheme.id
-                                  ? 'bg-black border-black text-white shadow-sm'
-                                  : 'bg-gray-50 border-gray-100 text-black hover:border-gray-200 hover:bg-gray-100'
+                                  ? 'bg-primary border-primary text-on-primary shadow-sm'
+                                  : 'bg-element border-border text-primary hover:border-border hover:bg-element-hover'
                               }`}
                             >
                               <div className="flex flex-col items-start">
                                 <span className="text-[13px] font-bold">{scheme.label}</span>
-                                <span className={`text-[11px] font-medium ${prefs.colorScheme === scheme.id ? 'text-gray-300' : 'text-gray-400'}`}>
+                                <span className={`text-[11px] font-medium ${prefs.colorScheme === scheme.id ? 'text-secondary' : 'text-secondary'}`}>
                                   {scheme.desc}
                                 </span>
                               </div>
@@ -895,15 +908,15 @@ export default function SettingsPage() {
                   </div>
 
                   {/* Chart Type Row */}
-                  <div className="border-b border-gray-100 bg-white sm:bg-transparent">
+                  <div className="border-b border-border bg-card sm:bg-transparent">
                     <div className="px-4 md:px-5 py-4 flex items-center justify-between group/item">
                       <div className="flex items-center space-x-3 md:space-x-4">
-                        <div className={`w-8 h-8 rounded-lg bg-white border border-gray-100 shadow-sm flex items-center justify-center transition-all duration-300 ${isEditingChartType ? 'scale-110 border-gray-200 ring-4 ring-black/5' : 'group-hover/item:border-gray-200'}`}>
-                          <BarChart2 className={`w-4 h-4 transition-colors duration-300 ${isEditingChartType ? 'text-black' : 'text-gray-400 group-hover/item:text-black'}`} />
+                        <div className={`w-8 h-8 rounded-lg bg-card border border-border shadow-sm flex items-center justify-center transition-all duration-300 ${isEditingChartType ? 'scale-110 border-border ring-4 ring-black/5' : 'group-hover/item:border-border'}`}>
+                          <BarChart2 className={`w-4 h-4 transition-colors duration-300 ${isEditingChartType ? 'text-primary' : 'text-secondary group-hover/item:text-primary'}`} />
                         </div>
                         <div>
-                          <div className="text-[14px] font-bold text-black leading-tight">Default Chart Type</div>
-                          <div className="text-[13px] text-gray-500 font-medium mt-0.5">{prefs.chartType}</div>
+                          <div className="text-[14px] font-bold text-primary leading-tight">Default Chart Type</div>
+                          <div className="text-[13px] text-secondary font-medium mt-0.5">{prefs.chartType}</div>
                         </div>
                       </div>
                       <button 
@@ -913,8 +926,8 @@ export default function SettingsPage() {
                         }}
                         className={`text-[12px] md:text-[13px] font-bold px-3 py-1.5 rounded-lg transition-colors shadow-sm active:scale-95 border ${
                           isEditingChartType 
-                            ? 'bg-gray-100 border-gray-200 text-gray-700' 
-                            : 'bg-white border-gray-100 text-black hover:bg-gray-100'
+                            ? 'bg-element-hover border-border text-gray-700' 
+                            : 'bg-card border-border text-primary hover:bg-element-hover'
                         }`}
                       >
                         {isEditingChartType ? 'Cancel' : 'Switch'}
@@ -923,7 +936,7 @@ export default function SettingsPage() {
                     {/* Expandable Chart Type Drawer */}
                     <div className={`grid transition-all duration-300 ease-in-out ${isEditingChartType ? 'grid-rows-[1fr] opacity-100' : 'grid-rows-[0fr] opacity-0'}`}>
                       <div className="overflow-hidden">
-                        <div className="p-4 md:p-5 bg-white border-t border-gray-100/60 flex flex-wrap gap-2">
+                        <div className="p-4 md:p-5 bg-card border-t border-border/60 flex flex-wrap gap-2">
                           {['Area', 'Line', 'Bar'].map((c) => (
                             <button
                               key={c}
@@ -933,8 +946,8 @@ export default function SettingsPage() {
                               }}
                               className={`flex-1 min-w-[80px] text-[12px] font-bold py-2.5 rounded-xl transition-all active:scale-95 border ${
                                 prefs.chartType.startsWith(c)
-                                  ? 'bg-black border-black text-white shadow-sm'
-                                  : 'bg-gray-50 border-gray-100 text-black hover:border-gray-200 hover:bg-gray-100'
+                                  ? 'bg-primary border-primary text-on-primary shadow-sm'
+                                  : 'bg-element border-border text-primary hover:border-border hover:bg-element-hover'
                               }`}
                             >
                               {c}
@@ -948,19 +961,19 @@ export default function SettingsPage() {
                   {/* Toggle Row: Hide Small Balances */}
                   <div className="px-4 md:px-5 py-4 flex items-center justify-between group/item">
                     <div className="flex items-center space-x-3 md:space-x-4">
-                      <div className="w-8 h-8 rounded-lg bg-white border border-gray-100 shadow-sm flex items-center justify-center transition-all duration-300 group-hover/item:scale-110 group-hover/item:ring-4 group-hover/item:ring-black/5">
-                        <EyeOff className="w-4 h-4 text-gray-400 transition-colors group-hover/item:text-black" />
+                      <div className="w-8 h-8 rounded-lg bg-card border border-border shadow-sm flex items-center justify-center transition-all duration-300 group-hover/item:scale-110 group-hover/item:ring-4 group-hover/item:ring-black/5">
+                        <EyeOff className="w-4 h-4 text-secondary transition-colors group-hover/item:text-primary" />
                       </div>
                       <div>
-                        <div className="text-[14px] font-bold text-black leading-tight">Hide Small Balances</div>
-                        <div className="text-[12px] text-gray-400 font-medium mt-0.5">Hide holdings &lt; $10</div>
+                        <div className="text-[14px] font-bold text-primary leading-tight">Hide Small Balances</div>
+                        <div className="text-[12px] text-secondary font-medium mt-0.5">Hide holdings &lt; $10</div>
                       </div>
                     </div>
                     <button
                       onClick={() => updatePreference('hideSmallBalances', !prefs.hideSmallBalances)}
-                      className={`w-10 h-5 ${prefs.hideSmallBalances ? 'bg-black' : 'bg-gray-200'} rounded-full relative transition-colors active:scale-90`}
+                      className={`w-10 h-5 ${prefs.hideSmallBalances ? 'bg-primary' : 'bg-gray-200'} rounded-full relative transition-colors active:scale-90`}
                     >
-                      <div className={`absolute ${prefs.hideSmallBalances ? 'left-[22px]' : 'left-0.5'} top-0.5 w-4 h-4 bg-white rounded-full shadow-sm transition-all`}></div>
+                      <div className={`absolute ${prefs.hideSmallBalances ? 'left-[22px]' : 'left-0.5'} top-0.5 w-4 h-4 bg-card rounded-full shadow-sm transition-all`}></div>
                     </button>
                   </div>
                 </div>
@@ -968,23 +981,23 @@ export default function SettingsPage() {
 
               {/* Performance Group */}
               <div className="space-y-4">
-                <h3 className="text-[11px] font-bold text-gray-400 uppercase tracking-[0.1em] pl-1">Performance</h3>
-                <div className="bg-gray-50/50 rounded-2xl border border-gray-100 overflow-hidden">
+                <h3 className="text-[11px] font-bold text-secondary uppercase tracking-[0.1em] pl-1">Performance</h3>
+                <div className="bg-element/50 rounded-2xl border border-border overflow-hidden">
                   <div className="px-4 md:px-5 py-4 flex items-center justify-between group/item">
                     <div className="flex items-center space-x-3 md:space-x-4">
-                      <div className="w-8 h-8 rounded-lg bg-white border border-gray-100 shadow-sm flex items-center justify-center transition-all duration-300 group-hover/item:scale-110 group-hover/item:ring-4 group-hover/item:ring-black/5">
-                        <Zap className="w-4 h-4 text-gray-400 transition-colors group-hover/item:text-black" />
+                      <div className="w-8 h-8 rounded-lg bg-card border border-border shadow-sm flex items-center justify-center transition-all duration-300 group-hover/item:scale-110 group-hover/item:ring-4 group-hover/item:ring-black/5">
+                        <Zap className="w-4 h-4 text-secondary transition-colors group-hover/item:text-primary" />
                       </div>
                       <div>
-                        <div className="text-[14px] font-bold text-black leading-tight">Real-time Sync</div>
-                        <div className="text-[12px] text-gray-400 font-medium mt-0.5">Faster updates</div>
+                        <div className="text-[14px] font-bold text-primary leading-tight">Real-time Sync</div>
+                        <div className="text-[12px] text-secondary font-medium mt-0.5">Faster updates</div>
                       </div>
                     </div>
                     <button
                       onClick={() => updatePreference('realTimeSync', !prefs.realTimeSync)}
-                      className={`w-10 h-5 ${prefs.realTimeSync ? 'bg-black' : 'bg-gray-200'} rounded-full relative transition-colors active:scale-90`}
+                      className={`w-10 h-5 ${prefs.realTimeSync ? 'bg-primary' : 'bg-gray-200'} rounded-full relative transition-colors active:scale-90`}
                     >
-                      <div className={`absolute ${prefs.realTimeSync ? 'left-[22px]' : 'left-0.5'} top-0.5 w-4 h-4 bg-white rounded-full shadow-sm transition-all`}></div>
+                      <div className={`absolute ${prefs.realTimeSync ? 'left-[22px]' : 'left-0.5'} top-0.5 w-4 h-4 bg-card rounded-full shadow-sm transition-all`}></div>
                     </button>
                   </div>
                 </div>
@@ -992,16 +1005,16 @@ export default function SettingsPage() {
 
               {/* Tax & Accounting Group */}
               <div className="space-y-4">
-                <h3 className="text-[11px] font-bold text-gray-400 uppercase tracking-[0.1em] pl-1">Tax & Accounting</h3>
-                <div className="bg-gray-50/50 rounded-2xl border border-gray-100 overflow-hidden">
+                <h3 className="text-[11px] font-bold text-secondary uppercase tracking-[0.1em] pl-1">Tax & Accounting</h3>
+                <div className="bg-element/50 rounded-2xl border border-border overflow-hidden">
                   <div className="px-4 md:px-5 py-4 flex items-center justify-between group/item">
                     <div className="flex items-center space-x-3 md:space-x-4">
-                      <div className={`w-8 h-8 rounded-lg bg-white border border-gray-100 shadow-sm flex items-center justify-center transition-all duration-300 ${isEditingCostBasis ? 'scale-110 border-gray-200 ring-4 ring-black/5' : 'group-hover/item:border-gray-200'}`}>
-                        <FileText className={`w-4 h-4 transition-colors duration-300 ${isEditingCostBasis ? 'text-black' : 'text-gray-400 group-hover/item:text-black'}`} />
+                      <div className={`w-8 h-8 rounded-lg bg-card border border-border shadow-sm flex items-center justify-center transition-all duration-300 ${isEditingCostBasis ? 'scale-110 border-border ring-4 ring-black/5' : 'group-hover/item:border-border'}`}>
+                        <FileText className={`w-4 h-4 transition-colors duration-300 ${isEditingCostBasis ? 'text-primary' : 'text-secondary group-hover/item:text-primary'}`} />
                       </div>
                       <div>
-                        <div className="text-[14px] font-bold text-black leading-tight">Cost Basis Method</div>
-                        <div className="text-[13px] text-gray-500 font-medium mt-0.5">
+                        <div className="text-[14px] font-bold text-primary leading-tight">Cost Basis Method</div>
+                        <div className="text-[13px] text-secondary font-medium mt-0.5">
                           {prefs.costBasisMethod === 'FIFO' ? 'First In, First Out' : 'Average Cost'}
                         </div>
                       </div>
@@ -1010,8 +1023,8 @@ export default function SettingsPage() {
                       onClick={() => setIsEditingCostBasis(!isEditingCostBasis)}
                       className={`text-[12px] md:text-[13px] font-bold px-3 py-1.5 rounded-lg transition-colors shadow-sm active:scale-95 border ${
                         isEditingCostBasis
-                          ? 'bg-gray-100 border-gray-200 text-gray-700'
-                          : 'bg-white border-gray-100 text-black hover:bg-gray-100'
+                          ? 'bg-element-hover border-border text-gray-700'
+                          : 'bg-card border-border text-primary hover:bg-element-hover'
                       }`}
                     >
                       {isEditingCostBasis ? 'Cancel' : 'Change'}
@@ -1020,7 +1033,7 @@ export default function SettingsPage() {
                   {/* Expandable Cost Basis Drawer */}
                   <div className={`grid transition-all duration-300 ease-in-out ${isEditingCostBasis ? 'grid-rows-[1fr] opacity-100' : 'grid-rows-[0fr] opacity-0'}`}>
                     <div className="overflow-hidden">
-                      <div className="p-4 md:p-5 bg-white border-t border-gray-100/60 flex gap-2">
+                      <div className="p-4 md:p-5 bg-card border-t border-border/60 flex gap-2">
                         {([
                           { id: 'FIFO', label: 'FIFO', desc: 'First In, First Out' },
                           { id: 'AVCO', label: 'AVCO', desc: 'Average Cost' },
@@ -1033,12 +1046,12 @@ export default function SettingsPage() {
                             }}
                             className={`flex-1 flex flex-col items-start px-4 py-3 rounded-xl transition-all active:scale-[0.98] border ${
                               prefs.costBasisMethod === method.id
-                                ? 'bg-black border-black text-white shadow-sm'
-                                : 'bg-gray-50 border-gray-100 text-black hover:border-gray-200 hover:bg-gray-100'
+                                ? 'bg-primary border-primary text-on-primary shadow-sm'
+                                : 'bg-element border-border text-primary hover:border-border hover:bg-element-hover'
                             }`}
                           >
                             <span className="text-[13px] font-bold">{method.label}</span>
-                            <span className={`text-[11px] font-medium mt-0.5 ${prefs.costBasisMethod === method.id ? 'text-gray-400' : 'text-gray-400'}`}>
+                            <span className={`text-[11px] font-medium mt-0.5 ${prefs.costBasisMethod === method.id ? 'text-secondary' : 'text-secondary'}`}>
                               {method.desc}
                             </span>
                           </button>
@@ -1054,19 +1067,19 @@ export default function SettingsPage() {
           {/* SECTION: NOTIFICATIONS */}
           <div id="notifications" ref={notificationsRef} className="scroll-mt-24 md:scroll-mt-32">
             <div className="mb-6 flex items-center gap-3">
-              <h2 className="text-[18px] md:text-[20px] font-bold text-black tracking-tight">Notifications</h2>
+              <h2 className="text-[18px] md:text-[20px] font-bold text-primary tracking-tight">Notifications</h2>
             </div>
             
-            <div className="space-y-6 bg-white rounded-2xl md:rounded-[32px] p-5 md:p-8 shadow-sm border border-gray-100 mb-12 md:mb-16">
+            <div className="space-y-6 bg-card rounded-2xl md:rounded-[32px] p-5 md:p-8 shadow-sm border border-border mb-12 md:mb-16">
               <div className="space-y-4">
-                <h3 className="text-[11px] font-bold text-gray-400 uppercase tracking-[0.1em] pl-1">Market Alerts</h3>
-                <div className="bg-gray-50/50 rounded-2xl border border-gray-100 overflow-hidden">
+                <h3 className="text-[11px] font-bold text-secondary uppercase tracking-[0.1em] pl-1">Market Alerts</h3>
+                <div className="bg-element/50 rounded-2xl border border-border overflow-hidden">
                   <div className="px-4 md:px-5 py-4 flex items-center justify-between">
                     <div className="flex items-center space-x-3 md:space-x-4">
-                      <div className="w-8 h-8 rounded-lg bg-white border border-gray-100 shadow-sm flex items-center justify-center"><TrendingUp className="w-4 h-4 text-gray-400" /></div>
+                      <div className="w-8 h-8 rounded-lg bg-card border border-border shadow-sm flex items-center justify-center"><TrendingUp className="w-4 h-4 text-secondary" /></div>
                       <div>
-                        <div className="text-[14px] font-bold text-black leading-tight">Price Volatility</div>
-                        <div className="text-[12px] text-gray-400 font-medium mt-0.5">Alert on &gt;5% moves</div>
+                        <div className="text-[14px] font-bold text-primary leading-tight">Price Volatility</div>
+                        <div className="text-[12px] text-secondary font-medium mt-0.5">Alert on &gt;5% moves</div>
                       </div>
                     </div>
                     {renderToggle(true)}
@@ -1074,24 +1087,24 @@ export default function SettingsPage() {
                 </div>
               </div>
               <div className="space-y-4">
-                <h3 className="text-[11px] font-bold text-gray-400 uppercase tracking-[0.1em] pl-1">Reporting</h3>
-                <div className="bg-gray-50/50 rounded-2xl border border-gray-100 overflow-hidden">
-                  <div className="px-4 md:px-5 py-4 flex items-center justify-between border-b border-gray-100">
+                <h3 className="text-[11px] font-bold text-secondary uppercase tracking-[0.1em] pl-1">Reporting</h3>
+                <div className="bg-element/50 rounded-2xl border border-border overflow-hidden">
+                  <div className="px-4 md:px-5 py-4 flex items-center justify-between border-b border-border">
                     <div className="flex items-center space-x-3 md:space-x-4">
-                      <div className="w-8 h-8 rounded-lg bg-white border border-gray-100 shadow-sm flex items-center justify-center"><FileText className="w-4 h-4 text-gray-400" /></div>
+                      <div className="w-8 h-8 rounded-lg bg-card border border-border shadow-sm flex items-center justify-center"><FileText className="w-4 h-4 text-secondary" /></div>
                       <div>
-                        <div className="text-[14px] font-bold text-black leading-tight">Daily Digest</div>
-                        <div className="text-[12px] text-gray-400 font-medium mt-0.5">Post-market summary</div>
+                        <div className="text-[14px] font-bold text-primary leading-tight">Daily Digest</div>
+                        <div className="text-[12px] text-secondary font-medium mt-0.5">Post-market summary</div>
                       </div>
                     </div>
                     {renderToggle(false)}
                   </div>
                   <div className="px-4 md:px-5 py-4 flex items-center justify-between">
                     <div className="flex items-center space-x-3 md:space-x-4">
-                      <div className="w-8 h-8 rounded-lg bg-white border border-gray-100 shadow-sm flex items-center justify-center"><Mail className="w-4 h-4 text-gray-400" /></div>
+                      <div className="w-8 h-8 rounded-lg bg-card border border-border shadow-sm flex items-center justify-center"><Mail className="w-4 h-4 text-secondary" /></div>
                       <div>
-                        <div className="text-[14px] font-bold text-black leading-tight">Weekly Newsletter</div>
-                        <div className="text-[12px] text-gray-400 font-medium mt-0.5">Insights and returns</div>
+                        <div className="text-[14px] font-bold text-primary leading-tight">Weekly Newsletter</div>
+                        <div className="text-[12px] text-secondary font-medium mt-0.5">Insights and returns</div>
                       </div>
                     </div>
                     {renderToggle(true)}
@@ -1104,50 +1117,50 @@ export default function SettingsPage() {
           {/* SECTION: ACCOUNT & SECURITY */}
           <div id="account" ref={accountRef} className="scroll-mt-24 md:scroll-mt-32">
             <div className="mb-6">
-              <h2 className="text-[18px] md:text-[20px] font-bold text-black tracking-tight">Account & Security</h2>
-              <p className="text-[13px] text-gray-400 font-medium mt-1">
+              <h2 className="text-[18px] md:text-[20px] font-bold text-primary tracking-tight">Account & Security</h2>
+              <p className="text-[13px] text-secondary font-medium mt-1">
                 {isLoggedIn 
                   ? 'Manage your account profile, authentication, and security preferences.' 
                   : 'Log in or create an account to sync your portfolio.'}
               </p>
             </div>
             
-            <div className="bg-white rounded-2xl md:rounded-[32px] p-5 md:p-8 shadow-sm border border-gray-100">
+            <div className="bg-card rounded-2xl md:rounded-[32px] p-5 md:p-8 shadow-sm border border-border">
               {isLoggedIn ? (
                 <div className="space-y-8">
                   {/* Profile Block */}
                   <div className="space-y-4">
-                    <h3 className="text-[11px] font-bold text-gray-400 uppercase tracking-[0.1em] pl-1">Profile</h3>
+                    <h3 className="text-[11px] font-bold text-secondary uppercase tracking-[0.1em] pl-1">Profile</h3>
                     
-                    <div className="bg-gray-50/50 rounded-2xl border border-gray-100 overflow-hidden">
+                    <div className="bg-element/50 rounded-2xl border border-border overflow-hidden">
                       {/* Name & Avatar */}
-                      <div className="flex items-center justify-between p-4 md:p-5 bg-transparent border-b border-gray-100">
+                      <div className="flex items-center justify-between p-4 md:p-5 bg-transparent border-b border-border">
                         <div className="flex items-center space-x-3 md:space-x-4">
-                          <div className="w-10 h-10 md:w-12 md:h-12 rounded-full bg-black text-white flex items-center justify-center font-bold text-base md:text-lg shrink-0 shadow-sm">
+                          <div className="w-10 h-10 md:w-12 md:h-12 rounded-full bg-primary text-on-primary flex items-center justify-center font-bold text-base md:text-lg shrink-0 shadow-sm">
                             {(user?.user_metadata?.display_name || user?.email)?.[0]?.toUpperCase()}
                           </div>
                           <div className="min-w-0">
-                            <div className="text-[14px] md:text-[15px] font-bold text-black truncate">
+                            <div className="text-[14px] md:text-[15px] font-bold text-primary truncate">
                               {user?.user_metadata?.display_name || user?.email?.split('@')[0]}
                             </div>
-                            <div className="text-[12px] md:text-[13px] text-gray-500 font-medium truncate">{user?.email}</div>
+                            <div className="text-[12px] md:text-[13px] text-secondary font-medium truncate">{user?.email}</div>
                           </div>
                         </div>
                       </div>
 
                       {/* Device Context */}
                       {user?.last_sign_in_at && (
-                        <div className="px-4 py-3.5 bg-transparent border-b border-gray-100 flex flex-col sm:flex-row sm:items-center justify-between gap-1.5 sm:gap-0">
+                        <div className="px-4 py-3.5 bg-transparent border-b border-border flex flex-col sm:flex-row sm:items-center justify-between gap-1.5 sm:gap-0">
                           <div className="flex items-center space-x-2.5">
-                            <Monitor className="w-3.5 h-3.5 text-gray-400 shrink-0" />
-                            <span className="text-[11px] font-medium text-gray-400 uppercase tracking-wider truncate sm:whitespace-normal">
+                            <Monitor className="w-3.5 h-3.5 text-secondary shrink-0" />
+                            <span className="text-[11px] font-medium text-secondary uppercase tracking-wider truncate sm:whitespace-normal">
                               Last Session: {new Date(user.last_sign_in_at).toLocaleDateString()}
                               <span className="hidden sm:inline"> at {new Date(user.last_sign_in_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
                             </span>
                           </div>
                           <div className="flex items-center space-x-1.5 opacity-60 ml-6 sm:ml-0 shrink-0">
                             <div className="w-1.5 h-1.5 bg-emerald-500 rounded-full animate-pulse shrink-0"></div>
-                            <span className="text-[11px] font-bold text-gray-500">
+                            <span className="text-[11px] font-bold text-secondary">
                               {typeof window !== 'undefined' && (
                                 <>
                                   {navigator.userAgent.includes('Mac') ? 'macOS' : navigator.userAgent.includes('Win') ? 'Windows' : 'Mobile'}
@@ -1161,7 +1174,7 @@ export default function SettingsPage() {
                       )}
 
                       {/* Account Verified Status */}
-                      <div className="px-4 py-3.5 bg-transparent border-b border-gray-100 flex items-start space-x-2.5">
+                      <div className="px-4 py-3.5 bg-transparent border-b border-border flex items-start space-x-2.5">
                         <ShieldCheck className="w-4 h-4 text-emerald-500 mt-[1px] shrink-0" />
                         <div>
                           <div className="text-[13px] font-bold text-emerald-700">Account Verified</div>
@@ -1172,7 +1185,7 @@ export default function SettingsPage() {
                       {/* Sign Out Action */}
                       <button
                         onClick={handleSignOut}
-                        className="w-full flex items-center justify-between px-4 py-3.5 bg-transparent hover:bg-gray-100 transition-colors active:bg-gray-200 group"
+                        className="w-full flex items-center justify-between px-4 py-3.5 bg-transparent hover:bg-element-hover transition-colors active:bg-gray-200 group"
                       >
                         <div className="flex items-center space-x-2.5">
                           <LogOut className="w-3.5 h-3.5 text-rose-500 group-hover:-translate-x-0.5 transition-transform shrink-0" />
@@ -1184,19 +1197,19 @@ export default function SettingsPage() {
 
                   {/* Login Credentials */}
                   <div className="space-y-4">
-                    <h3 className="text-[11px] font-bold text-gray-400 uppercase tracking-[0.1em] pl-1">Login Credentials</h3>
-                    <div className="bg-gray-50/50 rounded-2xl border border-gray-100 overflow-hidden transition-all duration-300">
+                    <h3 className="text-[11px] font-bold text-secondary uppercase tracking-[0.1em] pl-1">Login Credentials</h3>
+                    <div className="bg-element/50 rounded-2xl border border-border overflow-hidden transition-all duration-300">
 
                       {/* Display Name Row */}
-                      <div className="border-b border-gray-100 bg-white sm:bg-transparent">
+                      <div className="border-b border-border bg-card sm:bg-transparent">
                         <div className="px-4 md:px-5 py-4 flex items-center justify-between">
                           <div className="flex items-center space-x-3 md:space-x-4 min-w-0 mr-3">
-                            <div className={`w-8 h-8 rounded-lg bg-white border border-gray-100 shadow-sm flex items-center justify-center shrink-0 transition-all duration-300 ${isEditingDisplayName ? 'scale-110 border-gray-200 ring-4 ring-black/5' : ''}`}>
-                              <UserCircle className={`w-4 h-4 transition-colors duration-300 ${isEditingDisplayName ? 'text-black' : 'text-gray-400'}`} />
+                            <div className={`w-8 h-8 rounded-lg bg-card border border-border shadow-sm flex items-center justify-center shrink-0 transition-all duration-300 ${isEditingDisplayName ? 'scale-110 border-border ring-4 ring-black/5' : ''}`}>
+                              <UserCircle className={`w-4 h-4 transition-colors duration-300 ${isEditingDisplayName ? 'text-primary' : 'text-secondary'}`} />
                             </div>
                             <div className="min-w-0">
-                              <div className="text-[14px] font-bold text-black leading-tight">Display Name</div>
-                              <div className="text-[12px] md:text-[13px] text-gray-500 font-medium mt-0.5 truncate">
+                              <div className="text-[14px] font-bold text-primary leading-tight">Display Name</div>
+                              <div className="text-[12px] md:text-[13px] text-secondary font-medium mt-0.5 truncate">
                                 {user?.user_metadata?.display_name || user?.email?.split('@')[0]}
                               </div>
                             </div>
@@ -1211,8 +1224,8 @@ export default function SettingsPage() {
                             }}
                             className={`shrink-0 text-[12px] md:text-[13px] font-bold px-3 py-1.5 rounded-lg transition-colors shadow-sm active:scale-95 border ${
                               isEditingDisplayName
-                                ? 'bg-gray-100 border-gray-200 text-gray-700'
-                                : 'bg-white border-gray-100 text-black hover:bg-gray-100'
+                                ? 'bg-element-hover border-border text-gray-700'
+                                : 'bg-card border-border text-primary hover:bg-element-hover'
                             }`}
                           >
                             {isEditingDisplayName ? 'Cancel' : 'Change'}
@@ -1220,17 +1233,17 @@ export default function SettingsPage() {
                         </div>
                         <div className={`grid transition-all duration-300 ease-in-out ${isEditingDisplayName ? 'grid-rows-[1fr] opacity-100' : 'grid-rows-[0fr] opacity-0'}`}>
                           <div className="overflow-hidden">
-                            <div className="p-4 md:p-5 bg-white border-t border-gray-100/60 space-y-4">
+                            <div className="p-4 md:p-5 bg-card border-t border-border/60 space-y-4">
                               <form onSubmit={handleUpdateDisplayName} className="space-y-4">
                                 <div>
-                                  <label className="block text-[11px] font-bold text-gray-400 uppercase tracking-wider mb-2">New Display Name</label>
+                                  <label className="block text-[11px] font-bold text-secondary uppercase tracking-wider mb-2">New Display Name</label>
                                   <input
                                     type="text"
                                     required
                                     value={newDisplayName}
                                     onChange={(e) => setNewDisplayName(e.target.value)}
                                     placeholder="Enter your display name"
-                                    className="w-full px-4 py-2.5 bg-gray-50/50 rounded-xl text-[14px] text-black font-medium border border-gray-200 focus:border-black focus:ring-1 focus:ring-black outline-none transition-all placeholder:text-gray-400"
+                                    className="w-full px-4 py-2.5 bg-element/50 rounded-xl text-[14px] text-primary font-medium border border-border focus:border-primary focus:ring-1 focus:ring-black outline-none transition-all placeholder:text-secondary"
                                   />
                                 </div>
                                 {authError && isEditingDisplayName && (
@@ -1242,7 +1255,7 @@ export default function SettingsPage() {
                                 <button
                                   type="submit"
                                   disabled={authActionLoading || !newDisplayName.trim()}
-                                  className="w-full bg-black text-white text-[13px] font-bold py-2.5 rounded-xl hover:bg-gray-800 transition-colors active:scale-[0.98] disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2 shadow-sm"
+                                  className="w-full bg-primary text-on-primary text-[13px] font-bold py-2.5 rounded-xl hover:bg-primary-hover transition-colors active:scale-[0.98] disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2 shadow-sm"
                                 >
                                   {authActionLoading && isEditingDisplayName && <Loader2 className="w-4 h-4 animate-spin" />}
                                   {authActionLoading && isEditingDisplayName ? 'Updating...' : 'Update Name'}
@@ -1254,15 +1267,15 @@ export default function SettingsPage() {
                       </div>
 
                       {/* Email Row */}
-                      <div className="border-b border-gray-100 bg-white sm:bg-transparent">
+                      <div className="border-b border-border bg-card sm:bg-transparent">
                         <div className="px-4 md:px-5 py-4 flex items-center justify-between">
                           <div className="flex items-center space-x-3 md:space-x-4 min-w-0 mr-3">
-                            <div className={`w-8 h-8 rounded-lg bg-white border border-gray-100 shadow-sm flex items-center justify-center shrink-0 transition-all duration-300 ${isEditingEmail ? 'scale-110 border-gray-200 ring-4 ring-black/5' : ''}`}>
-                              <Mail className={`w-4 h-4 transition-colors duration-300 ${isEditingEmail ? 'text-black' : 'text-gray-400'}`} />
+                            <div className={`w-8 h-8 rounded-lg bg-card border border-border shadow-sm flex items-center justify-center shrink-0 transition-all duration-300 ${isEditingEmail ? 'scale-110 border-border ring-4 ring-black/5' : ''}`}>
+                              <Mail className={`w-4 h-4 transition-colors duration-300 ${isEditingEmail ? 'text-primary' : 'text-secondary'}`} />
                             </div>
                             <div className="min-w-0">
-                              <div className="text-[14px] font-bold text-black leading-tight">Email Address</div>
-                              <div className="text-[12px] md:text-[13px] text-gray-500 font-medium mt-0.5 truncate">{user?.email}</div>
+                              <div className="text-[14px] font-bold text-primary leading-tight">Email Address</div>
+                              <div className="text-[12px] md:text-[13px] text-secondary font-medium mt-0.5 truncate">{user?.email}</div>
                             </div>
                           </div>
                           <button 
@@ -1276,8 +1289,8 @@ export default function SettingsPage() {
                             }}
                             className={`shrink-0 text-[12px] md:text-[13px] font-bold px-3 py-1.5 rounded-lg transition-colors shadow-sm active:scale-95 border ${
                               isEditingEmail 
-                                ? 'bg-gray-100 border-gray-200 text-gray-700' 
-                                : 'bg-white border-gray-100 text-black hover:bg-gray-100'
+                                ? 'bg-element-hover border-border text-gray-700' 
+                                : 'bg-card border-border text-primary hover:bg-element-hover'
                             }`}
                           >
                             {isEditingEmail ? 'Cancel' : 'Change'}
@@ -1287,17 +1300,17 @@ export default function SettingsPage() {
                         {/* Expandable Email Editor */}
                         <div className={`grid transition-all duration-300 ease-in-out ${isEditingEmail ? 'grid-rows-[1fr] opacity-100' : 'grid-rows-[0fr] opacity-0'}`}>
                           <div className="overflow-hidden">
-                            <div className="p-4 md:p-5 bg-white border-t border-gray-100/60 space-y-4">
+                            <div className="p-4 md:p-5 bg-card border-t border-border/60 space-y-4">
                               <form onSubmit={handleUpdateEmail} className="space-y-4">
                                 <div>
-                                  <label className="block text-[11px] font-bold text-gray-400 uppercase tracking-wider mb-2">New Email Address</label>
+                                  <label className="block text-[11px] font-bold text-secondary uppercase tracking-wider mb-2">New Email Address</label>
                                   <input 
                                     type="email" 
                                     required
                                     value={newEmail}
                                     onChange={(e) => setNewEmail(e.target.value)}
                                     placeholder="Enter your new email"
-                                    className="w-full px-4 py-2.5 bg-gray-50/50 rounded-xl text-[14px] text-black font-medium border border-gray-200 focus:border-black focus:ring-1 focus:ring-black outline-none transition-all placeholder:text-gray-400"
+                                    className="w-full px-4 py-2.5 bg-element/50 rounded-xl text-[14px] text-primary font-medium border border-border focus:border-primary focus:ring-1 focus:ring-black outline-none transition-all placeholder:text-secondary"
                                   />
                                 </div>
                                 {authError && isEditingEmail && (
@@ -1309,7 +1322,7 @@ export default function SettingsPage() {
                                 <button 
                                   type="submit"
                                   disabled={authActionLoading || !newEmail || newEmail === user?.email}
-                                  className="w-full bg-black text-white text-[13px] font-bold py-2.5 rounded-xl hover:bg-gray-800 transition-colors active:scale-[0.98] disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2 shadow-sm"
+                                  className="w-full bg-primary text-on-primary text-[13px] font-bold py-2.5 rounded-xl hover:bg-primary-hover transition-colors active:scale-[0.98] disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2 shadow-sm"
                                 >
                                   {authActionLoading && isEditingEmail && <Loader2 className="w-4 h-4 animate-spin" />}
                                   {authActionLoading && isEditingEmail ? 'Updating...' : 'Update Email'}
@@ -1321,15 +1334,15 @@ export default function SettingsPage() {
                       </div>
 
                       {/* Password Row */}
-                      <div className="bg-white sm:bg-transparent">
+                      <div className="bg-card sm:bg-transparent">
                         <div className="px-4 md:px-5 py-4 flex items-center justify-between">
                           <div className="flex items-center space-x-3 md:space-x-4">
-                            <div className={`w-8 h-8 rounded-lg bg-white border border-gray-100 shadow-sm flex items-center justify-center shrink-0 transition-all duration-300 ${isEditingPassword ? 'scale-110 border-gray-200 ring-4 ring-black/5' : ''}`}>
-                              <Lock className={`w-4 h-4 transition-colors duration-300 ${isEditingPassword ? 'text-black' : 'text-gray-400'}`} />
+                            <div className={`w-8 h-8 rounded-lg bg-card border border-border shadow-sm flex items-center justify-center shrink-0 transition-all duration-300 ${isEditingPassword ? 'scale-110 border-border ring-4 ring-black/5' : ''}`}>
+                              <Lock className={`w-4 h-4 transition-colors duration-300 ${isEditingPassword ? 'text-primary' : 'text-secondary'}`} />
                             </div>
                             <div>
-                              <div className="text-[14px] font-bold text-black leading-tight">Password</div>
-                              <div className="text-[13px] text-gray-500 font-medium mt-0.5 tracking-widest mt-1">••••••••</div>
+                              <div className="text-[14px] font-bold text-primary leading-tight">Password</div>
+                              <div className="text-[13px] text-secondary font-medium mt-0.5 tracking-widest mt-1">••••••••</div>
                             </div>
                           </div>
                           <button 
@@ -1344,8 +1357,8 @@ export default function SettingsPage() {
                             }}
                             className={`text-[12px] md:text-[13px] font-bold px-3 py-1.5 rounded-lg transition-colors shadow-sm active:scale-95 border ${
                               isEditingPassword 
-                                ? 'bg-gray-100 border-gray-200 text-gray-700' 
-                                : 'bg-white border-gray-100 text-black hover:bg-gray-100'
+                                ? 'bg-element-hover border-border text-gray-700' 
+                                : 'bg-card border-border text-primary hover:bg-element-hover'
                             }`}
                           >
                             {isEditingPassword ? 'Cancel' : 'Update'}
@@ -1355,10 +1368,10 @@ export default function SettingsPage() {
                         {/* Expandable Password Editor */}
                         <div className={`grid transition-all duration-300 ease-in-out ${isEditingPassword ? 'grid-rows-[1fr] opacity-100' : 'grid-rows-[0fr] opacity-0'}`}>
                           <div className="overflow-hidden">
-                            <div className="p-4 md:p-5 bg-white border-t border-gray-100/60 space-y-4">
+                            <div className="p-4 md:p-5 bg-card border-t border-border/60 space-y-4">
                               <form onSubmit={handleUpdatePassword} className="space-y-4">
                                 <div>
-                                  <label className="block text-[11px] font-bold text-gray-400 uppercase tracking-wider mb-2">New Password</label>
+                                  <label className="block text-[11px] font-bold text-secondary uppercase tracking-wider mb-2">New Password</label>
                                   <div className="relative">
                                     <input 
                                       type={showPassword ? "text" : "password"} 
@@ -1366,26 +1379,26 @@ export default function SettingsPage() {
                                       value={newPassword}
                                       onChange={(e) => setNewPassword(e.target.value)}
                                       placeholder="Enter new password"
-                                      className="w-full px-4 py-2.5 bg-gray-50/50 rounded-xl text-[14px] text-black font-medium border border-gray-200 focus:border-black focus:ring-1 focus:ring-black outline-none transition-all placeholder:text-gray-400"
+                                      className="w-full px-4 py-2.5 bg-element/50 rounded-xl text-[14px] text-primary font-medium border border-border focus:border-primary focus:ring-1 focus:ring-black outline-none transition-all placeholder:text-secondary"
                                     />
                                     <button 
                                       type="button"
                                       onClick={() => setShowPassword(!showPassword)}
-                                      className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 transition-colors"
+                                      className="absolute right-3 top-1/2 -translate-y-1/2 text-secondary hover:text-secondary transition-colors"
                                     >
                                       {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
                                     </button>
                                   </div>
                                 </div>
                                 <div>
-                                  <label className="block text-[11px] font-bold text-gray-400 uppercase tracking-wider mb-2">Confirm New Password</label>
+                                  <label className="block text-[11px] font-bold text-secondary uppercase tracking-wider mb-2">Confirm New Password</label>
                                   <input 
                                     type={showPassword ? "text" : "password"} 
                                     required
                                     value={confirmPassword}
                                     onChange={(e) => setConfirmPassword(e.target.value)}
                                     placeholder="Confirm new password"
-                                    className="w-full px-4 py-2.5 bg-gray-50/50 rounded-xl text-[14px] text-black font-medium border border-gray-200 focus:border-black focus:ring-1 focus:ring-black outline-none transition-all placeholder:text-gray-400"
+                                    className="w-full px-4 py-2.5 bg-element/50 rounded-xl text-[14px] text-primary font-medium border border-border focus:border-primary focus:ring-1 focus:ring-black outline-none transition-all placeholder:text-secondary"
                                   />
                                 </div>
                                 {authError && isEditingPassword && (
@@ -1397,7 +1410,7 @@ export default function SettingsPage() {
                                 <button 
                                   type="submit"
                                   disabled={authActionLoading || !newPassword || newPassword !== confirmPassword}
-                                  className="w-full bg-black text-white text-[13px] font-bold py-2.5 rounded-xl hover:bg-gray-800 transition-colors active:scale-[0.98] disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2 shadow-sm"
+                                  className="w-full bg-primary text-on-primary text-[13px] font-bold py-2.5 rounded-xl hover:bg-primary-hover transition-colors active:scale-[0.98] disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2 shadow-sm"
                                 >
                                   {authActionLoading && isEditingPassword && <Loader2 className="w-4 h-4 animate-spin" />}
                                   {authActionLoading && isEditingPassword ? 'Updating...' : 'Update Password'}
@@ -1413,17 +1426,17 @@ export default function SettingsPage() {
 
                   {/* Access Control */}
                   <div className="space-y-4 select-none">
-                    <h3 className="text-[11px] font-bold text-gray-400 uppercase tracking-[0.1em] pl-1">Access Control</h3>
-                    <div className="bg-gray-50/50 rounded-2xl border border-gray-100 overflow-hidden">
-                      <div className="px-4 md:px-5 py-4 flex items-center justify-between border-b border-gray-100">
+                    <h3 className="text-[11px] font-bold text-secondary uppercase tracking-[0.1em] pl-1">Access Control</h3>
+                    <div className="bg-element/50 rounded-2xl border border-border overflow-hidden">
+                      <div className="px-4 md:px-5 py-4 flex items-center justify-between border-b border-border">
                         <div className="flex items-center space-x-3 md:space-x-4">
-                          <div className="w-8 h-8 rounded-lg bg-white border border-gray-100 shadow-sm flex items-center justify-center"><ShieldCheck className="w-4 h-4 text-gray-400" /></div>
+                          <div className="w-8 h-8 rounded-lg bg-card border border-border shadow-sm flex items-center justify-center"><ShieldCheck className="w-4 h-4 text-secondary" /></div>
                           <div>
-                            <div className="text-[14px] font-bold text-black leading-tight">Two-Factor Auth</div>
-                            <div className="text-[13px] text-gray-500 font-medium mt-0.5">Disabled</div>
+                            <div className="text-[14px] font-bold text-primary leading-tight">Two-Factor Auth</div>
+                            <div className="text-[13px] text-secondary font-medium mt-0.5">Disabled</div>
                           </div>
                         </div>
-                        <button className="text-[12px] md:text-[13px] font-bold text-black border border-gray-100 bg-white hover:bg-gray-100 px-3 py-1.5 rounded-lg transition-colors shadow-sm active:scale-95">Enable</button>
+                        <button className="text-[12px] md:text-[13px] font-bold text-primary border border-border bg-card hover:bg-element-hover px-3 py-1.5 rounded-lg transition-colors shadow-sm active:scale-95">Enable</button>
                       </div>
                       <PasskeySection user={user} />
                     </div>
@@ -1431,17 +1444,17 @@ export default function SettingsPage() {
 
                   {/* API Management */}
                   <div className="space-y-4 select-none">
-                    <h3 className="text-[11px] font-bold text-gray-400 uppercase tracking-[0.1em] pl-1">API Management</h3>
-                    <div className="bg-gray-50/50 rounded-2xl border border-gray-100 overflow-hidden">
+                    <h3 className="text-[11px] font-bold text-secondary uppercase tracking-[0.1em] pl-1">API Management</h3>
+                    <div className="bg-element/50 rounded-2xl border border-border overflow-hidden">
                       <div className="px-4 md:px-5 py-4 flex items-center justify-between">
                         <div className="flex items-center space-x-3 md:space-x-4 min-w-0 mr-3">
-                          <div className="w-8 h-8 rounded-lg bg-white border border-gray-100 shadow-sm flex items-center justify-center shrink-0 transition-all duration-300 transition-all duration-300"><Key className="w-4 h-4 text-gray-400 transition-colors duration-300" /></div>
+                          <div className="w-8 h-8 rounded-lg bg-card border border-border shadow-sm flex items-center justify-center shrink-0 transition-all duration-300 transition-all duration-300"><Key className="w-4 h-4 text-secondary transition-colors duration-300" /></div>
                           <div className="min-w-0">
-                            <div className="text-[14px] font-bold text-black leading-tight">Finnhub API Key</div>
-                            <div className="text-[13px] text-gray-500 font-medium mt-0.5 tracking-widest mt-1 truncate">••••••••••••</div>
+                            <div className="text-[14px] font-bold text-primary leading-tight">Finnhub API Key</div>
+                            <div className="text-[13px] text-secondary font-medium mt-0.5 tracking-widest mt-1 truncate">••••••••••••</div>
                           </div>
                         </div>
-                        <button className="text-[12px] md:text-[13px] font-bold text-black border border-gray-100 bg-white hover:bg-gray-100 px-3 py-1.5 rounded-lg transition-colors shadow-sm active:scale-95 shrink-0">Manage</button>
+                        <button className="text-[12px] md:text-[13px] font-bold text-primary border border-border bg-card hover:bg-element-hover px-3 py-1.5 rounded-lg transition-colors shadow-sm active:scale-95 shrink-0">Manage</button>
                       </div>
                     </div>
                   </div>
@@ -1453,7 +1466,7 @@ export default function SettingsPage() {
           </div>
 
           <div className="mt-16 text-center">
-            <p className="text-[11px] text-gray-400 font-medium">
+            <p className="text-[11px] text-secondary font-medium">
               Folio v1.0.0
             </p>
           </div>

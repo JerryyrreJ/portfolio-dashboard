@@ -3,12 +3,12 @@ import { ChevronLeft, Wallet, Settings, Bell, UserCircle } from 'lucide-react';
 
 export default function SettingsLoading() {
   return (
-    <div className="min-h-screen bg-[#FBFBFD] text-[#1D1D1F] font-sans antialiased flex flex-col">
+    <div className="min-h-screen bg-page text-primary font-sans antialiased flex flex-col">
       {/* Header */}
-      <header className="bg-white/80 backdrop-blur-xl border-b border-gray-100 px-6 h-[56px] flex items-center sticky top-0 z-50 transition-all">
-        <div className="flex items-center space-x-2 text-[14px] font-semibold text-gray-400">
-          <div className="w-6 h-6 rounded-full bg-gray-100 flex items-center justify-center">
-            <ChevronLeft className="w-3.5 h-3.5 text-gray-400" />
+      <header className="bg-card/80 backdrop-blur-xl border-b border-border px-6 h-[56px] flex items-center sticky top-0 z-50 transition-all">
+        <div className="flex items-center space-x-2 text-[14px] font-semibold text-secondary">
+          <div className="w-6 h-6 rounded-full bg-element-hover flex items-center justify-center">
+            <ChevronLeft className="w-3.5 h-3.5 text-secondary" />
           </div>
           <span>Back to Dashboard</span>
         </div>
@@ -19,7 +19,7 @@ export default function SettingsLoading() {
         
         {/* Sidebar Navigation Skeleton */}
         <aside className="w-full md:w-64 flex-shrink-0 md:sticky md:top-28">
-          <div className="h-9 w-32 bg-gray-200 rounded-lg mb-8 ml-4"></div>
+          <div className="h-9 w-32 bg-border rounded-lg mb-8 ml-4"></div>
           <nav className="flex flex-col space-y-1.5">
             {[
               { name: 'Portfolio', icon: <Wallet className="w-4 h-4" /> },
@@ -29,12 +29,12 @@ export default function SettingsLoading() {
             ].map((item, i) => (
               <div 
                 key={i}
-                className={`flex items-center space-x-3 px-4 py-3.5 rounded-[14px] border border-transparent ${i === 0 ? 'bg-white shadow-sm' : ''}`}
+                className={`flex items-center space-x-3 px-4 py-3.5 rounded-[14px] border border-transparent ${i === 0 ? 'bg-card shadow-sm' : ''}`}
               >
-                <div className="text-gray-300">
+                <div className="text-secondary">
                   {item.icon}
                 </div>
-                <div className="h-4 w-24 bg-gray-200 rounded"></div>
+                <div className="h-4 w-24 bg-border rounded"></div>
               </div>
             ))}
           </nav>
@@ -45,49 +45,49 @@ export default function SettingsLoading() {
           
           {/* Section Skeleton */}
           <div className="mb-6">
-            <div className="h-7 w-48 bg-gray-200 rounded-lg mb-2"></div>
-            <div className="h-4 w-64 bg-gray-200 rounded"></div>
+            <div className="h-7 w-48 bg-border rounded-lg mb-2"></div>
+            <div className="h-4 w-64 bg-border rounded"></div>
           </div>
           
-          <div className="space-y-6 bg-white rounded-[32px] p-8 shadow-sm border border-gray-100 mb-16">
+          <div className="space-y-6 bg-card rounded-[32px] p-8 shadow-sm border border-border mb-16">
             <div className="space-y-4">
-              <div className="h-3 w-16 bg-gray-200 rounded ml-1"></div>
-              <div className="bg-gray-50/50 rounded-2xl border border-gray-100 overflow-hidden">
-                <div className="px-5 py-6 flex items-center justify-between border-b border-gray-100">
+              <div className="h-3 w-16 bg-border rounded ml-1"></div>
+              <div className="bg-element/50 rounded-2xl border border-border overflow-hidden">
+                <div className="px-5 py-6 flex items-center justify-between border-b border-border">
                   <div className="flex items-center space-x-4">
-                    <div className="w-8 h-8 rounded-lg bg-white border border-gray-100 shadow-sm"></div>
+                    <div className="w-8 h-8 rounded-lg bg-card border border-border shadow-sm"></div>
                     <div>
-                      <div className="h-4 w-24 bg-gray-200 rounded mb-2"></div>
-                      <div className="h-3 w-32 bg-gray-200 rounded"></div>
+                      <div className="h-4 w-24 bg-border rounded mb-2"></div>
+                      <div className="h-3 w-32 bg-border rounded"></div>
                     </div>
                   </div>
-                  <div className="h-8 w-16 bg-gray-200 rounded-lg"></div>
+                  <div className="h-8 w-16 bg-border rounded-lg"></div>
                 </div>
                 <div className="px-5 py-6 flex items-center justify-between">
                   <div className="flex items-center space-x-4">
-                    <div className="w-8 h-8 rounded-lg bg-white border border-gray-100 shadow-sm"></div>
+                    <div className="w-8 h-8 rounded-lg bg-card border border-border shadow-sm"></div>
                     <div>
-                      <div className="h-4 w-24 bg-gray-200 rounded mb-2"></div>
-                      <div className="h-3 w-32 bg-gray-200 rounded"></div>
+                      <div className="h-4 w-24 bg-border rounded mb-2"></div>
+                      <div className="h-3 w-32 bg-border rounded"></div>
                     </div>
                   </div>
-                  <div className="h-8 w-16 bg-gray-200 rounded-lg"></div>
+                  <div className="h-8 w-16 bg-border rounded-lg"></div>
                 </div>
               </div>
             </div>
 
             <div className="space-y-4">
-              <div className="h-3 w-28 bg-gray-200 rounded ml-1"></div>
-              <div className="bg-gray-50/50 rounded-2xl border border-gray-100 overflow-hidden">
+              <div className="h-3 w-28 bg-border rounded ml-1"></div>
+              <div className="bg-element/50 rounded-2xl border border-border overflow-hidden">
                 <div className="px-5 py-6 flex items-center justify-between">
                   <div className="flex items-center space-x-4">
-                    <div className="w-8 h-8 rounded-lg bg-white border border-gray-100 shadow-sm"></div>
+                    <div className="w-8 h-8 rounded-lg bg-card border border-border shadow-sm"></div>
                     <div>
-                      <div className="h-4 w-24 bg-gray-200 rounded mb-2"></div>
-                      <div className="h-3 w-40 bg-gray-200 rounded"></div>
+                      <div className="h-4 w-24 bg-border rounded mb-2"></div>
+                      <div className="h-3 w-40 bg-border rounded"></div>
                     </div>
                   </div>
-                  <div className="h-8 w-20 bg-gray-200 rounded-lg"></div>
+                  <div className="h-8 w-20 bg-border rounded-lg"></div>
                 </div>
               </div>
             </div>
@@ -95,9 +95,9 @@ export default function SettingsLoading() {
 
           {/* Second Section Skeleton */}
           <div className="mb-6">
-            <div className="h-7 w-32 bg-gray-200 rounded-lg mb-2"></div>
+            <div className="h-7 w-32 bg-border rounded-lg mb-2"></div>
           </div>
-          <div className="space-y-6 bg-white rounded-[32px] p-8 shadow-sm border border-gray-100 mb-16 h-64"></div>
+          <div className="space-y-6 bg-card rounded-[32px] p-8 shadow-sm border border-border mb-16 h-64"></div>
         </div>
 
         {/* Right Spacer */}

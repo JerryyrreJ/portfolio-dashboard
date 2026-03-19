@@ -1,4 +1,5 @@
 import { getCompanyProfile } from '@/lib/finnhub';
+import { getLogo as getTwelveDataLogo } from '@/lib/twelvedata';
 import { getUser } from '@/lib/supabase-server';
 import prisma, { withRetry } from '@/lib/prisma';
 import TransactionsClient from './TransactionsClient';
@@ -96,15 +97,25 @@ export default async function TransactionsPage(props: {
   const missingLogos = uniqueAssets.filter(a => !a.logo);
   if (missingLogos.length > 0) {
     (async () => {
-      for (const asset of missingLogos) {
-        try {
-          const profile = await getCompanyProfile(asset.ticker);
-          if (profile?.logo) {
-            await prisma.asset.update({ where: { id: asset.id }, data: { logo: profile.logo } });
+      const CONCURRENCY = 5;
+      for (let i = 0; i < missingLogos.length; i += CONCURRENCY) {
+        const batch = missingLogos.slice(i, i + CONCURRENCY);
+        await Promise.allSettled(batch.map(async (asset) => {
+          try {
+            // Finnhub first
+            const profile = await getCompanyProfile(asset.ticker);
+            let logoUrl = profile?.logo || null;
+            // Twelve Data fallback
+            if (!logoUrl) {
+              logoUrl = await getTwelveDataLogo(asset.ticker);
+            }
+            if (logoUrl) {
+              await prisma.asset.update({ where: { id: asset.id }, data: { logo: logoUrl } });
+            }
+          } catch (err) {
+            console.warn(`Failed to cache logo for ${asset.ticker}:`, err);
           }
-        } catch (err) {
-          console.warn(`Failed to cache logo for ${asset.ticker}:`, err);
-        }
+        }));
       }
     })();
   }

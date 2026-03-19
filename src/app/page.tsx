@@ -1,6 +1,6 @@
 import DashboardClient from './DashboardClient'
 import { getCompanyProfile } from '@/lib/finnhub'
-import { get12MonthHistory } from '@/lib/twelvedata'
+import { get12MonthHistory, getLogo as getTwelveDataLogo } from '@/lib/twelvedata'
 import { getUser } from '@/lib/supabase-server'
 import prisma, { withRetry } from '@/lib/prisma'
 
@@ -230,11 +230,21 @@ export default async function Page() {
     // 异步闭包，在后台运行
     (async () => {
       try {
-        for (const asset of missingLogos) {
-          const profile = await getCompanyProfile(asset.ticker);
-          if (profile?.logo) {
-            await prisma.asset.update({ where: { id: asset.id }, data: { logo: profile.logo } });
-          }
+        const CONCURRENCY = 5;
+        for (let i = 0; i < missingLogos.length; i += CONCURRENCY) {
+          const batch = missingLogos.slice(i, i + CONCURRENCY);
+          await Promise.allSettled(batch.map(async (asset) => {
+            // Finnhub first
+            const profile = await getCompanyProfile(asset.ticker);
+            let logoUrl = profile?.logo || null;
+            // Twelve Data fallback
+            if (!logoUrl) {
+              logoUrl = await getTwelveDataLogo(asset.ticker);
+            }
+            if (logoUrl) {
+              await prisma.asset.update({ where: { id: asset.id }, data: { logo: logoUrl } });
+            }
+          }));
         }
         for (const asset of assetsNeedingHistorySync) {
           const history = await get12MonthHistory(asset.ticker);
@@ -338,9 +348,13 @@ export default async function Page() {
   // 5e. 对每个日期，回放交易 → 算持仓 → 乘以当日价格 → 得出该日组合市值
   const holdingsAtDate = new Map<string, number>(); // ticker → qty
   let txIndex = 0;
+  let cumulativeReturnFactor = 1.0;
 
-  const historicalChartData = allDateLabels.map(dateLabel => {
+  const historicalChartData = allDateLabels.map((dateLabel, i) => {
     const dayEnd = new Date(dateLabel + 'T23:59:59Z');
+
+    // 在推进交易之前先快照持仓（用于 TWR 权重计算）
+    const holdingsBeforeTx = new Map(holdingsAtDate);
 
     // 推进交易回放：把截止当天的所有交易都计入
     while (txIndex < sortedTransactions.length && new Date(sortedTransactions[txIndex].date) <= dayEnd) {
@@ -352,6 +366,7 @@ export default async function Page() {
       txIndex++;
     }
 
+    // 当天收盘市值（用交易后持仓）
     let total = 0;
     for (const [ticker, qty] of holdingsAtDate) {
       if (qty <= 0) continue;
@@ -362,13 +377,66 @@ export default async function Page() {
       total += qty * point.price;
     }
 
-    return { date: dateLabel, Total: Math.round(total * 100) / 100 };
+    // TWR 日收益率：用交易前的持仓权重 × (今天价格 / 昨天价格)
+    // 这样加仓/减仓完全不影响当天的收益率，只影响之后的权重
+    if (i > 0) {
+      const prevLabel = allDateLabels[i - 1];
+      let dailyFactor = 0;
+      let weightSum = 0;
+      for (const [ticker, qty] of holdingsBeforeTx) {
+        if (qty <= 0) continue;
+        const dayPrices = priceHistories[ticker];
+        if (!dayPrices) continue;
+        const today = dayPrices.find(p => p.date === dateLabel);
+        const prev = dayPrices.find(p => p.date === prevLabel);
+        if (!today || !prev || prev.price === 0) continue;
+        const weight = qty * prev.price;
+        dailyFactor += (today.price / prev.price) * weight;
+        weightSum += weight;
+      }
+      if (weightSum > 0) {
+        cumulativeReturnFactor *= dailyFactor / weightSum;
+      }
+    }
+
+    return {
+      date: dateLabel,
+      Total: Math.round(total * 100) / 100,
+      Return: Math.round((cumulativeReturnFactor - 1) * 10000) / 100,
+    };
   }).filter(p => p.Total > 0);
 
   // 5f. 末尾追加 Today 实时数据
+  // Today 的 TWR：用最后一个历史日的价格作为昨天
+  const lastHistorical = historicalChartData[historicalChartData.length - 1];
+  let todayReturnFactor = cumulativeReturnFactor;
+  if (lastHistorical) {
+    const lastLabel = lastHistorical.date;
+    let dailyFactor = 0;
+    let weightSum = 0;
+    for (const [ticker, qty] of holdingsAtDate) {
+      if (qty <= 0) continue;
+      const dayPrices = priceHistories[ticker];
+      if (!dayPrices) continue;
+      const prev = dayPrices.find(p => p.date === lastLabel);
+      // 今天实时价格从 holdingsData 里取
+      const holding = calculatedHoldings.find(h => h.ticker === ticker);
+      if (!prev || !holding || prev.price === 0) continue;
+      const weight = qty * prev.price;
+      dailyFactor += (holding.price / prev.price) * weight;
+      weightSum += weight;
+    }
+    if (weightSum > 0) {
+      todayReturnFactor *= dailyFactor / weightSum;
+    }
+  }
   const chartData = [
     ...historicalChartData,
-    { date: 'Today', Total: Math.round(totalValue * 100) / 100 },
+    {
+      date: 'Today',
+      Total: Math.round(totalValue * 100) / 100,
+      Return: Math.round((todayReturnFactor - 1) * 10000) / 100,
+    },
   ];
 
   const summary = {

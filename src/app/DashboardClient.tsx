@@ -45,7 +45,7 @@ interface FormatValueProps {
 
 const FormatValue: React.FC<FormatValueProps> = ({ val, isPercentage = false, isCurrency = true, symbol = '$', convert = (n) => n, gainColor = 'text-emerald-600', lossColor = 'text-rose-500' }) => {
   const converted = isCurrency ? convert(val) : val;
-  if (converted === 0) return <span className="text-gray-400">{isCurrency ? symbol : ''}0.00{isPercentage ? '%' : ''}</span>;
+  if (converted === 0) return <span className="text-secondary">{isCurrency ? symbol : ''}0.00{isPercentage ? '%' : ''}</span>;
   const isPositive = converted > 0;
   const color = isPositive ? gainColor : lossColor;
   const prefix = isCurrency ? (converted < 0 ? `-${symbol}` : symbol) : '';
@@ -112,7 +112,7 @@ const CustomXAxisTick = (props: any) => {
 
   return (
     <g transform={`translate(${x},${y})`}>
-      <text x={0} y={0} dy={15} textAnchor={textAnchor} fill="#a1a1aa" fontSize={10} fontWeight={500}>
+      <text x={0} y={0} dy={15} textAnchor={textAnchor} fill="var(--text-secondary)" fontSize={10} fontWeight={500}>
         {dateText}
       </text>
     </g>
@@ -135,6 +135,7 @@ export default function DashboardClient({ portfolioId, portfolioName, holdingsDa
 
   // 图表时间范围状态
   const [chartTimeRange, setChartTimeRange] = useState<'1M' | '3M' | '6M' | '1Y' | 'All'>('All');
+  const [chartMode, setChartMode] = useState<'value' | 'return'>('value');
   
   // Local state for unauthenticated users
   const [localHoldings, setLocalHoldings] = useState<HoldingsGroup[]>(holdingsData);
@@ -371,20 +372,20 @@ export default function DashboardClient({ portfolioId, portfolioName, holdingsDa
   const totalHoldingsCount = localHoldings.reduce((sum: number, g: HoldingsGroup) => sum + g.holdings.length, 0);
 
   return (
-    <div className="min-h-screen bg-[#FBFBFD] text-[#1D1D1F] font-sans antialiased">
+    <div className="min-h-screen bg-page text-primary font-sans antialiased">
       
       {/* 顶部导航栏 - 更舒适的高度和字体 */}
-      <header className="bg-white/70 backdrop-blur-xl border-b border-gray-100 px-6 h-[56px] flex items-center justify-between sticky top-0 z-50">
+      <header className="bg-card/70 backdrop-blur-xl border-b border-border px-6 h-[56px] flex items-center justify-between sticky top-0 z-50">
         <div className="flex items-center space-x-8">
-            <div className="flex items-center space-x-2 text-black font-bold text-[17px] tracking-tight">
-              <div className="bg-black text-white p-1 rounded-md">
+            <div className="flex items-center space-x-2 text-primary font-bold text-[17px] tracking-tight">
+              <div className="bg-primary text-on-primary p-1 rounded-md">
                 <TrendingUp className="w-4 h-4" />
               </div>
               <span>Folio</span>
             </div>
-          <nav className="hidden md:flex space-x-7 text-[14px] font-semibold text-gray-400">
-            <a href="/" className="text-black border-b-2 border-black py-[16px]">Investments</a>
-            <a href="/transactions" className="hover:text-black transition-colors py-[16px]">Transactions</a>
+          <nav className="hidden md:flex space-x-7 text-[14px] font-semibold text-secondary">
+            <a href="/" className="text-primary border-b-2 border-primary py-[16px]">Investments</a>
+            <a href="/transactions" className="hover:text-primary transition-colors py-[16px]">Transactions</a>
           </nav>
         </div>
         <div className="flex items-center space-x-5">
@@ -395,7 +396,7 @@ export default function DashboardClient({ portfolioId, portfolioName, holdingsDa
             {/* Mobile Search Trigger */}
             <button 
               onClick={() => setShowMobileSearch(true)}
-              className="sm:hidden w-7 h-7 rounded-full bg-gray-100 border border-gray-200 flex items-center justify-center text-gray-500 active:bg-gray-200 transition-colors shadow-sm"
+              className="sm:hidden w-7 h-7 rounded-full bg-element-hover border border-border flex items-center justify-center text-secondary active:bg-gray-200 transition-colors shadow-sm"
               title="Search"
             >
               <Search className="w-3.5 h-3.5" />
@@ -404,7 +405,7 @@ export default function DashboardClient({ portfolioId, portfolioName, holdingsDa
             {/* Mobile Transactions Link */}
             <Link 
               href="/transactions"
-              className="md:hidden w-7 h-7 rounded-full bg-gray-100 border border-gray-200 flex items-center justify-center text-gray-500 active:bg-gray-200 transition-colors shadow-sm"
+              className="md:hidden w-7 h-7 rounded-full bg-element-hover border border-border flex items-center justify-center text-secondary active:bg-gray-200 transition-colors shadow-sm"
               title="Transactions"
             >
               <HistoryIcon className="w-3.5 h-3.5" />
@@ -417,19 +418,19 @@ export default function DashboardClient({ portfolioId, portfolioName, holdingsDa
             >
               {userInitial ? (
                 <>
-                  <div className="w-7 h-7 rounded-full bg-black text-white flex items-center justify-center font-bold text-[12px] group-hover:bg-gray-800 transition-colors shadow-sm shrink-0">
+                  <div className="w-7 h-7 rounded-full bg-primary text-on-primary flex items-center justify-center font-bold text-[12px] group-hover:bg-primary-hover transition-colors shadow-sm shrink-0">
                     {userInitial}
                   </div>
-                  <span className="text-[13px] font-bold text-gray-500 group-hover:text-black transition-colors hidden sm:block">
+                  <span className="text-[13px] font-bold text-secondary group-hover:text-primary transition-colors hidden sm:block">
                     {displayName}
                   </span>
                 </>
               ) : (
                 <>
-                  <div className="w-7 h-7 rounded-full bg-gray-100 border border-gray-200 text-gray-500 flex items-center justify-center group-hover:bg-gray-200 transition-colors shadow-sm shrink-0">
+                  <div className="w-7 h-7 rounded-full bg-element-hover border border-border text-secondary flex items-center justify-center group-hover:bg-gray-200 transition-colors shadow-sm shrink-0">
                     <User className="w-3.5 h-3.5" />
                   </div>
-                  <span className="text-[13px] font-bold text-gray-500 group-hover:text-black transition-colors hidden sm:block">
+                  <span className="text-[13px] font-bold text-secondary group-hover:text-primary transition-colors hidden sm:block">
                     Guest
                   </span>
                 </>
@@ -450,20 +451,20 @@ export default function DashboardClient({ portfolioId, portfolioName, holdingsDa
         {/* 标题 & 操作按钮 - 紧凑布局 */}
         <div className="flex justify-between items-center mb-6">
           <div className="flex items-baseline space-x-3">
-            <h1 className="text-[28px] font-bold text-black tracking-tight leading-none">{portfolioName}</h1>
-            <span className="hidden sm:inline-block text-[13px] text-gray-400 font-medium bg-gray-100 px-2 py-0.5 rounded-md">Real-time</span>
+            <h1 className="text-[28px] font-bold text-primary tracking-tight leading-none">{portfolioName}</h1>
+            <span className="hidden sm:inline-block text-[13px] text-secondary font-medium bg-element-hover px-2 py-0.5 rounded-md">Real-time</span>
           </div>
           <div className="flex items-center space-x-2">
             <button
               onClick={handleRefresh}
               disabled={isRefreshing}
-              className="p-1.5 bg-white text-gray-400 rounded-lg border border-gray-200 hover:text-black hover:border-gray-300 transition-all disabled:opacity-50"
+              className="p-1.5 bg-card text-secondary rounded-lg border border-border hover:text-primary hover:border-border transition-all disabled:opacity-50"
             >
               <RefreshCw className={`w-3.5 h-3.5 ${isRefreshing ? 'animate-spin' : ''}`} />
             </button>
             <button
               onClick={() => setIsModalOpen(true)}
-              className="px-4 py-1.5 bg-black text-white text-[13px] font-semibold rounded-lg hover:bg-gray-800 transition-all shadow-sm flex items-center space-x-1"
+              className="px-4 py-1.5 bg-primary text-on-primary text-[13px] font-semibold rounded-lg hover:bg-primary-hover transition-all shadow-sm flex items-center space-x-1"
             >
               <Plus className="w-3.5 h-3.5" />
               <span>Add Trade</span>
@@ -473,22 +474,22 @@ export default function DashboardClient({ portfolioId, portfolioName, holdingsDa
 
         {totalHoldingsCount === 0 ? (
           /* 空状态面板 */
-          <div className="flex flex-col items-center justify-center py-20 bg-white rounded-2xl border border-gray-100 shadow-sm relative w-full my-4">
-            <div className="w-16 h-16 bg-gray-50 rounded-full flex items-center justify-center mb-6">
-              <Wallet className="w-8 h-8 text-gray-400" />
+          <div className="flex flex-col items-center justify-center py-20 bg-card rounded-2xl border border-border shadow-sm relative w-full my-4">
+            <div className="w-16 h-16 bg-element rounded-full flex items-center justify-center mb-6">
+              <Wallet className="w-8 h-8 text-secondary" />
             </div>
-            <h2 className="text-2xl font-bold text-black tracking-tight mb-2">Build your portfolio</h2>
-            <p className="text-sm text-gray-500 mb-8 max-w-[280px] text-center">
+            <h2 className="text-2xl font-bold text-primary tracking-tight mb-2">Build your portfolio</h2>
+            <p className="text-sm text-secondary mb-8 max-w-[280px] text-center">
               Add your first trade to start tracking your market performance in real-time.
             </p>
             <button
               onClick={() => setIsModalOpen(true)}
-              className="px-8 py-3 bg-black text-white text-sm font-semibold rounded-full hover:bg-gray-800 transition-all shadow-sm flex items-center space-x-2"
+              className="px-8 py-3 bg-primary text-on-primary text-sm font-semibold rounded-full hover:bg-primary-hover transition-all shadow-sm flex items-center space-x-2"
             >
               <Plus className="w-4 h-4" />
               <span>Add your first trade</span>
             </button>
-            <p className="text-xs text-gray-400 mt-6 font-medium">No account required to start.</p>
+            <p className="text-xs text-secondary mt-6 font-medium">No account required to start.</p>
           </div>
         ) : (
           <>
@@ -497,10 +498,10 @@ export default function DashboardClient({ portfolioId, portfolioName, holdingsDa
           
           {/* 左侧：核心指标垂直排列 */}
           <div className="col-span-12 lg:col-span-3 space-y-4">
-            <div className="bg-white rounded-2xl p-5 border border-gray-100 shadow-sm relative overflow-hidden group">
-              <p className="text-[11px] text-gray-400 font-bold uppercase tracking-wider mb-1">Portfolio Value</p>
+            <div className="bg-card rounded-2xl p-5 border border-border shadow-sm relative overflow-hidden group">
+              <p className="text-[11px] text-secondary font-bold uppercase tracking-wider mb-1">Portfolio Value</p>
               <div className="flex items-baseline space-x-1">
-                <span className="text-[28px] font-bold text-black tracking-tight tabular-nums">
+                <span className="text-[28px] font-bold text-primary tracking-tight tabular-nums">
                   {fmt(localSummary.totalValue)}
                 </span>
               </div>
@@ -508,52 +509,52 @@ export default function DashboardClient({ portfolioId, portfolioName, holdingsDa
                 <span className={`text-[12px] font-bold px-1.5 py-0.5 rounded ${upColor.tailwind.bgLight} ${upColor.tailwind.text}`} title="Total Return (Including Dividends)">
                   {isUp ? '+' : ''}{totalReturnPct.toFixed(2)}%
                 </span>
-                <span className="text-[12px] font-medium text-gray-400 tabular-nums">
+                <span className="text-[12px] font-medium text-secondary tabular-nums">
                   ({isUp ? '+' : '-'}{fmt(Math.abs(totalReturnAbs))})
                 </span>
               </div>
             </div>
 
-            <div className="bg-white rounded-2xl p-5 border border-gray-100 shadow-sm space-y-4">
+            <div className="bg-card rounded-2xl p-5 border border-border shadow-sm space-y-4">
               <div>
-                <p className="text-[11px] text-gray-400 font-bold uppercase tracking-wider mb-1">Unrealized P&L</p>
+                <p className="text-[11px] text-secondary font-bold uppercase tracking-wider mb-1">Unrealized P&L</p>
                 <div className="flex items-baseline">
                   <span className={`text-[20px] font-bold tracking-tight tabular-nums ${unrealizedColor.tailwind.text}`}>
                     {isUnrealizedUp ? '+' : '-'}{fmt(Math.abs(localSummary.totalCapGain))}
                   </span>
                 </div>
-                <p className="text-gray-400 text-[11px] font-medium mt-0.5">Open positions</p>
+                <p className="text-secondary text-[11px] font-medium mt-0.5">Open positions</p>
               </div>
-              <div className="border-t border-gray-100" />
+              <div className="border-t border-border" />
               <div>
-                <p className="text-[11px] text-gray-400 font-bold uppercase tracking-wider mb-1">Realized P&L</p>
+                <p className="text-[11px] text-secondary font-bold uppercase tracking-wider mb-1">Realized P&L</p>
                 <div className="flex items-baseline">
-                  <span className={`text-[20px] font-bold tracking-tight tabular-nums ${safeRealizedGain === 0 ? 'text-gray-400' : realizedColor.tailwind.text}`}>
+                  <span className={`text-[20px] font-bold tracking-tight tabular-nums ${safeRealizedGain === 0 ? 'text-secondary' : realizedColor.tailwind.text}`}>
                     {safeRealizedGain === 0 ? '' : (isRealizedUp ? '+' : '-')}{fmt(Math.abs(safeRealizedGain))}
                   </span>
                 </div>
-                <p className="text-gray-400 text-[11px] font-medium mt-0.5">Closed positions</p>
+                <p className="text-secondary text-[11px] font-medium mt-0.5">Closed positions</p>
               </div>
-              <div className="border-t border-gray-100" />
+              <div className="border-t border-border" />
               <div>
-                <p className="text-[11px] text-gray-400 font-bold uppercase tracking-wider mb-1">Dividends Collected</p>
+                <p className="text-[11px] text-secondary font-bold uppercase tracking-wider mb-1">Dividends Collected</p>
                 <div className="flex items-baseline">
-                  <span className={`text-[20px] font-bold tracking-tight tabular-nums ${localSummary.totalDividendIncome > 0 ? colors.gain.tailwind.text : 'text-gray-400'}`}>
+                  <span className={`text-[20px] font-bold tracking-tight tabular-nums ${localSummary.totalDividendIncome > 0 ? colors.gain.tailwind.text : 'text-secondary'}`}>
                     {localSummary.totalDividendIncome > 0 ? '+' : ''}{fmt(localSummary.totalDividendIncome || 0)}
                   </span>
                 </div>
-                <p className="text-gray-400 text-[11px] font-medium mt-0.5">Cash reinvested or withdrawn</p>
+                <p className="text-secondary text-[11px] font-medium mt-0.5">Cash reinvested or withdrawn</p>
               </div>
             </div>
 
-            <div className="bg-white rounded-2xl p-5 border border-gray-100 shadow-sm flex items-center justify-between">
+            <div className="bg-card rounded-2xl p-5 border border-border shadow-sm flex items-center justify-between">
               <div>
-                <p className="text-[11px] text-gray-400 font-bold uppercase tracking-wider mb-1">Assets</p>
-                <p className="text-[22px] font-bold text-black tracking-tight">{totalHoldingsCount}</p>
+                <p className="text-[11px] text-secondary font-bold uppercase tracking-wider mb-1">Assets</p>
+                <p className="text-[22px] font-bold text-primary tracking-tight">{totalHoldingsCount}</p>
               </div>
               <div className="flex -space-x-1.5">
                 {localHoldings.flatMap(g => g.holdings).slice(0, 3).map((h) => (
-                  <div key={h.ticker} className="w-7 h-7 rounded-full bg-white border border-gray-100 flex items-center justify-center text-[9px] font-bold text-gray-600 shadow-sm overflow-hidden z-10">
+                  <div key={h.ticker} className="w-7 h-7 rounded-full bg-card border border-border flex items-center justify-center text-[9px] font-bold text-secondary shadow-sm overflow-hidden z-10">
                     {h.logo ? (
                       <Image 
                         src={h.logo} 
@@ -574,13 +575,14 @@ export default function DashboardClient({ portfolioId, portfolioName, holdingsDa
 
           {/* 右侧：图表占据大块空间 */}
           <div className="col-span-12 lg:col-span-9">
-            <div className="bg-white rounded-2xl p-6 border border-gray-100 shadow-sm h-full flex flex-col">
+            <div className="bg-card rounded-2xl p-6 border border-border shadow-sm h-full flex flex-col">
               <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 sm:gap-0 mb-6">
                 <div>
-                  <h2 className="text-[15px] font-bold text-black tracking-tight leading-none">Performance History</h2>
+                  <h2 className="text-[15px] font-bold text-primary tracking-tight leading-none">Performance History</h2>
                   {(() => {
+                    if (chartMode === 'return') return <p className="text-[12px] text-secondary font-medium mt-1">Time-weighted return (price movements only)</p>;
                     const first = filteredChartData.find(d => d.date !== 'Today');
-                    if (!first || chartTimeRange === 'All') return <p className="text-[12px] text-gray-400 font-medium mt-1">Total portfolio value</p>;
+                    if (!first || chartTimeRange === 'All') return <p className="text-[12px] text-secondary font-medium mt-1">Total portfolio value</p>;
                     const now = new Date();
                     const cutoff = new Date();
                     switch (chartTimeRange) {
@@ -592,26 +594,43 @@ export default function DashboardClient({ portfolioId, portfolioName, holdingsDa
                     const firstDate = new Date(first.date);
                     const isConstrained = firstDate > cutoff;
                     return isConstrained
-                      ? <p className="text-[12px] text-gray-400 font-medium mt-1">
+                      ? <p className="text-[12px] text-secondary font-medium mt-1">
                           Showing data since {firstDate.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
                         </p>
-                      : <p className="text-[12px] text-gray-400 font-medium mt-1">Total portfolio value</p>;
+                      : <p className="text-[12px] text-secondary font-medium mt-1">Total portfolio value</p>;
                   })()}
                 </div>
-                <div className="flex bg-gray-50 rounded-lg p-0.5 border border-gray-100 w-full sm:w-auto overflow-x-auto no-scrollbar justify-between sm:justify-start">
-                  {(['1M', '3M', '6M', '1Y', 'All'] as const).map((range) => (
-                    <button
-                      key={range}
-                      onClick={() => setChartTimeRange(range)}
-                      className={`flex-1 sm:flex-none px-3 py-1.5 sm:py-1 text-[11px] font-bold rounded-md transition-all whitespace-nowrap text-center ${
-                        chartTimeRange === range
-                          ? 'bg-white text-black shadow-sm'
-                          : 'text-gray-400 hover:text-black'
-                      }`}
-                    >
-                      {range}
-                    </button>
-                  ))}
+                <div className="flex items-center gap-2 w-full sm:w-auto">
+                  {portfolioId !== 'local-portfolio' && (
+                    <div className="flex bg-element rounded-lg p-0.5 border border-border">
+                      {(['value', 'return'] as const).map((mode) => (
+                        <button
+                          key={mode}
+                          onClick={() => setChartMode(mode)}
+                          className={`px-3 py-1.5 text-[11px] font-bold rounded-md transition-all whitespace-nowrap capitalize ${
+                            chartMode === mode ? 'bg-card text-primary shadow-sm' : 'text-secondary hover:text-primary'
+                          }`}
+                        >
+                          {mode === 'value' ? 'Value' : 'Return %'}
+                        </button>
+                      ))}
+                    </div>
+                  )}
+                  <div className="flex bg-element rounded-lg p-0.5 border border-border w-full sm:w-auto overflow-x-auto no-scrollbar justify-between sm:justify-start">
+                    {(['1M', '3M', '6M', '1Y', 'All'] as const).map((range) => (
+                      <button
+                        key={range}
+                        onClick={() => setChartTimeRange(range)}
+                        className={`flex-1 sm:flex-none px-3 py-1.5 sm:py-1 text-[11px] font-bold rounded-md transition-all whitespace-nowrap text-center ${
+                          chartTimeRange === range
+                            ? 'bg-card text-primary shadow-sm'
+                            : 'text-secondary hover:text-primary'
+                        }`}
+                      >
+                        {range}
+                      </button>
+                    ))}
+                  </div>
                 </div>
               </div>
 
@@ -620,11 +639,11 @@ export default function DashboardClient({ portfolioId, portfolioName, holdingsDa
                   <AreaChart data={filteredChartData} margin={{ top: 10, right: 0, left: -25, bottom: 0 }}>
                     <defs>
                       <linearGradient id="colorTotal" x1="0" y1="0" x2="0" y2="1">
-                        <stop offset="5%" stopColor="#000000" stopOpacity={0.08}/>
-                        <stop offset="95%" stopColor="#000000" stopOpacity={0}/>
+                        <stop offset="5%" stopColor="var(--text-primary)" stopOpacity={0.08}/>
+                        <stop offset="95%" stopColor="var(--text-primary)" stopOpacity={0}/>
                       </linearGradient>
                     </defs>
-                    <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f0f0f0" />
+                    <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="var(--border-subtle)" />
                     <XAxis
                       dataKey="date"
                       axisLine={false}
@@ -633,29 +652,37 @@ export default function DashboardClient({ portfolioId, portfolioName, holdingsDa
                       interval="equidistantPreserveStart"
                       minTickGap={20}
                     />
-                    <YAxis 
-                      axisLine={false} 
-                      tickLine={false} 
-                      tick={{ fontSize: 10, fill: '#a1a1aa', fontWeight: 500 }} 
+                    <YAxis
+                      axisLine={false}
+                      tickLine={false}
+                      tick={{ fontSize: 10, fill: 'var(--text-secondary)', fontWeight: 500 }}
                       width={50}
-                      tickFormatter={(value) => value >= 1000 ? `${(value / 1000).toFixed(1)}k` : value}
+                      tickFormatter={(value) =>
+                        chartMode === 'return'
+                          ? `${value >= 0 ? '+' : ''}${Number(value).toFixed(1)}%`
+                          : value >= 1000 ? `${(value / 1000).toFixed(1)}k` : value
+                      }
                     />
                     <Tooltip
-                      contentStyle={{ borderRadius: '12px', border: 'none', boxShadow: '0 8px 20px -5px rgb(0 0 0 / 0.1)', backgroundColor: 'rgba(255, 255, 255, 0.95)', backdropFilter: 'blur(8px)', padding: '10px' }}
-                      itemStyle={{ fontSize: '11px', fontWeight: 'bold', padding: '2px 0' }}
-                      labelStyle={{ marginBottom: '4px', color: '#888', fontSize: '10px', fontWeight: '600' }}
+                      contentStyle={{ borderRadius: '12px', border: '1px solid var(--border-subtle)', boxShadow: '0 8px 20px -5px rgb(0 0 0 / 0.2)', backgroundColor: 'var(--bg-card)', backdropFilter: 'blur(8px)', padding: '10px' }}
+                      itemStyle={{ fontSize: '11px', fontWeight: 'bold', padding: '2px 0', color: 'var(--text-primary)' }}
+                      labelStyle={{ marginBottom: '4px', color: 'var(--text-secondary)', fontSize: '10px', fontWeight: '600' }}
                       labelFormatter={(dateStr) => {
                         if (dateStr === 'Today') return 'Today';
                         const d = new Date(dateStr);
                         if (isNaN(d.getTime())) return dateStr;
                         return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
                       }}
-                      formatter={(value: any) => [`${fmt(Number(value))}`, undefined as any]}
+                      formatter={(value: any) =>
+                        chartMode === 'return'
+                          ? [`${Number(value) >= 0 ? '+' : ''}${Number(value).toFixed(2)}%`, undefined as any]
+                          : [`${fmt(Number(value))}`, undefined as any]
+                      }
                     />
                     {portfolioId === 'local-portfolio' ? (
-                      <Area type="monotone" dataKey="Local" stroke="#000" strokeWidth={2} fill="#f3f4f6" fillOpacity={1} activeDot={{ r: 4, strokeWidth: 0, fill: '#000' }} />
+                      <Area type="monotone" dataKey="Local" stroke="var(--text-primary)" strokeWidth={2} fill="var(--bg-element)" fillOpacity={1} activeDot={{ r: 4, strokeWidth: 0, fill: 'var(--text-primary)' }} />
                     ) : (
-                      <Area type="monotone" dataKey="Total" stroke="#000000" strokeWidth={2} fill="url(#colorTotal)" activeDot={{ r: 4, strokeWidth: 0, fill: '#000' }} />
+                      <Area type="monotone" dataKey={chartMode === 'return' ? 'Return' : 'Total'} stroke="var(--text-primary)" strokeWidth={2} fill="url(#colorTotal)" activeDot={{ r: 4, strokeWidth: 0, fill: 'var(--text-primary)' }} />
                     )}
                   </AreaChart>
                 </ResponsiveContainer>
@@ -666,31 +693,31 @@ export default function DashboardClient({ portfolioId, portfolioName, holdingsDa
         </div>
 
         {/* 持仓明细表 - 高密度列表设计 */}
-        <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
-          <div className="px-6 py-4 border-b border-gray-50 flex justify-between items-center">
-            <h2 className="text-[15px] font-bold text-black tracking-tight">Investment Holdings</h2>
+        <div className="bg-card rounded-2xl border border-border shadow-sm overflow-hidden">
+          <div className="px-6 py-4 border-b border-border flex justify-between items-center">
+            <h2 className="text-[15px] font-bold text-primary tracking-tight">Investment Holdings</h2>
             <div className="flex items-center space-x-4">
-              <div className="flex items-center bg-gray-100 rounded-lg p-0.5">
+              <div className="flex items-center bg-element-hover rounded-lg p-0.5">
                 <button
                   onClick={() => setReturnDisplayMode('percentage')}
-                  className={`px-3 py-1 rounded-md text-[11px] font-bold transition-all ${returnDisplayMode === 'percentage' ? 'bg-white text-black shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}
+                  className={`px-3 py-1 rounded-md text-[11px] font-bold transition-all ${returnDisplayMode === 'percentage' ? 'bg-card text-primary shadow-sm' : 'text-secondary hover:text-gray-700'}`}
                 >
                   %
                 </button>
                 <button
                   onClick={() => setReturnDisplayMode('currency')}
-                  className={`px-3 py-1 rounded-md text-[11px] font-bold transition-all ${returnDisplayMode === 'currency' ? 'bg-white text-black shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}
+                  className={`px-3 py-1 rounded-md text-[11px] font-bold transition-all ${returnDisplayMode === 'currency' ? 'bg-card text-primary shadow-sm' : 'text-secondary hover:text-gray-700'}`}
                 >
                   $
                 </button>
               </div>
-              <div className="text-[11px] text-gray-400 font-medium hidden sm:block">Sorted by Market</div>
+              <div className="text-[11px] text-secondary font-medium hidden sm:block">Sorted by Market</div>
             </div>
           </div>
           <div className="overflow-x-auto no-scrollbar">
             <table className="w-full text-left border-collapse">
               <thead>
-                <tr className="bg-gray-50/50 text-[10px] font-bold text-gray-400 uppercase tracking-widest border-b border-gray-100">
+                <tr className="bg-element/50 text-[10px] font-bold text-secondary uppercase tracking-widest border-b border-border">
                   <th className="px-4 sm:px-6 py-3">Asset</th>
                   <th className="px-4 sm:px-6 py-3 text-right hidden md:table-cell">Market Price</th>
                   <th className="px-4 sm:px-6 py-3 text-right hidden sm:table-cell">Position</th>
@@ -699,24 +726,24 @@ export default function DashboardClient({ portfolioId, portfolioName, holdingsDa
                   <th className="px-4 sm:px-6 py-3 text-right w-10 hidden sm:table-cell"></th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-gray-50 bg-white">
+              <tbody className="divide-y divide-gray-50 bg-card">
                 {localHoldings.map((group) => (
                   <React.Fragment key={group.market}>
                     {/* 分组标题行 */}
-                    <tr className="bg-gray-50/30">
-                      <td colSpan={6} className="px-4 sm:px-6 py-2 text-[10px] font-bold text-gray-400 bg-gray-50/20">
+                    <tr className="bg-element/30">
+                      <td colSpan={6} className="px-4 sm:px-6 py-2 text-[10px] font-bold text-secondary bg-element/20">
                         {group.market}
                       </td>
                     </tr>
                     {group.holdings.map((asset) => (
                       <tr 
                         key={asset.ticker} 
-                        className="hover:bg-gray-50/80 transition-all cursor-pointer group" 
+                        className="hover:bg-element/80 transition-all cursor-pointer group" 
                         onClick={() => router.push(`/stock/${asset.ticker}`)}
                       >
                         <td className="px-4 sm:px-6 py-3">
                           <div className="flex items-center space-x-3">
-                            <div className="w-8 h-8 rounded-full bg-white flex items-center justify-center font-bold text-[11px] text-gray-900 border border-gray-100 shadow-sm overflow-hidden shrink-0">
+                            <div className="w-8 h-8 rounded-full bg-card flex items-center justify-center font-bold text-[11px] text-primary border border-border shadow-sm overflow-hidden shrink-0">
                               {asset.logo ? (
                                 <Image 
                                   src={asset.logo} 
@@ -731,20 +758,20 @@ export default function DashboardClient({ portfolioId, portfolioName, holdingsDa
                               )}
                             </div>
                             <div className="min-w-0">
-                              <div className="font-bold text-black text-[14px] leading-tight group-hover:underline underline-offset-2">{asset.ticker}</div>
-                              <div className="text-[11px] text-gray-400 font-medium truncate max-w-[90px] sm:max-w-[200px]">{asset.name}</div>
+                              <div className="font-bold text-primary text-[14px] leading-tight group-hover:underline underline-offset-2">{asset.ticker}</div>
+                              <div className="text-[11px] text-secondary font-medium truncate max-w-[90px] sm:max-w-[200px]">{asset.name}</div>
                             </div>
                           </div>
                         </td>
-                        <td className="px-4 sm:px-6 py-3 text-right text-[13px] font-semibold tabular-nums text-gray-900 hidden md:table-cell">{asset.price > 0 ? fmt(asset.price) : '--'}</td>
+                        <td className="px-4 sm:px-6 py-3 text-right text-[13px] font-semibold tabular-nums text-primary hidden md:table-cell">{asset.price > 0 ? fmt(asset.price) : '--'}</td>
                         <td className="px-4 sm:px-6 py-3 text-right hidden sm:table-cell">
-                          <div className="text-[13px] font-semibold text-gray-900 tabular-nums">{asset.qty.toLocaleString()}</div>
-                          <div className="text-[10px] text-gray-400 font-medium">Shares</div>
+                          <div className="text-[13px] font-semibold text-primary tabular-nums">{asset.qty.toLocaleString()}</div>
+                          <div className="text-[10px] text-secondary font-medium">Shares</div>
                         </td>
                         <td className="px-4 sm:px-6 py-3 text-right">
-                          <div className="text-[13px] font-bold text-black tabular-nums">{asset.price > 0 ? fmt(asset.value) : '--'}</div>
-                          <div className="text-[10px] text-gray-400 font-medium sm:hidden">Value</div>
-                          <div className="text-[10px] text-gray-400 font-medium hidden sm:block">Market Value</div>
+                          <div className="text-[13px] font-bold text-primary tabular-nums">{asset.price > 0 ? fmt(asset.value) : '--'}</div>
+                          <div className="text-[10px] text-secondary font-medium sm:hidden">Value</div>
+                          <div className="text-[10px] text-secondary font-medium hidden sm:block">Market Value</div>
                         </td>
                         <td className="px-4 sm:px-6 py-3 text-right">
                           {asset.price > 0 ? <FormatValue
@@ -755,11 +782,11 @@ export default function DashboardClient({ portfolioId, portfolioName, holdingsDa
                             convert={convert}
                             gainColor={colors.gain.tailwind.text}
                             lossColor={colors.loss.tailwind.text}
-                          /> : <span className="text-gray-400 text-[13px]">--</span>}
-                          <div className="text-[10px] text-gray-400 font-medium hidden sm:block">Since purchase</div>
+                          /> : <span className="text-secondary text-[13px]">--</span>}
+                          <div className="text-[10px] text-secondary font-medium hidden sm:block">Since purchase</div>
                         </td>
                         <td className="px-4 sm:px-6 py-3 text-right hidden sm:table-cell">
-                          <ChevronRight className="w-4 h-4 text-gray-300 group-hover:text-black transition-colors" />
+                          <ChevronRight className="w-4 h-4 text-secondary group-hover:text-primary transition-colors" />
                         </td>
                       </tr>
                     ))}
@@ -767,11 +794,11 @@ export default function DashboardClient({ portfolioId, portfolioName, holdingsDa
                 ))}
               </tbody>
               <tfoot>
-                <tr className="bg-black/[0.02] font-bold border-t border-gray-100">
-                  <td className="px-4 sm:px-6 py-4 text-[13px] text-black">Total</td>
+                <tr className="bg-primary/[0.02] font-bold border-t border-border">
+                  <td className="px-4 sm:px-6 py-4 text-[13px] text-primary">Total</td>
                   <td className="px-4 sm:px-6 py-4 hidden md:table-cell"></td>
                   <td className="px-4 sm:px-6 py-4 hidden sm:table-cell"></td>
-                  <td className="px-4 sm:px-6 py-4 text-right text-[14px] sm:text-[15px] text-black tabular-nums">{fmt(localSummary.totalValue)}</td>
+                  <td className="px-4 sm:px-6 py-4 text-right text-[14px] sm:text-[15px] text-primary tabular-nums">{fmt(localSummary.totalValue)}</td>
                   <td className="px-4 sm:px-6 py-4 text-right">
                     <FormatValue
                       val={returnDisplayMode === 'percentage' ? localSummary.totalCapGainPercentage : localSummary.totalCapGain}

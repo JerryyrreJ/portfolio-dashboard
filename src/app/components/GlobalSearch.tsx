@@ -79,15 +79,15 @@ export default function GlobalSearch({ onClose, isMobileOnly = false }: GlobalSe
   // 移动端全屏搜索视图
   if (isMobileOnly) {
     return (
-      <div className="fixed inset-0 z-[100] bg-white/95 backdrop-blur-2xl flex flex-col animate-in fade-in duration-300 overflow-hidden">
+      <div className="fixed inset-0 z-[100] bg-card/95 backdrop-blur-2xl flex flex-col animate-in fade-in duration-300 overflow-hidden">
         {/* 顶部搜索条 */}
-        <div className="pt-6 px-5 pb-4 flex items-center gap-4 border-b border-gray-100/50">
+        <div className="pt-6 px-5 pb-4 flex items-center gap-4 border-b border-border/50">
           <div className="relative flex-1 group">
             <div className="absolute left-3.5 top-1/2 -translate-y-1/2 transition-colors">
               {isSearching ? (
-                <Loader2 className="w-4 h-4 text-black animate-spin" />
+                <Loader2 className="w-4 h-4 text-primary animate-spin" />
               ) : (
-                <Search className="w-4 h-4 text-gray-400 group-focus-within:text-black transition-colors" />
+                <Search className="w-4 h-4 text-secondary group-focus-within:text-primary transition-colors" />
               )}
             </div>
             <input
@@ -96,20 +96,20 @@ export default function GlobalSearch({ onClose, isMobileOnly = false }: GlobalSe
               value={searchQuery}
               onChange={handleSearchChange}
               placeholder="Search stocks..."
-              className="w-full bg-gray-100/80 border-none rounded-2xl py-3 pl-11 pr-4 text-[16px] font-medium outline-none focus:ring-2 focus:ring-black/5 transition-all"
+              className="w-full bg-element-hover/80 border-none rounded-2xl py-3 pl-11 pr-4 text-[16px] font-medium outline-none focus:ring-2 focus:ring-black/5 transition-all"
             />
             {searchQuery && (
               <button 
                 onClick={() => setSearchQuery('')}
                 className="absolute right-3 top-1/2 -translate-y-1/2 w-5 h-5 bg-gray-300/50 rounded-full flex items-center justify-center"
               >
-                <X className="w-3 h-3 text-white" />
+                <X className="w-3 h-3 text-on-primary" />
               </button>
             )}
           </div>
           <button 
             onClick={onClose}
-            className="text-[16px] font-bold text-black px-1 active:opacity-50 transition-opacity"
+            className="text-[16px] font-bold text-primary px-1 active:opacity-50 transition-opacity"
           >
             Cancel
           </button>
@@ -119,11 +119,11 @@ export default function GlobalSearch({ onClose, isMobileOnly = false }: GlobalSe
         <div className="flex-1 overflow-y-auto px-5">
           {!searchQuery && (
             <div className="h-full flex flex-col items-center justify-center pb-20 opacity-50">
-              <div className="w-16 h-16 bg-gray-50 rounded-full flex items-center justify-center mb-6">
-                <Search className="w-8 h-8 text-gray-300" />
+              <div className="w-16 h-16 bg-element rounded-full flex items-center justify-center mb-6">
+                <Search className="w-8 h-8 text-secondary" />
               </div>
-              <h3 className="text-[17px] font-bold text-black tracking-tight mb-2">Search Portfolio</h3>
-              <p className="text-[14px] text-gray-500 max-w-[200px] text-center leading-relaxed font-medium">
+              <h3 className="text-[17px] font-bold text-primary tracking-tight mb-2">Search Portfolio</h3>
+              <p className="text-[14px] text-secondary max-w-[200px] text-center leading-relaxed font-medium">
                 Find tickers, company names or market symbols
               </p>
             </div>
@@ -131,7 +131,7 @@ export default function GlobalSearch({ onClose, isMobileOnly = false }: GlobalSe
           
           {searchQuery && searchResults.length === 0 && !isSearching && (
             <div className="pt-20 flex flex-col items-center justify-center opacity-50">
-              <p className="text-[15px] font-bold text-black tracking-tight">No results for "{searchQuery}"</p>
+              <p className="text-[15px] font-bold text-primary tracking-tight">No results for "{searchQuery}"</p>
             </div>
           )}
 
@@ -140,16 +140,16 @@ export default function GlobalSearch({ onClose, isMobileOnly = false }: GlobalSe
               <button
                 key={r.symbol}
                 onClick={() => handleSelectStock(r.symbol)}
-                className="w-full flex items-center justify-between py-4 active:bg-gray-50 transition-colors text-left"
+                className="w-full flex items-center justify-between py-4 active:bg-element transition-colors text-left"
               >
                 <div className="flex-1 min-w-0 pr-4">
                   <div className="flex items-center gap-2 mb-0.5">
-                    <span className="text-[16px] font-bold text-black tracking-tight">{r.displaySymbol}</span>
-                    <span className="text-[10px] font-bold text-gray-400 bg-gray-100 px-1.5 py-0.5 rounded-md uppercase tracking-widest">{r.type}</span>
+                    <span className="text-[16px] font-bold text-primary tracking-tight">{r.displaySymbol}</span>
+                    <span className="text-[10px] font-bold text-secondary bg-element-hover px-1.5 py-0.5 rounded-md uppercase tracking-widest">{r.type}</span>
                   </div>
-                  <div className="text-[13px] text-gray-500 font-medium truncate leading-tight">{r.description}</div>
+                  <div className="text-[13px] text-secondary font-medium truncate leading-tight">{r.description}</div>
                 </div>
-                <ChevronRight className="w-4 h-4 text-gray-300 shrink-0" />
+                <ChevronRight className="w-4 h-4 text-secondary shrink-0" />
               </button>
             ))}
           </div>
@@ -163,9 +163,9 @@ export default function GlobalSearch({ onClose, isMobileOnly = false }: GlobalSe
     <div className="relative" ref={searchRef}>
       <div className="relative">
         {isSearching ? (
-          <Loader2 className="w-3.5 h-3.5 absolute left-3 top-[10px] text-gray-400 animate-spin" />
+          <Loader2 className="w-3.5 h-3.5 absolute left-3 top-[10px] text-secondary animate-spin" />
         ) : (
-          <Search className="w-3.5 h-3.5 absolute left-3 top-[10px] text-gray-400" />
+          <Search className="w-3.5 h-3.5 absolute left-3 top-[10px] text-secondary" />
         )}
         <input
           ref={inputRef}
@@ -177,14 +177,14 @@ export default function GlobalSearch({ onClose, isMobileOnly = false }: GlobalSe
             if (searchResults.length > 0) setShowSearchResults(true);
           }}
           placeholder="Search stocks..."
-          className={`bg-gray-100 border-none rounded-lg py-1.5 pl-9 pr-4 text-[13px] transition-all duration-300 outline-none ${
-            isFocused ? 'w-60 ring-1 ring-black/5 bg-white' : 'w-44'
+          className={`bg-element-hover border-none rounded-lg py-1.5 pl-9 pr-4 text-[13px] transition-all duration-300 outline-none ${
+            isFocused ? 'w-60 ring-1 ring-black/5 bg-card' : 'w-44'
           }`}
         />
       </div>
       
       {showSearchResults && searchResults.length > 0 && (
-        <div className="absolute top-full mt-2 left-0 w-full min-w-[320px] bg-white rounded-2xl shadow-2xl border border-gray-100 overflow-hidden z-50 py-1.5 animate-in fade-in slide-in-from-top-2 duration-200">
+        <div className="absolute top-full mt-2 left-0 w-full min-w-[320px] bg-card rounded-2xl shadow-2xl border border-border overflow-hidden z-50 py-1.5 animate-in fade-in slide-in-from-top-2 duration-200">
           {searchResults.map((r) => (
             <button
               key={r.symbol}
@@ -192,13 +192,13 @@ export default function GlobalSearch({ onClose, isMobileOnly = false }: GlobalSe
                 e.preventDefault();
                 handleSelectStock(r.symbol);
               }}
-              className="w-full flex flex-col px-4 py-2.5 hover:bg-gray-50 transition-colors text-left group/item"
+              className="w-full flex flex-col px-4 py-2.5 hover:bg-element transition-colors text-left group/item"
             >
               <div className="flex items-center justify-between mb-0.5">
-                <span className="text-[14px] font-bold text-black tracking-tight">{r.displaySymbol}</span>
-                <span className="text-[10px] font-bold text-gray-300 uppercase tracking-widest group-hover/item:text-gray-400 transition-colors">{r.type}</span>
+                <span className="text-[14px] font-bold text-primary tracking-tight">{r.displaySymbol}</span>
+                <span className="text-[10px] font-bold text-secondary uppercase tracking-widest group-hover/item:text-secondary transition-colors">{r.type}</span>
               </div>
-              <span className="text-[12px] text-gray-500 font-medium truncate w-full">{r.description}</span>
+              <span className="text-[12px] text-secondary font-medium truncate w-full">{r.description}</span>
             </button>
           ))}
         </div>

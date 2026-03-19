@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import prisma from '@/lib/prisma';
 import { getCompanyProfile, getBasicFinancials } from '@/lib/finnhub';
+import { getLogo as getTwelveDataLogo } from '@/lib/twelvedata';
 import { getQuote as getTDQuote, get12MonthHistory } from '@/lib/twelvedata';
 import { getQuote as getFinnhubQuote } from '@/lib/finnhub';
 
@@ -74,7 +75,12 @@ export async function POST(
     if (needsProfileSync) {
       const p = await getCompanyProfile(decodedTicker) as any;
       if (p?.name) {
-        updateData.logo = p.logo || asset.logo;
+        let logoUrl = p.logo || asset.logo;
+        // Twelve Data fallback for logo
+        if (!logoUrl) {
+          logoUrl = await getTwelveDataLogo(decodedTicker);
+        }
+        updateData.logo = logoUrl || asset.logo;
         updateData.profile = JSON.stringify({
           finnhubIndustry: p.finnhubIndustry,
           country: p.country,

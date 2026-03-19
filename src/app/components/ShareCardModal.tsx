@@ -84,10 +84,11 @@ export default function ShareCardModal({ isOpen, onClose, stockData }: ShareCard
       // Small delay to ensure everything is rendered
       await new Promise(resolve => setTimeout(resolve, 100));
 
-      const dataUrl = await toPng(cardRef.current, { 
+      const isDark = document.documentElement.classList.contains('dark');
+      const dataUrl = await toPng(cardRef.current, {
         cacheBust: true,
-        pixelRatio: 2.5, // High resolution but safer than 3
-        backgroundColor: '#FFFFFF',
+        pixelRatio: 2.5,
+        backgroundColor: isDark ? '#1c1c1e' : '#FFFFFF',
       });
       
       const link = document.createElement('a');
@@ -137,46 +138,46 @@ export default function ShareCardModal({ isOpen, onClose, stockData }: ShareCard
         </button>
 
         {/* The Card Component (This is what gets screenshotted) */}
-        <div className="bg-white rounded-[24px] sm:rounded-[32px] overflow-hidden shadow-2xl border border-white/20">
-          <div 
-            ref={cardRef} 
-            className="bg-white p-6 sm:p-10 flex flex-col items-center text-center relative overflow-hidden"
+        <div className="bg-card rounded-[24px] sm:rounded-[32px] overflow-hidden shadow-2xl border border-border">
+          <div
+            ref={cardRef}
+            className="bg-card p-6 sm:p-10 flex flex-col items-center text-center relative overflow-hidden"
             style={{ width: '100%', aspectRatio: '4/5' }}
           >
             {/* Background Accent */}
             <div className={`absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-${profitColor.tw}-400 to-${profitColor.tw}-600`} />
-            
+
             {/* Header: Brand & Market */}
             <div className="w-full flex justify-between items-center mb-6 sm:mb-10">
-              <div className="flex items-center gap-1 sm:gap-1.5 text-black font-bold text-[13px] sm:text-[15px] tracking-tight">
-                <div className="bg-black text-white p-0.5 rounded">
+              <div className="flex items-center gap-1 sm:gap-1.5 text-primary font-bold text-[13px] sm:text-[15px] tracking-tight">
+                <div className="bg-primary text-on-primary p-0.5 rounded">
                   <TrendingUp className="w-3 sm:w-3.5 h-3 sm:h-3.5" />
                 </div>
                 <span>Folio</span>
               </div>
-              <span className="text-[9px] sm:text-[10px] font-bold text-gray-400 uppercase tracking-widest bg-gray-50 px-2 py-0.5 rounded-full border border-gray-100">
+              <span className="text-[9px] sm:text-[10px] font-bold text-secondary uppercase tracking-widest bg-element px-2 py-0.5 rounded-full border border-border">
                 Holding Snapshot
               </span>
             </div>
 
             {/* Logo Section */}
-            <div className="w-16 h-16 sm:w-20 sm:h-20 rounded-full bg-white border border-gray-100 shadow-sm flex items-center justify-center overflow-hidden mb-4 sm:mb-6 relative z-10">
+            <div className="w-16 h-16 sm:w-20 sm:h-20 rounded-full bg-card border border-border shadow-sm flex items-center justify-center overflow-hidden mb-4 sm:mb-6 relative z-10">
               {logo ? (
                 /* Use the proxy API to avoid CORS issues when generating screenshots */
                 // eslint-disable-next-line @next/next/no-img-element
-                <img 
-                  src={`/api/proxy-image?url=${encodeURIComponent(logo)}`} 
-                  alt={ticker} 
+                <img
+                  src={`/api/proxy-image?url=${encodeURIComponent(logo)}`}
+                  alt={ticker}
                   className="w-full h-full object-cover scale-110"
                 />
               ) : (
-                <span className="text-2xl sm:text-3xl font-bold text-gray-800">{ticker.charAt(0)}</span>
+                <span className="text-2xl sm:text-3xl font-bold text-primary">{ticker.charAt(0)}</span>
               )}
             </div>
 
             {/* Asset Title */}
-            <h2 className="text-[12px] sm:text-[14px] font-bold text-gray-400 uppercase tracking-[0.2em] mb-0.5 sm:mb-1">{name}</h2>
-            <h1 className="text-[28px] sm:text-[36px] font-black text-black tracking-tighter leading-none mb-4 sm:mb-8">{ticker}</h1>
+            <h2 className="text-[12px] sm:text-[14px] font-bold text-secondary uppercase tracking-[0.2em] mb-0.5 sm:mb-1">{name}</h2>
+            <h1 className="text-[28px] sm:text-[36px] font-black text-primary tracking-tighter leading-none mb-4 sm:mb-8">{ticker}</h1>
 
             {/* Hero Number: Return Percentage */}
             <div className="flex flex-col items-center mb-6 sm:mb-10">
@@ -191,17 +192,17 @@ export default function ShareCardModal({ isOpen, onClose, stockData }: ShareCard
             </div>
 
             {/* Key Stats: Grid */}
-            <div className="grid grid-cols-3 w-full gap-2 sm:gap-4 pt-6 sm:pt-8 border-t border-gray-50">
+            <div className="grid grid-cols-3 w-full gap-2 sm:gap-4 pt-6 sm:pt-8 border-t border-border">
               <div className="text-center">
-                <p className="text-[9px] sm:text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-0.5 sm:mb-1">Avg. Cost</p>
-                <p className="text-[13px] sm:text-[15px] font-bold text-black tabular-nums">{currencySymbol}{avgBuyPrice.toFixed(2)}</p>
+                <p className="text-[9px] sm:text-[10px] font-bold text-secondary uppercase tracking-wider mb-0.5 sm:mb-1">Avg. Cost</p>
+                <p className="text-[13px] sm:text-[15px] font-bold text-primary tabular-nums">{currencySymbol}{avgBuyPrice.toFixed(2)}</p>
               </div>
               <div className="text-center">
-                <p className="text-[9px] sm:text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-0.5 sm:mb-1">Market Price</p>
-                <p className="text-[13px] sm:text-[15px] font-bold text-black tabular-nums">{currencySymbol}{currentPrice.toFixed(2)}</p>
+                <p className="text-[9px] sm:text-[10px] font-bold text-secondary uppercase tracking-wider mb-0.5 sm:mb-1">Market Price</p>
+                <p className="text-[13px] sm:text-[15px] font-bold text-primary tabular-nums">{currencySymbol}{currentPrice.toFixed(2)}</p>
               </div>
               <div className="text-center">
-                <p className="text-[9px] sm:text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-0.5 sm:mb-1">{isProfit ? 'Profit' : 'Loss'}</p>
+                <p className="text-[9px] sm:text-[10px] font-bold text-secondary uppercase tracking-wider mb-0.5 sm:mb-1">{isProfit ? 'Profit' : 'Loss'}</p>
                 <p className={`text-[13px] sm:text-[15px] font-bold tabular-nums ${profitColor.tailwind.text}`}>
                   {isProfit ? '+' : '-'}{currencySymbol}{Math.abs(totalReturn).toFixed(2)}
                 </p>
@@ -239,7 +240,7 @@ export default function ShareCardModal({ isOpen, onClose, stockData }: ShareCard
           <button
             onClick={handleDownload}
             disabled={isGenerating}
-            className="w-full py-4 bg-white text-black text-[16px] font-bold rounded-2xl hover:bg-gray-50 transition-all shadow-xl flex items-center justify-center gap-3 group border border-gray-100 active:scale-[0.98]"
+            className="w-full py-4 bg-card text-primary text-[16px] font-bold rounded-2xl hover:bg-element transition-all shadow-xl flex items-center justify-center gap-3 group border border-border active:scale-[0.98]"
           >
             {isGenerating ? (
               <RefreshCw className="w-5 h-5 animate-spin text-gray-400" />

@@ -57,8 +57,8 @@ interface TransactionsClientProps {
 function EmptyState() {
   return (
     <div className="flex flex-col items-center gap-3">
-      <div className="w-12 h-12 bg-gray-50 rounded-full flex items-center justify-center">
-        <Search className="w-6 h-6 text-gray-300" />
+      <div className="w-12 h-12 bg-element rounded-full flex items-center justify-center">
+        <Search className="w-6 h-6 text-secondary" />
       </div>
       <p className="font-medium">No transactions found</p>
     </div>
@@ -85,6 +85,7 @@ export default function TransactionsClient({
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editState, setEditState] = useState<EditState | null>(null);
   const [isSaving, setIsSaving] = useState(false);
+  const [failedLogos, setFailedLogos] = useState<Set<string>>(new Set());
 
   const openEdit = (tx: TransactionWithAsset) => {
     setEditingId(tx.id);
@@ -150,31 +151,31 @@ export default function TransactionsClient({
   };
 
   return (
-    <div className="min-h-screen bg-[#FBFBFD] text-[#1D1D1F] font-sans antialiased">
+    <div className="min-h-screen bg-page text-primary font-sans antialiased">
 
       {/* 顶部导航栏 */}
-      <header className="bg-white/70 backdrop-blur-xl border-b border-gray-100 px-6 h-[56px] flex items-center justify-between sticky top-0 z-50">
+      <header className="bg-card/70 backdrop-blur-xl border-b border-border px-6 h-[56px] flex items-center justify-between sticky top-0 z-50">
         <div className="flex items-center space-x-8">
-          <div className="flex items-center space-x-2 text-black font-bold text-[17px] tracking-tight cursor-pointer">
+          <div className="flex items-center space-x-2 text-primary font-bold text-[17px] tracking-tight cursor-pointer">
             <Link href="/" className="flex items-center space-x-2">
-              <div className="bg-black text-white p-1 rounded-md">
+              <div className="bg-primary text-on-primary p-1 rounded-md">
                 <TrendingUp className="w-4 h-4" />
               </div>
               <span>Folio</span>
             </Link>
           </div>
-          <nav className="hidden md:flex space-x-7 text-[14px] font-semibold text-gray-400">
-            <Link href="/" className="hover:text-black transition-colors py-[16px]">Investments</Link>
-            <Link href="/transactions" className="text-black border-b-2 border-black py-[16px]">Transactions</Link>
+          <nav className="hidden md:flex space-x-7 text-[14px] font-semibold text-secondary">
+            <Link href="/" className="hover:text-primary transition-colors py-[16px]">Investments</Link>
+            <Link href="/transactions" className="text-primary border-b-2 border-primary py-[16px]">Transactions</Link>
           </nav>
         </div>
         <div className="flex items-center space-x-5">
           <div className="relative">
-            <Search className="w-3.5 h-3.5 absolute left-3 top-[10px] text-gray-400" />
+            <Search className="w-3.5 h-3.5 absolute left-3 top-[10px] text-secondary" />
             <input
               type="text"
               placeholder="Search transactions"
-              className="bg-gray-100 border-none rounded-lg py-1.5 pl-9 pr-4 text-[13px] w-44 focus:w-60 focus:ring-1 focus:ring-black/5 focus:bg-white transition-all duration-300"
+              className="bg-element-hover border-none rounded-lg py-1.5 pl-9 pr-4 text-[13px] w-44 focus:w-60 focus:ring-1 focus:ring-black/5 focus:bg-card transition-all duration-300"
             />
           </div>
           <Link
@@ -183,19 +184,19 @@ export default function TransactionsClient({
           >
             {userDisplayName ? (
               <>
-                <div className="w-7 h-7 rounded-full bg-black text-white flex items-center justify-center font-bold text-[12px] group-hover:bg-gray-800 transition-colors shadow-sm shrink-0">
+                <div className="w-7 h-7 rounded-full bg-primary text-on-primary flex items-center justify-center font-bold text-[12px] group-hover:bg-primary-hover transition-colors shadow-sm shrink-0">
                   {userDisplayName[0].toUpperCase()}
                 </div>
-                <span className="text-[13px] font-bold text-gray-500 group-hover:text-black transition-colors hidden sm:block">
+                <span className="text-[13px] font-bold text-secondary group-hover:text-primary transition-colors hidden sm:block">
                   {userDisplayName}
                 </span>
               </>
             ) : (
               <>
-                <div className="w-7 h-7 rounded-full bg-gray-100 border border-gray-200 text-gray-500 flex items-center justify-center group-hover:bg-gray-200 transition-colors shadow-sm shrink-0">
+                <div className="w-7 h-7 rounded-full bg-element-hover border border-border text-secondary flex items-center justify-center group-hover:bg-gray-200 transition-colors shadow-sm shrink-0">
                   <User className="w-3.5 h-3.5" />
                 </div>
-                <span className="text-[13px] font-bold text-gray-500 group-hover:text-black transition-colors hidden sm:block">
+                <span className="text-[13px] font-bold text-secondary group-hover:text-primary transition-colors hidden sm:block">
                   Guest
                 </span>
               </>
@@ -209,20 +210,20 @@ export default function TransactionsClient({
         {/* Breadcrumbs & Header */}
         <div className="flex flex-col sm:flex-row justify-between items-start sm:items-end gap-4 mb-6 sm:mb-8">
           <div>
-            <div className="flex items-center gap-2 text-[12px] sm:text-[13px] font-medium text-gray-400 mb-1.5 sm:mb-2">
-              <Link href="/" className="hover:text-black transition-colors">Dashboard</Link>
+            <div className="flex items-center gap-2 text-[12px] sm:text-[13px] font-medium text-secondary mb-1.5 sm:mb-2">
+              <Link href="/" className="hover:text-primary transition-colors">Dashboard</Link>
               <ChevronRight className="w-3 h-3" />
-              <span className="text-gray-900">Transactions</span>
+              <span className="text-primary">Transactions</span>
             </div>
-            <h1 className="text-[28px] sm:text-[32px] font-bold text-black tracking-tight leading-tight">Transaction History</h1>
-            <p className="text-gray-500 font-medium mt-1 text-[13px] sm:text-[15px]">{total} recorded activities in {portfolioName}</p>
+            <h1 className="text-[28px] sm:text-[32px] font-bold text-primary tracking-tight leading-tight">Transaction History</h1>
+            <p className="text-secondary font-medium mt-1 text-[13px] sm:text-[15px]">{total} recorded activities in {portfolioName}</p>
           </div>
           <div className="flex items-center gap-2 sm:gap-3 w-full sm:w-auto">
-            <button className="flex-1 sm:flex-none flex items-center justify-center gap-1.5 px-4 py-2 text-[13px] font-semibold text-gray-600 bg-white border border-gray-200 rounded-full hover:bg-gray-50 transition-all">
+            <button className="flex-1 sm:flex-none flex items-center justify-center gap-1.5 px-4 py-2 text-[13px] font-semibold text-secondary bg-card border border-border rounded-full hover:bg-element transition-all">
               <Filter className="w-3.5 h-3.5" />
               Filter
             </button>
-            <button className="flex-1 sm:flex-none flex items-center justify-center gap-1.5 px-4 py-2 text-[13px] font-semibold text-gray-600 bg-white border border-gray-200 rounded-full hover:bg-gray-50 transition-all">
+            <button className="flex-1 sm:flex-none flex items-center justify-center gap-1.5 px-4 py-2 text-[13px] font-semibold text-secondary bg-card border border-border rounded-full hover:bg-element transition-all">
               <Download className="w-3.5 h-3.5" />
               Export
             </button>
@@ -231,31 +232,31 @@ export default function TransactionsClient({
 
         {/* 统计卡片 */}
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-5 mb-6 sm:mb-8">
-          <div className="bg-white p-4 sm:p-5 rounded-2xl border border-gray-100 shadow-sm">
-            <p className="text-[10px] sm:text-[11px] text-gray-400 font-bold uppercase tracking-wider mb-1 text-center">Total Volume</p>
-            <p className="text-[18px] sm:text-[20px] font-bold text-black text-center tabular-nums">{fmt(totalVolume)}</p>
+          <div className="bg-card p-4 sm:p-5 rounded-2xl border border-border shadow-sm">
+            <p className="text-[10px] sm:text-[11px] text-secondary font-bold uppercase tracking-wider mb-1 text-center">Total Volume</p>
+            <p className="text-[18px] sm:text-[20px] font-bold text-primary text-center tabular-nums">{fmt(totalVolume)}</p>
           </div>
-          <div className="bg-white p-4 sm:p-5 rounded-2xl border border-gray-100 shadow-sm">
-            <p className="text-[10px] sm:text-[11px] text-gray-400 font-bold uppercase tracking-wider mb-1 text-center">Buy Activity</p>
+          <div className="bg-card p-4 sm:p-5 rounded-2xl border border-border shadow-sm">
+            <p className="text-[10px] sm:text-[11px] text-secondary font-bold uppercase tracking-wider mb-1 text-center">Buy Activity</p>
             <p className={`text-[18px] sm:text-[20px] font-bold text-center tabular-nums ${colors.gain.tailwind.text}`}>{buyCount} Orders</p>
           </div>
-          <div className="bg-white p-4 sm:p-5 rounded-2xl border border-gray-100 shadow-sm">
-            <p className="text-[10px] sm:text-[11px] text-gray-400 font-bold uppercase tracking-wider mb-1 text-center">Sell Activity</p>
+          <div className="bg-card p-4 sm:p-5 rounded-2xl border border-border shadow-sm">
+            <p className="text-[10px] sm:text-[11px] text-secondary font-bold uppercase tracking-wider mb-1 text-center">Sell Activity</p>
             <p className={`text-[18px] sm:text-[20px] font-bold text-center tabular-nums ${colors.loss.tailwind.text}`}>{sellCount} Orders</p>
           </div>
-          <div className="bg-white p-4 sm:p-5 rounded-2xl border border-gray-100 shadow-sm">
-            <p className="text-[10px] sm:text-[11px] text-gray-400 font-bold uppercase tracking-wider mb-1 text-center">Avg. Order</p>
-            <p className="text-[18px] sm:text-[20px] font-bold text-black text-center tabular-nums">{fmt(total > 0 ? totalVolume / total : 0)}</p>
+          <div className="bg-card p-4 sm:p-5 rounded-2xl border border-border shadow-sm">
+            <p className="text-[10px] sm:text-[11px] text-secondary font-bold uppercase tracking-wider mb-1 text-center">Avg. Order</p>
+            <p className="text-[18px] sm:text-[20px] font-bold text-primary text-center tabular-nums">{fmt(total > 0 ? totalVolume / total : 0)}</p>
           </div>
         </div>
 
         {/* Transactions Container */}
-        <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
+        <div className="bg-card rounded-2xl border border-border shadow-sm overflow-hidden">
           {/* Desktop Table */}
           <div className="hidden md:block">
             <table className="w-full text-left border-collapse">
               <thead>
-                <tr className="bg-gray-50/50 text-[10px] font-bold text-gray-400 uppercase tracking-widest border-b border-gray-100">
+                <tr className="bg-element/50 text-[10px] font-bold text-secondary uppercase tracking-widest border-b border-border">
                   <th className="px-6 py-4">Date & Time</th>
                   <th className="px-6 py-4">Asset</th>
                   <th className="px-6 py-4 text-center">Side</th>
@@ -268,31 +269,31 @@ export default function TransactionsClient({
               <tbody className="divide-y divide-gray-50">
                 {transactions.length === 0 ? (
                   <tr>
-                    <td colSpan={7} className="px-6 py-20 text-center text-gray-400">
+                    <td colSpan={7} className="px-6 py-20 text-center text-secondary">
                       <EmptyState />
                     </td>
                   </tr>
                 ) : (
                   transactions.map((transaction) => (
                     <React.Fragment key={transaction.id}>
-                      <tr className={`transition-all group ${editingId === transaction.id ? 'bg-gray-50/80' : 'hover:bg-gray-50/80'}`}>
+                      <tr className={`transition-all group ${editingId === transaction.id ? 'bg-element/80' : 'hover:bg-element/80'}`}>
                         <td className="px-6 py-4 whitespace-nowrap">
-                          <div className="text-[13px] font-semibold text-black leading-tight">
+                          <div className="text-[13px] font-semibold text-primary leading-tight">
                             {format(new Date(transaction.date), 'MMM dd, yyyy')}
                           </div>
                         </td>
                         <td className="px-6 py-4 whitespace-nowrap">
                           <Link href={`/stock/${transaction.asset.ticker}`} className="flex items-center gap-3">
-                            <div className="w-9 h-9 rounded-full bg-gray-100 border border-gray-100 shadow-sm flex items-center justify-center overflow-hidden">
-                              {logoMap[transaction.asset.ticker] ? (
-                                <Image src={logoMap[transaction.asset.ticker]!} alt={transaction.asset.ticker} width={36} height={36} className="w-full h-full object-cover" />
+                            <div className="w-9 h-9 rounded-full bg-element-hover border border-border shadow-sm flex items-center justify-center overflow-hidden">
+                              {logoMap[transaction.asset.ticker] && !failedLogos.has(transaction.asset.ticker) ? (
+                                <Image src={logoMap[transaction.asset.ticker]!} alt={transaction.asset.ticker} width={36} height={36} className="w-full h-full object-cover" unoptimized={true} onError={() => setFailedLogos(s => new Set(s).add(transaction.asset.ticker))} />
                               ) : (
                                 <span className="text-[11px] font-bold text-gray-800">{transaction.asset.ticker.charAt(0)}</span>
                               )}
                             </div>
                             <div>
-                              <p className="text-[14px] font-bold text-black leading-tight group-hover:underline underline-offset-2">{transaction.asset.ticker}</p>
-                              <p className="text-[11px] text-gray-400 font-medium truncate max-w-[150px]">{transaction.asset.name}</p>
+                              <p className="text-[14px] font-bold text-primary leading-tight group-hover:underline underline-offset-2">{transaction.asset.ticker}</p>
+                              <p className="text-[11px] text-secondary font-medium truncate max-w-[150px]">{transaction.asset.name}</p>
                             </div>
                           </Link>
                         </td>
@@ -302,15 +303,15 @@ export default function TransactionsClient({
                           </span>
                         </td>
                         <td className="px-6 py-4 whitespace-nowrap text-right">
-                          <p className="text-[13px] font-semibold text-black tabular-nums">{formatNumber(transaction.quantity)}</p>
+                          <p className="text-[13px] font-semibold text-primary tabular-nums">{formatNumber(transaction.quantity)}</p>
                         </td>
                         <td className="px-6 py-4 whitespace-nowrap text-right">
-                          <p className="text-[13px] font-medium text-gray-600 tabular-nums">{fmt(transaction.priceUSD || transaction.price)}</p>
+                          <p className="text-[13px] font-medium text-secondary tabular-nums">{fmt(transaction.priceUSD || transaction.price)}</p>
                         </td>
                         <td className="px-6 py-4 whitespace-nowrap text-right">
-                          <p className="text-[14px] font-bold text-black tabular-nums">{fmt((transaction.priceUSD || transaction.price) * Math.abs(transaction.quantity))}</p>
+                          <p className="text-[14px] font-bold text-primary tabular-nums">{fmt((transaction.priceUSD || transaction.price) * Math.abs(transaction.quantity))}</p>
                           {transaction.fee > 0 && (
-                            <p className="text-[10px] text-gray-400 font-medium">Fee: {getCurrencySymbol(transaction.currency ?? 'USD')}{transaction.fee.toFixed(2)}</p>
+                            <p className="text-[10px] text-secondary font-medium">Fee: {getCurrencySymbol(transaction.currency ?? 'USD')}{transaction.fee.toFixed(2)}</p>
                           )}
                         </td>
                         <td className="px-6 py-4 whitespace-nowrap text-center">
@@ -324,7 +325,7 @@ export default function TransactionsClient({
                               </button>
                               <button
                                 onClick={() => setConfirmingId(null)}
-                                className="px-2.5 py-1 text-[11px] font-bold text-gray-400 hover:text-black bg-gray-50 hover:bg-gray-100 rounded-md transition-colors"
+                                className="px-2.5 py-1 text-[11px] font-bold text-secondary hover:text-primary bg-element hover:bg-element-hover rounded-md transition-colors"
                               >
                                 Cancel
                               </button>
@@ -333,7 +334,7 @@ export default function TransactionsClient({
                             <div className="flex items-center justify-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
                               <button
                                 onClick={() => editingId === transaction.id ? closeEdit() : openEdit(transaction)}
-                                className={`p-1.5 transition-all duration-300 rounded-md ${editingId === transaction.id ? 'text-black bg-gray-100 scale-110 ring-4 ring-black/5' : 'text-gray-400 hover:text-black hover:bg-gray-100'}`}
+                                className={`p-1.5 transition-all duration-300 rounded-md ${editingId === transaction.id ? 'text-primary bg-element-hover scale-110 ring-4 ring-black/5' : 'text-secondary hover:text-primary hover:bg-element-hover'}`}
                               >
                                 {editingId === transaction.id
                                   ? <X className="w-3.5 h-3.5" />
@@ -342,7 +343,7 @@ export default function TransactionsClient({
                               </button>
                               <button
                                 onClick={() => setConfirmingId(transaction.id)}
-                                className="p-1.5 text-gray-400 hover:text-rose-500 transition-colors rounded-md hover:bg-rose-50"
+                                className="p-1.5 text-secondary hover:text-rose-500 transition-colors rounded-md hover:bg-rose-50"
                               >
                                 <Trash2 className="w-3.5 h-3.5" />
                               </button>
@@ -352,35 +353,35 @@ export default function TransactionsClient({
                       </tr>
 
                       {/* Edit Drawer Row — always rendered, animated via grid-rows */}
-                      <tr className={editingId === transaction.id ? 'bg-gray-50/60' : ''}>
+                      <tr className={editingId === transaction.id ? 'bg-element/60' : ''}>
                         <td colSpan={7} className="p-0">
                           <div className={`grid transition-all duration-300 ease-in-out ${editingId === transaction.id ? 'grid-rows-[1fr] opacity-100' : 'grid-rows-[0fr] opacity-0'}`}>
                             <div className="overflow-hidden">
-                              <div className="px-6 pb-5 pt-3 border-t border-gray-100/60">
+                              <div className="px-6 pb-5 pt-3 border-t border-border/60">
                                 <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 mb-4">
                                   <div className="space-y-1.5">
-                                    <label className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">Date</label>
+                                    <label className="text-[10px] font-bold text-secondary uppercase tracking-widest">Date</label>
                                     <input
                                       type="date"
                                       value={editState?.date ?? ''}
                                       onChange={e => setEditState(s => s ? { ...s, date: e.target.value } : s)}
-                                      className="w-full px-3 py-2 bg-white rounded-xl text-[13px] font-semibold text-black border border-gray-200 focus:border-black focus:ring-1 focus:ring-black outline-none transition-all"
+                                      className="w-full px-3 py-2 bg-card rounded-xl text-[13px] font-semibold text-primary border border-border focus:border-primary focus:ring-1 focus:ring-black outline-none transition-all"
                                     />
                                   </div>
                                   <div className="space-y-1.5">
-                                    <label className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">Shares</label>
+                                    <label className="text-[10px] font-bold text-secondary uppercase tracking-widest">Shares</label>
                                     <input
                                       type="number"
                                       step="0.0001"
                                       value={editState?.quantity ?? ''}
                                       onChange={e => setEditState(s => s ? { ...s, quantity: e.target.value } : s)}
                                       onWheel={e => (e.target as HTMLInputElement).blur()}
-                                      className="w-full px-3 py-2 bg-white rounded-xl text-[13px] font-semibold tabular-nums text-black border border-gray-200 focus:border-black focus:ring-1 focus:ring-black outline-none transition-all [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+                                      className="w-full px-3 py-2 bg-card rounded-xl text-[13px] font-semibold tabular-nums text-primary border border-border focus:border-primary focus:ring-1 focus:ring-black outline-none transition-all [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
                                     />
                                   </div>
                                   <div className="space-y-1.5">
-                                    <label className="text-[10px] font-bold text-gray-400 uppercase tracking-widest flex items-center gap-1">
-                                      Unit Price <span className="text-gray-300">·</span> {getCurrencySymbol(transaction.currency ?? 'USD')}
+                                    <label className="text-[10px] font-bold text-secondary uppercase tracking-widest flex items-center gap-1">
+                                      Unit Price <span className="text-secondary">·</span> {getCurrencySymbol(transaction.currency ?? 'USD')}
                                     </label>
                                     <input
                                       type="number"
@@ -388,12 +389,12 @@ export default function TransactionsClient({
                                       value={editState?.price ?? ''}
                                       onChange={e => setEditState(s => s ? { ...s, price: e.target.value } : s)}
                                       onWheel={e => (e.target as HTMLInputElement).blur()}
-                                      className="w-full px-3 py-2 bg-white rounded-xl text-[13px] font-semibold tabular-nums text-black border border-gray-200 focus:border-black focus:ring-1 focus:ring-black outline-none transition-all [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+                                      className="w-full px-3 py-2 bg-card rounded-xl text-[13px] font-semibold tabular-nums text-primary border border-border focus:border-primary focus:ring-1 focus:ring-black outline-none transition-all [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
                                     />
                                   </div>
                                   <div className="space-y-1.5">
-                                    <label className="text-[10px] font-bold text-gray-400 uppercase tracking-widest flex items-center gap-1">
-                                      Fee <span className="text-gray-300">·</span> {getCurrencySymbol(transaction.currency ?? 'USD')}
+                                    <label className="text-[10px] font-bold text-secondary uppercase tracking-widest flex items-center gap-1">
+                                      Fee <span className="text-secondary">·</span> {getCurrencySymbol(transaction.currency ?? 'USD')}
                                     </label>
                                     <input
                                       type="number"
@@ -401,25 +402,25 @@ export default function TransactionsClient({
                                       value={editState?.fee ?? ''}
                                       onChange={e => setEditState(s => s ? { ...s, fee: e.target.value } : s)}
                                       onWheel={e => (e.target as HTMLInputElement).blur()}
-                                      className="w-full px-3 py-2 bg-white rounded-xl text-[13px] font-semibold tabular-nums text-black border border-gray-200 focus:border-black focus:ring-1 focus:ring-black outline-none transition-all [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+                                      className="w-full px-3 py-2 bg-card rounded-xl text-[13px] font-semibold tabular-nums text-primary border border-border focus:border-primary focus:ring-1 focus:ring-black outline-none transition-all [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
                                     />
                                   </div>
                                 </div>
                                 <div className="space-y-1.5">
-                                  <label className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">Notes</label>
+                                  <label className="text-[10px] font-bold text-secondary uppercase tracking-widest">Notes</label>
                                   <input
                                     type="text"
                                     value={editState?.notes ?? ''}
                                     onChange={e => setEditState(s => s ? { ...s, notes: e.target.value } : s)}
                                     placeholder="Optional"
-                                    className="w-full px-3 py-2 bg-white rounded-xl text-[13px] font-medium text-black border border-gray-200 focus:border-black focus:ring-1 focus:ring-black outline-none transition-all"
+                                    className="w-full px-3 py-2 bg-card rounded-xl text-[13px] font-medium text-primary border border-border focus:border-primary focus:ring-1 focus:ring-black outline-none transition-all"
                                   />
                                 </div>
                                 <div className="flex justify-end">
                                   <button
                                     onClick={() => handleSave(transaction)}
                                     disabled={isSaving}
-                                    className="flex items-center gap-1.5 px-4 py-2 text-[12px] font-bold text-white bg-black hover:bg-gray-800 rounded-xl transition-colors active:scale-95 disabled:opacity-50 shadow-sm"
+                                    className="flex items-center gap-1.5 px-4 py-2 text-[12px] font-bold text-on-primary bg-primary hover:bg-primary-hover rounded-xl transition-colors active:scale-95 disabled:opacity-50 shadow-sm"
                                   >
                                     <Check className="w-3.5 h-3.5" />
                                     Save Changes
@@ -440,52 +441,52 @@ export default function TransactionsClient({
           {/* Mobile List */}
           <div className="md:hidden divide-y divide-gray-50">
             {transactions.length === 0 ? (
-              <div className="px-6 py-16 text-center text-gray-400">
+              <div className="px-6 py-16 text-center text-secondary">
                 <EmptyState />
               </div>
             ) : (
               transactions.map((transaction) => (
-                <div key={transaction.id} className={`transition-colors ${editingId === transaction.id ? 'bg-gray-50/80' : ''}`}>
+                <div key={transaction.id} className={`transition-colors ${editingId === transaction.id ? 'bg-element/80' : ''}`}>
                   <div className="p-4">
                     <div className="flex items-center justify-between mb-3">
                       <div className="flex items-center gap-3">
-                        <div className="w-10 h-10 rounded-full bg-gray-100 border border-gray-100 shadow-sm flex items-center justify-center overflow-hidden">
-                          {logoMap[transaction.asset.ticker] ? (
-                            <Image src={logoMap[transaction.asset.ticker]!} alt={transaction.asset.ticker} width={40} height={40} className="w-full h-full object-cover" />
+                        <div className="w-10 h-10 rounded-full bg-element-hover border border-border shadow-sm flex items-center justify-center overflow-hidden">
+                          {logoMap[transaction.asset.ticker] && !failedLogos.has(transaction.asset.ticker) ? (
+                            <Image src={logoMap[transaction.asset.ticker]!} alt={transaction.asset.ticker} width={40} height={40} className="w-full h-full object-cover" unoptimized={true} onError={() => setFailedLogos(s => new Set(s).add(transaction.asset.ticker))} />
                           ) : (
                             <span className="text-[12px] font-bold text-gray-800">{transaction.asset.ticker.charAt(0)}</span>
                           )}
                         </div>
                         <div>
                           <div className="flex items-center gap-2">
-                            <p className="text-[15px] font-bold text-black leading-tight">{transaction.asset.ticker}</p>
+                            <p className="text-[15px] font-bold text-primary leading-tight">{transaction.asset.ticker}</p>
                             <span className={`px-1.5 py-0.5 rounded text-[9px] font-bold uppercase tracking-wide ${transaction.type === 'BUY' ? `${colors.gain.tailwind.bgLight} ${colors.gain.tailwind.text}` : `${colors.loss.tailwind.bgLight} ${colors.loss.tailwind.text}`}`}>
                               {transaction.type}
                             </span>
                           </div>
-                          <p className="text-[12px] text-gray-400 font-medium truncate max-w-[140px]">{transaction.asset.name}</p>
+                          <p className="text-[12px] text-secondary font-medium truncate max-w-[140px]">{transaction.asset.name}</p>
                         </div>
                       </div>
                       <div className="text-right">
-                        <p className="text-[15px] font-bold text-black tabular-nums">{fmt((transaction.priceUSD || transaction.price) * Math.abs(transaction.quantity))}</p>
-                        <p className="text-[12px] text-gray-400 font-medium tabular-nums">{formatNumber(transaction.quantity)} shares</p>
+                        <p className="text-[15px] font-bold text-primary tabular-nums">{fmt((transaction.priceUSD || transaction.price) * Math.abs(transaction.quantity))}</p>
+                        <p className="text-[12px] text-secondary font-medium tabular-nums">{formatNumber(transaction.quantity)} shares</p>
                       </div>
                     </div>
                     <div className="flex items-center justify-between mt-2">
-                      <div className="text-[12px] text-gray-400 font-medium">
+                      <div className="text-[12px] text-secondary font-medium">
                         {format(new Date(transaction.date), 'MMM dd, yyyy')}
                       </div>
                       <div className="flex items-center gap-3">
                         <button
                           onClick={() => editingId === transaction.id ? closeEdit() : openEdit(transaction)}
-                          className={`text-[12px] font-semibold transition-colors ${editingId === transaction.id ? 'text-black' : 'text-gray-400'}`}
+                          className={`text-[12px] font-semibold transition-colors ${editingId === transaction.id ? 'text-primary' : 'text-secondary'}`}
                         >
                           {editingId === transaction.id ? 'Close' : 'Edit'}
                         </button>
                         {confirmingId === transaction.id ? (
                           <>
                             <button onClick={() => handleDelete(transaction.id)} className="text-[12px] font-bold text-rose-500">Confirm</button>
-                            <button onClick={() => setConfirmingId(null)} className="text-[12px] font-semibold text-gray-400">Cancel</button>
+                            <button onClick={() => setConfirmingId(null)} className="text-[12px] font-semibold text-secondary">Cancel</button>
                           </>
                         ) : (
                           <button onClick={() => setConfirmingId(transaction.id)} className="text-[12px] font-semibold text-rose-400">Delete</button>
@@ -497,31 +498,31 @@ export default function TransactionsClient({
                   {/* Mobile Edit Drawer — always rendered, animated via grid-rows */}
                   <div className={`grid transition-all duration-300 ease-in-out ${editingId === transaction.id ? 'grid-rows-[1fr] opacity-100' : 'grid-rows-[0fr] opacity-0'}`}>
                     <div className="overflow-hidden">
-                      <div className="px-4 pb-4 space-y-3 border-t border-gray-100/60">
+                      <div className="px-4 pb-4 space-y-3 border-t border-border/60">
                         <div className="grid grid-cols-2 gap-3 pt-3">
                           <div className="space-y-1.5">
-                            <label className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">Date</label>
+                            <label className="text-[10px] font-bold text-secondary uppercase tracking-widest">Date</label>
                             <input
                               type="date"
                               value={editState?.date ?? ''}
                               onChange={e => setEditState(s => s ? { ...s, date: e.target.value } : s)}
-                              className="w-full px-3 py-2 bg-gray-50/50 rounded-xl text-[13px] font-semibold text-black border border-gray-200 focus:border-black focus:ring-1 focus:ring-black outline-none transition-all"
+                              className="w-full px-3 py-2 bg-element/50 rounded-xl text-[13px] font-semibold text-primary border border-border focus:border-primary focus:ring-1 focus:ring-black outline-none transition-all"
                             />
                           </div>
                           <div className="space-y-1.5">
-                            <label className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">Shares</label>
+                            <label className="text-[10px] font-bold text-secondary uppercase tracking-widest">Shares</label>
                             <input
                               type="number"
                               step="0.0001"
                               value={editState?.quantity ?? ''}
                               onChange={e => setEditState(s => s ? { ...s, quantity: e.target.value } : s)}
                               onWheel={e => (e.target as HTMLInputElement).blur()}
-                              className="w-full px-3 py-2 bg-gray-50/50 rounded-xl text-[13px] font-semibold tabular-nums text-black border border-gray-200 focus:border-black focus:ring-1 focus:ring-black outline-none transition-all [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+                              className="w-full px-3 py-2 bg-element/50 rounded-xl text-[13px] font-semibold tabular-nums text-primary border border-border focus:border-primary focus:ring-1 focus:ring-black outline-none transition-all [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
                             />
                           </div>
                           <div className="space-y-1.5">
-                            <label className="text-[10px] font-bold text-gray-400 uppercase tracking-widest flex items-center gap-1">
-                              Unit Price <span className="text-gray-300">·</span> {getCurrencySymbol(transaction.currency ?? 'USD')}
+                            <label className="text-[10px] font-bold text-secondary uppercase tracking-widest flex items-center gap-1">
+                              Unit Price <span className="text-secondary">·</span> {getCurrencySymbol(transaction.currency ?? 'USD')}
                             </label>
                             <input
                               type="number"
@@ -529,12 +530,12 @@ export default function TransactionsClient({
                               value={editState?.price ?? ''}
                               onChange={e => setEditState(s => s ? { ...s, price: e.target.value } : s)}
                               onWheel={e => (e.target as HTMLInputElement).blur()}
-                              className="w-full px-3 py-2 bg-gray-50/50 rounded-xl text-[13px] font-semibold tabular-nums text-black border border-gray-200 focus:border-black focus:ring-1 focus:ring-black outline-none transition-all [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+                              className="w-full px-3 py-2 bg-element/50 rounded-xl text-[13px] font-semibold tabular-nums text-primary border border-border focus:border-primary focus:ring-1 focus:ring-black outline-none transition-all [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
                             />
                           </div>
                           <div className="space-y-1.5">
-                            <label className="text-[10px] font-bold text-gray-400 uppercase tracking-widest flex items-center gap-1">
-                              Fee <span className="text-gray-300">·</span> {getCurrencySymbol(transaction.currency ?? 'USD')}
+                            <label className="text-[10px] font-bold text-secondary uppercase tracking-widest flex items-center gap-1">
+                              Fee <span className="text-secondary">·</span> {getCurrencySymbol(transaction.currency ?? 'USD')}
                             </label>
                             <input
                               type="number"
@@ -542,24 +543,24 @@ export default function TransactionsClient({
                               value={editState?.fee ?? ''}
                               onChange={e => setEditState(s => s ? { ...s, fee: e.target.value } : s)}
                               onWheel={e => (e.target as HTMLInputElement).blur()}
-                              className="w-full px-3 py-2 bg-gray-50/50 rounded-xl text-[13px] font-semibold tabular-nums text-black border border-gray-200 focus:border-black focus:ring-1 focus:ring-black outline-none transition-all [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+                              className="w-full px-3 py-2 bg-element/50 rounded-xl text-[13px] font-semibold tabular-nums text-primary border border-border focus:border-primary focus:ring-1 focus:ring-black outline-none transition-all [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
                             />
                           </div>
                         </div>
                         <div className="space-y-1.5">
-                          <label className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">Notes</label>
+                          <label className="text-[10px] font-bold text-secondary uppercase tracking-widest">Notes</label>
                           <input
                             type="text"
                             value={editState?.notes ?? ''}
                             onChange={e => setEditState(s => s ? { ...s, notes: e.target.value } : s)}
                             placeholder="Optional"
-                            className="w-full px-3 py-2 bg-gray-50/50 rounded-xl text-[13px] font-medium text-black border border-gray-200 focus:border-black focus:ring-1 focus:ring-black outline-none transition-all"
+                            className="w-full px-3 py-2 bg-element/50 rounded-xl text-[13px] font-medium text-primary border border-border focus:border-primary focus:ring-1 focus:ring-black outline-none transition-all"
                           />
                         </div>
                         <button
                           onClick={() => handleSave(transaction)}
                           disabled={isSaving}
-                          className="w-full flex items-center justify-center gap-1.5 py-2.5 text-[13px] font-bold text-white bg-black hover:bg-gray-800 rounded-xl transition-colors active:scale-[0.98] disabled:opacity-50 shadow-sm"
+                          className="w-full flex items-center justify-center gap-1.5 py-2.5 text-[13px] font-bold text-on-primary bg-primary hover:bg-primary-hover rounded-xl transition-colors active:scale-[0.98] disabled:opacity-50 shadow-sm"
                         >
                           <Check className="w-3.5 h-3.5" />
                           Save Changes
@@ -576,24 +577,24 @@ export default function TransactionsClient({
         {/* Pagination */}
         {totalPages > 1 && (
           <div className="flex flex-col sm:flex-row items-center justify-between mt-8 gap-4">
-            <p className="text-[13px] font-medium text-gray-400 px-2 order-2 sm:order-1">
+            <p className="text-[13px] font-medium text-secondary px-2 order-2 sm:order-1">
               Showing {((currentPage - 1) * limit) + 1}–{Math.min(currentPage * limit, total)} of {total}
             </p>
-            <div className="flex items-center bg-white border border-gray-200 rounded-full p-1 shadow-sm order-1 sm:order-2 w-full sm:w-auto justify-between sm:justify-start">
+            <div className="flex items-center bg-card border border-border rounded-full p-1 shadow-sm order-1 sm:order-2 w-full sm:w-auto justify-between sm:justify-start">
               <a
                 href={`/transactions?page=${currentPage - 1}${searchTicker ? `&ticker=${searchTicker}` : ''}${searchType ? `&type=${searchType}` : ''}`}
-                className={`flex-1 sm:flex-none text-center px-4 py-1.5 text-[13px] font-semibold rounded-full transition-all ${currentPage <= 1 ? 'text-gray-200 cursor-not-allowed' : 'text-gray-600 hover:text-black hover:bg-gray-50'}`}
+                className={`flex-1 sm:flex-none text-center px-4 py-1.5 text-[13px] font-semibold rounded-full transition-all ${currentPage <= 1 ? 'text-gray-200 cursor-not-allowed' : 'text-secondary hover:text-primary hover:bg-element'}`}
               >
                 Previous
               </a>
-              <div className="w-px h-4 bg-gray-100 mx-1 hidden sm:block"></div>
-              <span className="px-4 py-1.5 text-[13px] font-bold text-black">
-                {currentPage} <span className="text-gray-300 font-medium">/</span> {totalPages}
+              <div className="w-px h-4 bg-element-hover mx-1 hidden sm:block"></div>
+              <span className="px-4 py-1.5 text-[13px] font-bold text-primary">
+                {currentPage} <span className="text-secondary font-medium">/</span> {totalPages}
               </span>
-              <div className="w-px h-4 bg-gray-100 mx-1 hidden sm:block"></div>
+              <div className="w-px h-4 bg-element-hover mx-1 hidden sm:block"></div>
               <a
                 href={`/transactions?page=${currentPage + 1}${searchTicker ? `&ticker=${searchTicker}` : ''}${searchType ? `&type=${searchType}` : ''}`}
-                className={`flex-1 sm:flex-none text-center px-4 py-1.5 text-[13px] font-semibold rounded-full transition-all ${currentPage >= totalPages ? 'text-gray-200 cursor-not-allowed' : 'text-gray-600 hover:text-black hover:bg-gray-50'}`}
+                className={`flex-1 sm:flex-none text-center px-4 py-1.5 text-[13px] font-semibold rounded-full transition-all ${currentPage >= totalPages ? 'text-gray-200 cursor-not-allowed' : 'text-secondary hover:text-primary hover:bg-element'}`}
               >
                 Next
               </a>

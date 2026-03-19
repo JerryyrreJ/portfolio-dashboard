@@ -61,24 +61,24 @@ export default function UpdatePasswordPage() {
 
   if (success) {
     return (
-      <div className="min-h-screen bg-[#FBFBFD] flex items-center justify-center p-6">
-        <div className="w-full max-w-[400px] bg-white rounded-[32px] p-10 shadow-sm border border-gray-100 text-center animate-in fade-in zoom-in-95 duration-500">
+      <div className="min-h-screen bg-page flex items-center justify-center p-6">
+        <div className="w-full max-w-[400px] bg-card rounded-[32px] p-10 shadow-sm border border-border text-center animate-in fade-in zoom-in-95 duration-500">
           <div className="w-16 h-16 bg-emerald-50 rounded-full flex items-center justify-center mx-auto mb-6">
             <CheckCircle2 className="w-8 h-8 text-emerald-500" />
           </div>
-          <h2 className="text-[24px] font-bold text-black mb-2">Password Updated</h2>
-          <p className="text-[14px] text-gray-500 font-medium">Your password has been changed successfully. Redirecting you back...</p>
+          <h2 className="text-[24px] font-bold text-primary mb-2">Password Updated</h2>
+          <p className="text-[14px] text-secondary font-medium">Your password has been changed successfully. Redirecting you back...</p>
         </div>
       </div>
     );
   }
 
   return (
-    <div className="min-h-screen bg-[#FBFBFD] flex items-center justify-center p-6">
-      <div className="w-full max-w-[400px] bg-white rounded-[32px] p-10 shadow-sm border border-gray-100 animate-in fade-in slide-in-from-bottom-4 duration-700">
+    <div className="min-h-screen bg-page flex items-center justify-center p-6">
+      <div className="w-full max-w-[400px] bg-card rounded-[32px] p-10 shadow-sm border border-border animate-in fade-in slide-in-from-bottom-4 duration-700">
         <div className="mb-8 text-center">
-          <h2 className="text-[24px] font-bold tracking-tight text-black mb-2">Set New Password</h2>
-          <p className="text-[14px] text-gray-400 font-medium">Create a secure password for your account</p>
+          <h2 className="text-[24px] font-bold tracking-tight text-primary mb-2">Set New Password</h2>
+          <p className="text-[14px] text-secondary font-medium">Create a secure password for your account</p>
         </div>
 
         <form onSubmit={handleSubmit} className="space-y-4">
@@ -91,7 +91,7 @@ export default function UpdatePasswordPage() {
 
           <div className="space-y-3">
             <div className="relative group">
-              <div className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400 group-focus-within:text-black transition-colors">
+              <div className="absolute left-4 top-1/2 -translate-y-1/2 text-secondary group-focus-within:text-primary transition-colors">
                 <Lock className="w-4 h-4" />
               </div>
               <input
@@ -100,19 +100,19 @@ export default function UpdatePasswordPage() {
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
                 required
-                className="w-full bg-gray-50 border border-gray-100 rounded-2xl py-3.5 pl-11 pr-12 text-[14px] font-medium focus:bg-white focus:ring-1 focus:ring-black/5 transition-all outline-none"
+                className="w-full bg-element border border-border rounded-2xl py-3.5 pl-11 pr-12 text-[14px] font-medium focus:bg-card focus:ring-1 focus:ring-black/5 transition-all outline-none"
               />
               <button
                 type="button"
                 onClick={() => setShowPassword(!showPassword)}
-                className="absolute right-4 top-1/2 -translate-y-1/2 text-gray-400 hover:text-black transition-colors"
+                className="absolute right-4 top-1/2 -translate-y-1/2 text-secondary hover:text-primary transition-colors"
               >
                 {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
               </button>
             </div>
 
             <div className="relative group">
-              <div className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400 group-focus-within:text-black transition-colors">
+              <div className="absolute left-4 top-1/2 -translate-y-1/2 text-secondary group-focus-within:text-primary transition-colors">
                 <Lock className="w-4 h-4" />
               </div>
               <input
@@ -121,7 +121,7 @@ export default function UpdatePasswordPage() {
                 value={confirmPassword}
                 onChange={(e) => setConfirmPassword(e.target.value)}
                 required
-                className="w-full bg-gray-50 border border-gray-100 rounded-2xl py-3.5 pl-11 pr-4 text-[14px] font-medium focus:bg-white focus:ring-1 focus:ring-black/5 transition-all outline-none"
+                className="w-full bg-element border border-border rounded-2xl py-3.5 pl-11 pr-4 text-[14px] font-medium focus:bg-card focus:ring-1 focus:ring-black/5 transition-all outline-none"
               />
             </div>
           </div>
@@ -129,7 +129,7 @@ export default function UpdatePasswordPage() {
           <button
             type="submit"
             disabled={loading}
-            className="w-full bg-black text-white rounded-2xl py-3.5 text-[14px] font-bold hover:bg-gray-900 transition-all flex items-center justify-center space-x-2 disabled:opacity-50 disabled:cursor-not-allowed shadow-sm active:scale-[0.98] mt-2"
+            className="w-full bg-primary text-on-primary rounded-2xl py-3.5 text-[14px] font-bold hover:bg-gray-900 transition-all flex items-center justify-center space-x-2 disabled:opacity-50 disabled:cursor-not-allowed shadow-sm active:scale-[0.98] mt-2"
           >
             {loading ? (
               <Loader2 className="w-4 h-4 animate-spin" />

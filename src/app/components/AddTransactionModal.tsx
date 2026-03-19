@@ -366,14 +366,14 @@ export default function AddTransactionModal({
           <button 
             type="button" 
             onClick={() => setShowYearPicker(!showYearPicker)}
-            className="text-[14px] font-bold text-black hover:bg-gray-100 px-2 py-1 rounded-lg transition-colors flex items-center gap-1"
+            className="text-[14px] font-bold text-primary hover:bg-element-hover px-2 py-1 rounded-lg transition-colors flex items-center gap-1"
           >
             {format(currentMonth, 'MMMM yyyy')}
             <ChevronRight className={`w-3 h-3 transition-transform duration-200 ${showYearPicker ? 'rotate-90' : ''}`} />
           </button>
           <div className="flex items-center gap-1">
-            <button type="button" onClick={() => setCurrentMonth(subMonths(currentMonth, 1))} className="p-1.5 hover:bg-gray-100 rounded-lg transition-colors"><ChevronLeft className="w-4 h-4 text-gray-500" /></button>
-            <button type="button" onClick={() => setCurrentMonth(addMonths(currentMonth, 1))} className="p-1.5 hover:bg-gray-100 rounded-lg transition-colors"><ChevronRight className="w-4 h-4 text-gray-500" /></button>
+            <button type="button" onClick={() => setCurrentMonth(subMonths(currentMonth, 1))} className="p-1.5 hover:bg-element-hover rounded-lg transition-colors"><ChevronLeft className="w-4 h-4 text-secondary" /></button>
+            <button type="button" onClick={() => setCurrentMonth(addMonths(currentMonth, 1))} className="p-1.5 hover:bg-element-hover rounded-lg transition-colors"><ChevronRight className="w-4 h-4 text-secondary" /></button>
           </div>
         </div>
 
@@ -389,29 +389,29 @@ export default function AddTransactionModal({
                   setCurrentMonth(newDate);
                   setShowYearPicker(false);
                 }}
-                className={`py-3 text-[13px] font-semibold rounded-xl transition-all ${year === currentYear ? 'bg-black text-white' : 'hover:bg-gray-50 text-gray-600'}`}
+                className={`py-3 text-[13px] font-semibold rounded-xl transition-all ${year === currentYear ? 'bg-primary text-on-primary' : 'hover:bg-element text-secondary'}`}
               >
                 {year}
               </button>
             ))}
-            <div className="col-span-3 flex justify-between mt-2 pt-2 border-t border-gray-100">
+            <div className="col-span-3 flex justify-between mt-2 pt-2 border-t border-border">
               <button type="button" onClick={() => {
                 const newDate = new Date(currentMonth);
                 newDate.setFullYear(currentYear - 12);
                 setCurrentMonth(newDate);
-              }} className="p-1 hover:bg-gray-50 rounded text-gray-400"><ChevronLeft className="w-4 h-4" /></button>
+              }} className="p-1 hover:bg-element rounded text-secondary"><ChevronLeft className="w-4 h-4" /></button>
               <button type="button" onClick={() => {
                 const newDate = new Date(currentMonth);
                 newDate.setFullYear(currentYear + 12);
                 setCurrentMonth(newDate);
-              }} className="p-1 hover:bg-gray-50 rounded text-gray-400"><ChevronRight className="w-4 h-4" /></button>
+              }} className="p-1 hover:bg-element rounded text-secondary"><ChevronRight className="w-4 h-4" /></button>
             </div>
           </div>
         ) : (
           <>
             <div className="grid grid-cols-7 mb-2">
               {['S', 'M', 'T', 'W', 'T', 'F', 'S'].map((d, i) => (
-                <span key={i} className="text-center text-[10px] font-bold text-gray-300">{d}</span>
+                <span key={i} className="text-center text-[10px] font-bold text-secondary">{d}</span>
               ))}
             </div>
             <div className="grid grid-cols-7 gap-px">
@@ -425,12 +425,12 @@ export default function AddTransactionModal({
                     type="button"
                     onClick={() => handleDateSelect(day)}
                     className={`h-9 flex items-center justify-center text-[13px] rounded-xl transition-all relative
-                      ${isSelected ? 'bg-black text-white font-bold' : 'hover:bg-gray-50 text-gray-700'}
+                      ${isSelected ? 'bg-primary text-on-primary font-bold' : 'hover:bg-element text-gray-700'}
                       ${!isCurrentMonth ? 'opacity-20' : ''}
                     `}
                   >
                     {format(day, 'd')}
-                    {isToday && !isSelected && <div className="absolute bottom-1 w-1 h-1 rounded-full bg-black" />}
+                    {isToday && !isSelected && <div className="absolute bottom-1 w-1 h-1 rounded-full bg-primary" />}
                   </button>
                 );
               })}
@@ -444,16 +444,16 @@ export default function AddTransactionModal({
   if (!isOpen) return null;
 
   return (
-    <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/40 backdrop-blur-md transition-all p-4">
-      <div className="relative w-full max-w-[500px] bg-white rounded-[28px] sm:rounded-[32px] shadow-[0_20px_70px_-10px_rgba(0,0,0,0.15)] border border-gray-100 overflow-y-auto max-h-[90vh] flex flex-col animate-in fade-in zoom-in duration-200">
+    <div className="fixed inset-0 z-[100] flex items-center justify-center bg-primary/40 backdrop-blur-md transition-all p-4">
+      <div className="relative w-full max-w-[500px] bg-card rounded-[28px] sm:rounded-[32px] shadow-[0_20px_70px_-10px_rgba(0,0,0,0.15)] border border-border overflow-y-auto max-h-[90vh] flex flex-col animate-in fade-in zoom-in duration-200">
         
         {/* Header - Apple Style */}
-        <div className="px-6 pt-6 sm:px-8 sm:pt-8 pb-4 flex items-center justify-between sticky top-0 bg-white/90 backdrop-blur-sm z-20">
+        <div className="px-6 pt-6 sm:px-8 sm:pt-8 pb-4 flex items-center justify-between sticky top-0 bg-card/90 backdrop-blur-sm z-20">
           <div>
-            <h2 className="text-[20px] sm:text-[24px] font-bold text-black tracking-tight leading-none">Record Trade</h2>
-            <p className="text-[12px] sm:text-[13px] text-gray-400 font-medium mt-1.5 sm:mt-2">Portfolio: <span className="text-black font-semibold">{portfolioName}</span></p>
+            <h2 className="text-[20px] sm:text-[24px] font-bold text-primary tracking-tight leading-none">Record Trade</h2>
+            <p className="text-[12px] sm:text-[13px] text-secondary font-medium mt-1.5 sm:mt-2">Portfolio: <span className="text-primary font-semibold">{portfolioName}</span></p>
           </div>
-          <button onClick={handleClose} className="p-2 text-gray-300 hover:text-black transition-colors rounded-full hover:bg-gray-50 bg-gray-50/50 sm:bg-transparent">
+          <button onClick={handleClose} className="p-2 text-secondary hover:text-primary transition-colors rounded-full hover:bg-element bg-element/50 sm:bg-transparent">
             <X className="w-5 h-5" />
           </button>
         </div>
@@ -461,7 +461,7 @@ export default function AddTransactionModal({
         <form onSubmit={handleSubmit} className="p-6 pt-2 sm:p-8 sm:pt-2 space-y-5 sm:space-y-6">
           
           {/* Side Switch - Full Width Colorful Toggle */}
-          <div className="bg-gray-100 p-1.5 rounded-2xl relative h-12">
+          <div className="bg-element-hover p-1.5 rounded-2xl relative h-12">
             <div className="absolute inset-0 p-1.5 flex transition-all duration-300 pointer-events-none">
               <div 
                 className={`h-full w-1/3 rounded-xl shadow-sm transition-all duration-300 ease-out
@@ -474,26 +474,26 @@ export default function AddTransactionModal({
               <button 
                 type="button" 
                 onClick={() => { setTransactionType('BUY'); if (transactionType === 'DIVIDEND') setPrice(''); }} 
-                className={`flex-1 text-[14px] font-bold transition-colors duration-200 ${transactionType === 'BUY' ? 'text-white' : 'text-gray-400 hover:text-gray-600'}`}
+                className={`flex-1 text-[14px] font-bold transition-colors duration-200 ${transactionType === 'BUY' ? 'text-on-primary' : 'text-secondary hover:text-secondary'}`}
               >BUY</button>
               <button 
                 type="button" 
                 onClick={() => { setTransactionType('SELL'); if (transactionType === 'DIVIDEND') setPrice(''); }} 
-                className={`flex-1 text-[14px] font-bold transition-colors duration-200 ${transactionType === 'SELL' ? 'text-white' : 'text-gray-400 hover:text-gray-600'}`}
+                className={`flex-1 text-[14px] font-bold transition-colors duration-200 ${transactionType === 'SELL' ? 'text-on-primary' : 'text-secondary hover:text-secondary'}`}
               >SELL</button>
               <button 
                 type="button" 
                 onClick={() => { setTransactionType('DIVIDEND'); setPrice(''); }} 
-                className={`flex-1 text-[14px] font-bold transition-colors duration-200 ${transactionType === 'DIVIDEND' ? 'text-white' : 'text-gray-400 hover:text-gray-600'}`}
+                className={`flex-1 text-[14px] font-bold transition-colors duration-200 ${transactionType === 'DIVIDEND' ? 'text-on-primary' : 'text-secondary hover:text-secondary'}`}
               >DIVIDEND</button>
             </div>
           </div>
 
           {/* Search Box */}
           <div className="relative group">
-            <label className="text-[11px] font-bold text-gray-400 uppercase tracking-widest mb-2 block px-1">Ticker / Symbol</label>
+            <label className="text-[11px] font-bold text-secondary uppercase tracking-widest mb-2 block px-1">Ticker / Symbol</label>
             <div className="relative">
-              <SearchIcon className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-300 group-focus-within:text-black transition-colors" />
+              <SearchIcon className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-secondary group-focus-within:text-primary transition-colors" />
               <input
                 type="text"
                 value={searchQuery}
@@ -501,32 +501,32 @@ export default function AddTransactionModal({
                 onBlur={() => setTimeout(() => setIsSearchFocused(false), 200)}
                 onChange={(e) => { setSearchQuery(e.target.value); if (selectedStock) setSelectedStock(null); }}
                 placeholder="Search symbol (e.g. AAPL)"
-                className="w-full pl-11 pr-10 py-3.5 bg-gray-50 border-none rounded-[18px] text-[15px] font-semibold focus:ring-2 focus:ring-black/5 focus:bg-white transition-all outline-none"
+                className="w-full pl-11 pr-10 py-3.5 bg-element border-none rounded-[18px] text-[15px] font-semibold focus:ring-2 focus:ring-black/5 focus:bg-card transition-all outline-none"
                 autoComplete="off"
               />
-              {isLoading && <Loader2 className="absolute right-4 top-1/2 -translate-y-1/2 w-4 h-4 animate-spin text-gray-300" />}
+              {isLoading && <Loader2 className="absolute right-4 top-1/2 -translate-y-1/2 w-4 h-4 animate-spin text-secondary" />}
             </div>
 
             {/* Suggestions & Quick Select */}
             {isSearchFocused && !selectedStock && (
-              <div className="absolute z-50 w-full mt-2 bg-white/95 backdrop-blur-xl border border-gray-100 rounded-2xl shadow-[0_10px_40px_-10px_rgba(0,0,0,0.1)] max-h-60 overflow-y-auto p-2">
+              <div className="absolute z-50 w-full mt-2 bg-card/95 backdrop-blur-xl border border-border rounded-2xl shadow-[0_10px_40px_-10px_rgba(0,0,0,0.1)] max-h-60 overflow-y-auto p-2">
                 
                 {searchQuery === '' && holdings.length > 0 && (
                   <div className="mb-1 px-1 pt-1 pb-1">
-                    <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-2 px-2">Current Holdings</p>
+                    <p className="text-[10px] font-bold text-secondary uppercase tracking-widest mb-2 px-2">Current Holdings</p>
                     {holdings.map((h) => (
                       <button 
                         key={h.ticker} 
                         type="button" 
                         onClick={() => handleSelectStock({ symbol: h.ticker, displaySymbol: h.ticker, description: h.name, type: 'Common Stock' })} 
-                        className="w-full p-2 text-left hover:bg-gray-50 rounded-xl flex items-center justify-between group transition-colors"
+                        className="w-full p-2 text-left hover:bg-element rounded-xl flex items-center justify-between group transition-colors"
                       >
                         <div className="flex-1 min-w-0 pr-3">
-                          <span className="font-bold text-black block truncate">{h.ticker}</span>
-                          <p className="text-[11px] text-gray-400 font-medium truncate mt-0.5">{h.name}</p>
+                          <span className="font-bold text-primary block truncate">{h.ticker}</span>
+                          <p className="text-[11px] text-secondary font-medium truncate mt-0.5">{h.name}</p>
                         </div>
                         <div className="shrink-0">
-                           <span className="inline-block text-[11px] font-bold text-gray-500 bg-gray-100/80 px-2 py-1 rounded-md whitespace-nowrap tabular-nums">
+                           <span className="inline-block text-[11px] font-bold text-secondary bg-element-hover/80 px-2 py-1 rounded-md whitespace-nowrap tabular-nums">
                              {h.quantity.toLocaleString(undefined, { maximumFractionDigits: 4 })}
                            </span>
                         </div>
@@ -536,17 +536,17 @@ export default function AddTransactionModal({
                 )}
 
                 {searchQuery !== '' && searchResults.length > 0 && searchResults.map((stock) => (
-                  <button key={stock.symbol} type="button" onClick={() => handleSelectStock(stock)} className="w-full p-3 text-left hover:bg-gray-50 rounded-xl flex items-center justify-between group transition-colors">
+                  <button key={stock.symbol} type="button" onClick={() => handleSelectStock(stock)} className="w-full p-3 text-left hover:bg-element rounded-xl flex items-center justify-between group transition-colors">
                     <div>
-                      <span className="font-bold text-black">{stock.symbol}</span>
-                      <p className="text-[11px] text-gray-400 font-medium truncate max-w-[200px] mt-0.5">{stock.description}</p>
+                      <span className="font-bold text-primary">{stock.symbol}</span>
+                      <p className="text-[11px] text-secondary font-medium truncate max-w-[200px] mt-0.5">{stock.description}</p>
                     </div>
                     <ChevronRight className="w-4 h-4 text-gray-200 opacity-0 group-hover:opacity-100 transition-all -translate-x-2 group-hover:translate-x-0" />
                   </button>
                 ))}
 
                 {searchQuery !== '' && searchResults.length === 0 && !isLoading && (
-                  <div className="p-4 text-center text-gray-400 text-[13px] font-medium">No results found for &quot;{searchQuery}&quot;</div>
+                  <div className="p-4 text-center text-secondary text-[13px] font-medium">No results found for &quot;{searchQuery}&quot;</div>
                 )}
               </div>
             )}
@@ -561,7 +561,7 @@ export default function AddTransactionModal({
               'bg-indigo-50/30 border-indigo-100/50'
             }`}>
               <div className="flex items-center gap-3">
-                <div className="w-10 h-10 rounded-xl bg-white shadow-sm flex items-center justify-center font-bold text-gray-800 border border-gray-100 overflow-hidden">
+                <div className="w-10 h-10 rounded-xl bg-card shadow-sm flex items-center justify-center font-bold text-gray-800 border border-border overflow-hidden">
                   {txLogo ? (
                     <img src={txLogo} alt={selectedStock.symbol} className="w-full h-full object-cover" />
                   ) : (
@@ -569,14 +569,14 @@ export default function AddTransactionModal({
                   )}
                 </div>
                 <div>
-                  <p className="font-bold text-black leading-tight">{selectedStock.symbol}</p>
-                  <p className="text-[11px] text-gray-400 font-medium">{selectedStock.description}</p>
+                  <p className="font-bold text-primary leading-tight">{selectedStock.symbol}</p>
+                  <p className="text-[11px] text-secondary font-medium">{selectedStock.description}</p>
                 </div>
               </div>
               {transactionType === 'SELL' && (
                 <div className="text-right">
-                  <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">Available</p>
-                  <p className="font-bold text-black tabular-nums">{getAvailableShares(selectedStock.symbol).toLocaleString()}</p>
+                  <p className="text-[10px] font-bold text-secondary uppercase tracking-widest">Available</p>
+                  <p className="font-bold text-primary tabular-nums">{getAvailableShares(selectedStock.symbol).toLocaleString()}</p>
                 </div>
               )}
               </div>
@@ -596,16 +596,16 @@ export default function AddTransactionModal({
           {/* Currency Selector */}
           {selectedStock && (
             <div className="space-y-2">
-              <label className="text-[11px] font-bold text-gray-400 uppercase tracking-widest px-1">Currency</label>
+              <label className="text-[11px] font-bold text-secondary uppercase tracking-widest px-1">Currency</label>
               <button
                 type="button"
                 onClick={() => setShowCurrencyPicker(v => !v)}
-                className="w-full px-4 py-3 bg-gray-50 rounded-[18px] flex items-center justify-between hover:bg-gray-100 transition-colors active:scale-[0.99]"
+                className="w-full px-4 py-3 bg-element rounded-[18px] flex items-center justify-between hover:bg-element-hover transition-colors active:scale-[0.99]"
               >
-                <span className="text-[14px] font-bold text-black">
+                <span className="text-[14px] font-bold text-primary">
                   {getCurrencySymbol(txCurrency)}&nbsp;&nbsp;{txCurrency}
                 </span>
-                <ChevronDown className={`w-4 h-4 text-gray-400 transition-transform duration-200 ${showCurrencyPicker ? 'rotate-180' : ''}`} />
+                <ChevronDown className={`w-4 h-4 text-secondary transition-transform duration-200 ${showCurrencyPicker ? 'rotate-180' : ''}`} />
               </button>
               <div className={`grid transition-all duration-200 ease-in-out ${showCurrencyPicker ? 'grid-rows-[1fr] opacity-100' : 'grid-rows-[0fr] opacity-0'}`}>
                 <div className="overflow-hidden">
@@ -617,8 +617,8 @@ export default function AddTransactionModal({
                         onClick={() => { setTxCurrency(c.code); setShowCurrencyPicker(false); }}
                         className={`py-2.5 rounded-xl text-[12px] font-bold transition-all active:scale-95 flex flex-col items-center gap-0.5 ${
                           txCurrency === c.code
-                            ? 'bg-black text-white'
-                            : 'bg-gray-50 text-gray-700 hover:bg-gray-100'
+                            ? 'bg-primary text-on-primary'
+                            : 'bg-element text-gray-700 hover:bg-element-hover'
                         }`}
                       >
                         <span>{getCurrencySymbol(c.code)}</span>
@@ -633,22 +633,22 @@ export default function AddTransactionModal({
 
           {/* Custom Calendar Trigger */}
           <div className="space-y-2 relative" ref={calendarRef}>
-            <label className="text-[11px] font-bold text-gray-400 uppercase tracking-widest px-1 flex justify-between">
+            <label className="text-[11px] font-bold text-secondary uppercase tracking-widest px-1 flex justify-between">
               <span>Trade Date</span>
-              {isFetchingPrice && <span className="text-gray-400 flex items-center gap-1 normal-case tracking-normal font-medium"><Loader2 className="w-3 h-3 animate-spin" /> Fetching historical price...</span>}
+              {isFetchingPrice && <span className="text-secondary flex items-center gap-1 normal-case tracking-normal font-medium"><Loader2 className="w-3 h-3 animate-spin" /> Fetching historical price...</span>}
             </label>
             <button 
               type="button" 
               onClick={() => setShowCalendar(!showCalendar)}
-              className="w-full pl-11 pr-4 py-3.5 bg-gray-50 border-none rounded-[18px] text-[14px] font-bold flex items-center justify-start relative hover:bg-gray-100 transition-colors"
+              className="w-full pl-11 pr-4 py-3.5 bg-element border-none rounded-[18px] text-[14px] font-bold flex items-center justify-start relative hover:bg-element-hover transition-colors"
             >
-              <CalendarIcon className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-300" />
+              <CalendarIcon className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-secondary" />
               {format(new Date(purchaseDate), 'MMMM d, yyyy')}
             </button>
 
             {/* Floating Apple Calendar */}
             {showCalendar && (
-              <div className="absolute z-[60] left-0 top-[100%] mt-2 bg-white/95 backdrop-blur-xl border border-gray-100 rounded-[24px] shadow-[0_15px_50px_-10px_rgba(0,0,0,0.15)] animate-in fade-in slide-in-from-top-2 duration-200">
+              <div className="absolute z-[60] left-0 top-[100%] mt-2 bg-card/95 backdrop-blur-xl border border-border rounded-[24px] shadow-[0_15px_50px_-10px_rgba(0,0,0,0.15)] animate-in fade-in slide-in-from-top-2 duration-200">
                 {renderCalendar()}
               </div>
             )}
@@ -658,9 +658,9 @@ export default function AddTransactionModal({
           {transactionType !== 'DIVIDEND' ? (
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-5 sm:gap-6">
               <div className="space-y-2">
-                <label className="text-[11px] font-bold text-gray-400 uppercase tracking-widest px-1">Shares</label>
+                <label className="text-[11px] font-bold text-secondary uppercase tracking-widest px-1">Shares</label>
                 <div className="relative">
-                  <Hash className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-300" />
+                  <Hash className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-secondary" />
                   <input 
                     type="number" 
                     step="0.0001" 
@@ -668,18 +668,18 @@ export default function AddTransactionModal({
                     onChange={(e) => setShares(e.target.value)} 
                     onWheel={(e) => (e.target as HTMLInputElement).blur()}
                     placeholder="0.00" 
-                    className="w-full pl-11 pr-4 py-3.5 bg-gray-50 border-none rounded-[18px] text-[15px] font-bold tabular-nums outline-none focus:ring-2 focus:ring-black/5 [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none" 
+                    className="w-full pl-11 pr-4 py-3.5 bg-element border-none rounded-[18px] text-[15px] font-bold tabular-nums outline-none focus:ring-2 focus:ring-black/5 [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none" 
                   />
                 </div>
               </div>
               <div className="space-y-2">
-                <label className="text-[11px] font-bold text-gray-400 uppercase tracking-widest px-1 flex items-center gap-1.5">
+                <label className="text-[11px] font-bold text-secondary uppercase tracking-widest px-1 flex items-center gap-1.5">
                   Unit Price
-                  <span className="text-gray-300">·</span>
+                  <span className="text-secondary">·</span>
                   <span>{getCurrencySymbol(txCurrency)}</span>
                 </label>
                 <div className="relative">
-                  <DollarSign className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-300" />
+                  <DollarSign className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-secondary" />
                   <input 
                     type="number" 
                     step="0.01" 
@@ -687,7 +687,7 @@ export default function AddTransactionModal({
                     onChange={(e) => { setPrice(e.target.value); setPriceSource('manual'); }} 
                     onWheel={(e) => (e.target as HTMLInputElement).blur()}
                     placeholder="0.00" 
-                    className={`w-full pl-11 pr-4 py-3.5 border-none rounded-[18px] text-[15px] font-bold tabular-nums outline-none focus:ring-2 focus:ring-black/5 transition-colors [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none ${priceSource === 'api' ? 'bg-blue-50/50 text-blue-900 ring-1 ring-blue-100' : 'bg-gray-50 text-black'}`} 
+                    className={`w-full pl-11 pr-4 py-3.5 border-none rounded-[18px] text-[15px] font-bold tabular-nums outline-none focus:ring-2 focus:ring-black/5 transition-colors [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none ${priceSource === 'api' ? 'bg-blue-50/50 text-blue-900 ring-1 ring-blue-100' : 'bg-element text-primary'}`} 
                   />
                 </div>
               </div>
@@ -695,13 +695,13 @@ export default function AddTransactionModal({
           ) : (
             <div className="grid grid-cols-1 gap-5">
               <div className="space-y-2">
-                <label className="text-[11px] font-bold text-gray-400 uppercase tracking-widest px-1 flex items-center gap-1.5">
+                <label className="text-[11px] font-bold text-secondary uppercase tracking-widest px-1 flex items-center gap-1.5">
                   Total Payout Amount
-                  <span className="text-gray-300">·</span>
+                  <span className="text-secondary">·</span>
                   <span>{getCurrencySymbol(txCurrency)}</span>
                 </label>
                 <div className="relative">
-                  <DollarSign className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-300" />
+                  <DollarSign className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-secondary" />
                   <input 
                     type="number" 
                     step="0.01" 
@@ -709,7 +709,7 @@ export default function AddTransactionModal({
                     onChange={(e) => { setPrice(e.target.value); setPriceSource('manual'); }} 
                     onWheel={(e) => (e.target as HTMLInputElement).blur()}
                     placeholder="0.00" 
-                    className="w-full pl-11 pr-4 py-3.5 bg-gray-50 border-none rounded-[18px] text-[15px] font-bold tabular-nums outline-none focus:ring-2 focus:ring-black/5 transition-colors [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none text-black" 
+                    className="w-full pl-11 pr-4 py-3.5 bg-element border-none rounded-[18px] text-[15px] font-bold tabular-nums outline-none focus:ring-2 focus:ring-black/5 transition-colors [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none text-primary" 
                   />
                 </div>
               </div>
@@ -720,27 +720,27 @@ export default function AddTransactionModal({
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-5 sm:gap-6">
             {transactionType !== 'DIVIDEND' ? (
               <div className="space-y-2">
-                <label className="text-[11px] font-bold text-gray-400 uppercase tracking-widest px-1 flex items-center gap-1.5">
+                <label className="text-[11px] font-bold text-secondary uppercase tracking-widest px-1 flex items-center gap-1.5">
                   Fee (Optional)
-                  <span className="text-gray-300">·</span>
+                  <span className="text-secondary">·</span>
                   <span>{getCurrencySymbol(txCurrency)}</span>
                 </label>
                 <div className="relative">
-                  <DollarSign className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-300" />
+                  <DollarSign className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-secondary" />
                   <input 
                     type="number" 
                     step="0.01" 
                     value={fees} 
                     onChange={(e) => setFees(e.target.value)} 
                     onWheel={(e) => (e.target as HTMLInputElement).blur()}
-                    className="w-full pl-11 pr-4 py-3.5 bg-gray-50 border-none rounded-[18px] text-[15px] font-bold outline-none focus:ring-2 focus:ring-black/5 [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none" 
+                    className="w-full pl-11 pr-4 py-3.5 bg-element border-none rounded-[18px] text-[15px] font-bold outline-none focus:ring-2 focus:ring-black/5 [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none" 
                   />
                 </div>
               </div>
             ) : <div className="hidden sm:block"></div>}
             <div className="space-y-2">
-              <label className="text-[11px] font-bold text-gray-400 uppercase tracking-widest px-1">Notes</label>
-              <input type="text" value={notes} onChange={(e) => setNotes(e.target.value)} placeholder="Optional" className="w-full px-4 py-3.5 bg-gray-50 border-none rounded-[18px] text-[13px] font-medium outline-none focus:ring-2 focus:ring-black/5" />
+              <label className="text-[11px] font-bold text-secondary uppercase tracking-widest px-1">Notes</label>
+              <input type="text" value={notes} onChange={(e) => setNotes(e.target.value)} placeholder="Optional" className="w-full px-4 py-3.5 bg-element border-none rounded-[18px] text-[13px] font-medium outline-none focus:ring-2 focus:ring-black/5" />
             </div>
           </div>
 
@@ -763,7 +763,7 @@ export default function AddTransactionModal({
             <button
               type="submit"
               disabled={!selectedStock || !price || (transactionType !== 'DIVIDEND' && !shares) || submitStatus !== 'idle'}
-              className="w-full py-4 bg-black text-white text-[16px] font-bold rounded-[20px] shadow-lg shadow-black/10 hover:bg-gray-800 active:scale-[0.98] disabled:bg-gray-200 disabled:shadow-none transition-all flex items-center justify-center gap-2"
+              className="w-full py-4 bg-primary text-on-primary text-[16px] font-bold rounded-[20px] shadow-lg shadow-black/10 hover:bg-primary-hover active:scale-[0.98] disabled:bg-gray-200 disabled:shadow-none transition-all flex items-center justify-center gap-2"
             >
               {submitStatus === 'loading' ? <Loader2 className="w-5 h-5 animate-spin" /> : <span>Confirm Transaction</span>}
             </button>

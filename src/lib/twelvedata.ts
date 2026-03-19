@@ -73,6 +73,17 @@ async function fetchTwelveData(endpoint: string, params: Record<string, string> 
 }
 
 /**
+ * 获取公司 Logo URL
+ * @param symbol 股票代码
+ */
+export async function getLogo(symbol: string): Promise<string | null> {
+  const data = await fetchTwelveData('/logo', {
+    symbol: symbol.toUpperCase(),
+  });
+  return data?.url || null;
+}
+
+/**
  * 获取 K 线数据，返回与 Finnhub HistoricalCandle 兼容的格式
  * @param symbol 股票代码
  * @param from 开始时间戳（Unix 秒）

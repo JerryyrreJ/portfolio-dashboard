@@ -3,7 +3,7 @@ import StockDetailClient from './StockDetailClient'
 import { getUser } from '@/lib/supabase-server'
 import prisma, { withRetry } from '@/lib/prisma'
 import { getQuote, getCompanyProfile } from '@/lib/finnhub'
-import { get12MonthHistory } from '@/lib/twelvedata'
+import { get12MonthHistory, getLogo as getTwelveDataLogo } from '@/lib/twelvedata'
 
 interface PageProps {
   params: Promise<{ ticker: string }>
@@ -102,7 +102,7 @@ if (user) {
         name: companyProfile?.name || decodedTicker,
         ticker: decodedTicker,
         exchange: companyProfile?.exchange || '',
-        logo: companyProfile?.logo || '',
+        logo: companyProfile?.logo || (await getTwelveDataLogo(decodedTicker)) || '',
         finnhubIndustry: companyProfile?.finnhubIndustry || '',
         country: companyProfile?.country || '',
         currency: companyProfile?.currency || 'USD',
@@ -167,7 +167,7 @@ if (user) {
     name: asset.name,
     ticker: decodedTicker,
     exchange: asset.market,
-    logo: asset.logo || '', 
+    logo: asset.logo || (await getTwelveDataLogo(decodedTicker)) || '',
     finnhubIndustry: 'Technology',
     country: 'US',
     currency: 'USD',
