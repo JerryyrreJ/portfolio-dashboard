@@ -39,6 +39,7 @@ import Notification from '@/app/components/Notification';
 
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
+import { getCurrencySymbol } from '@/lib/currency';
 
 export default function SettingsPage() {
   const [activeSection, setActiveSection] = useState('portfolio');
@@ -97,60 +98,148 @@ export default function SettingsPage() {
         const data = await response.json();
 
         const doc = new jsPDF();
-        
-        // Header
-        doc.setFontSize(20);
+        const pageWidth = doc.internal.pageSize.getWidth();
+
+        // Dark header bar
+        doc.setFillColor(30, 30, 30);
+        doc.rect(0, 0, pageWidth, 18, 'F');
+
+        doc.setFontSize(13);
         doc.setFont('helvetica', 'bold');
-        doc.text('Folio Investment Report', 14, 22);
-        
-        doc.setFontSize(10);
+        doc.setTextColor(255, 255, 255);
+        doc.text('Folio', 14, 12);
+
+        const rangeLabel = exportRange === 'ytd' ? `YTD ${new Date().getFullYear()}`
+          : exportRange === '12m' ? 'Last 12 Months' : 'All Time';
+        doc.setFontSize(9);
         doc.setFont('helvetica', 'normal');
-        doc.setTextColor(100);
-        doc.text(`Portfolio: ${data.portfolio.name} (${data.portfolio.currency})`, 14, 30);
-        doc.text(`Generated: ${new Date().toLocaleDateString()}`, 14, 35);
-        doc.text(`Range: ${exportRange.toUpperCase()}`, 14, 40);
+        doc.text(rangeLabel, pageWidth - 14, 12, { align: 'right' });
 
-        // Transactions Table
-        const tableColumn = ['Date', 'Asset', 'Type', 'Qty', 'Price', 'Fee', 'Total'];
-        const tableRows = data.transactions.map((t: any) => [
-          t.date,
-          `${t.ticker}`,
-          t.type,
-          t.quantity,
-          `$${t.price}`,
-          `$${t.fee}`,
-          `$${t.totalValue}`
-        ]);
+        // Sub-header
+        doc.setFontSize(9);
+        doc.setTextColor(80, 80, 80);
+        doc.text(`${data.portfolio.name}  ·  ${data.portfolio.currency}`, 14, 26);
+        doc.text(new Date().toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' }), pageWidth - 14, 26, { align: 'right' });
 
-        autoTable(doc, {
-          startY: 50,
-          head: [tableColumn],
-          body: tableRows,
-          theme: 'plain',
-          headStyles: { 
-            fillColor: [250, 250, 250], 
-            textColor: 100, 
-            fontStyle: 'bold',
-            fontSize: 9,
-            cellPadding: 6
-          },
-          bodyStyles: {
-            fontSize: 9,
-            cellPadding: 6,
-            textColor: 40
-          },
-          alternateRowStyles: {
-            fillColor: [252, 252, 252]
-          },
-          styles: {
-            font: 'helvetica',
-            lineColor: [240, 240, 240],
-            lineWidth: 0.1
-          },
-          margin: { top: 50 },
+        // Separator
+        doc.setDrawColor(220, 220, 220);
+        doc.setLineWidth(0.3);
+        doc.line(14, 29, pageWidth - 14, 29);
+
+        let currentY = 36;
+
+        // Summary stat boxes
+        const totalCount = data.transactions.length;
+        const totalBuy = data.transactions.filter((t: any) => t.type === 'BUY').reduce((s: number, t: any) => s + parseFloat(t.totalValue), 0);
+        const totalSell = data.transactions.filter((t: any) => t.type === 'SELL').reduce((s: number, t: any) => s + parseFloat(t.totalValue), 0);
+        const portfolioSym = getCurrencySymbol(data.portfolio.currency);
+
+        const statBoxes = [
+          { label: 'Transactions', value: String(totalCount) },
+          { label: 'Total Bought', value: `${portfolioSym}${totalBuy.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}` },
+          { label: 'Total Sold',   value: `${portfolioSym}${totalSell.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}` },
+        ];
+        const boxWidth = (pageWidth - 28) / 3;
+
+        statBoxes.forEach((box, i) => {
+          const x = 14 + i * boxWidth;
+          doc.setFillColor(248, 248, 248);
+          doc.roundedRect(x, currentY, boxWidth - 3, 16, 1, 1, 'F');
+          doc.setFontSize(7); doc.setFont('helvetica', 'normal'); doc.setTextColor(120, 120, 120);
+          doc.text(box.label.toUpperCase(), x + 4, currentY + 5.5);
+          doc.setFontSize(11); doc.setFont('helvetica', 'bold'); doc.setTextColor(30, 30, 30);
+          doc.text(box.value, x + 4, currentY + 13);
         });
 
-        doc.save(`portfolio_report_${exportRange}.pdf`);
+        currentY += 22;
+
+        // Group transactions by market
+        const grouped = data.transactions.reduce((acc: Record<string, any[]>, t: any) => {
+          const key = t.market || 'OTHER';
+          if (!acc[key]) acc[key] = [];
+          acc[key].push(t);
+          return acc;
+        }, {});
+        const marketOrder = Object.keys(grouped).sort();
+
+        // Build table columns and body rows
+        const columns = [
+          { header: 'Date',     dataKey: 'date'     },
+          { header: 'Asset',    dataKey: 'asset'    },
+          { header: 'Type',     dataKey: 'type'     },
+          { header: 'Qty',      dataKey: 'quantity' },
+          { header: 'Price',    dataKey: 'price'    },
+          { header: 'Fee',      dataKey: 'fee'      },
+          { header: 'Total',    dataKey: 'total'    },
+          { header: 'Ccy',      dataKey: 'currency' },
+        ];
+
+        const bodyRows: any[] = [];
+        for (const market of marketOrder) {
+          bodyRows.push({ date: market, asset: '', type: '', quantity: '', price: '', fee: '', total: '', currency: '', _isGroupHeader: true });
+          for (const t of grouped[market]) {
+            const tsym = getCurrencySymbol(t.currency || 'USD');
+            bodyRows.push({
+              date:     t.date,
+              asset:    `${t.ticker}\n${t.name}`,
+              type:     t.type,
+              quantity: t.quantity,
+              price:    `${tsym}${parseFloat(t.price).toFixed(2)}`,
+              fee:      `${tsym}${parseFloat(t.fee).toFixed(2)}`,
+              total:    `${tsym}${parseFloat(t.totalValue).toFixed(2)}`,
+              currency: t.currency || 'USD',
+            });
+          }
+        }
+
+        autoTable(doc, {
+          startY: currentY,
+          columns,
+          body: bodyRows,
+          theme: 'plain',
+          headStyles: { fillColor: [240, 240, 240], textColor: 60, fontStyle: 'bold', fontSize: 8, cellPadding: 4 },
+          bodyStyles: { fontSize: 8, cellPadding: 4, textColor: 40 },
+          alternateRowStyles: { fillColor: [252, 252, 252] },
+          styles: { font: 'helvetica', lineColor: [235, 235, 235], lineWidth: 0.1, overflow: 'linebreak' },
+          columnStyles: {
+            date:     { cellWidth: 22 },
+            asset:    { cellWidth: 42 },
+            type:     { cellWidth: 16 },
+            quantity: { cellWidth: 18, halign: 'right' },
+            price:    { cellWidth: 24, halign: 'right' },
+            fee:      { cellWidth: 20, halign: 'right' },
+            total:    { cellWidth: 28, halign: 'right' },
+            currency: { cellWidth: 18, halign: 'center' },
+          },
+          margin: { top: 20, bottom: 16 },
+          didParseCell(data) {
+            if (data.row.raw && (data.row.raw as any)._isGroupHeader) {
+              data.cell.styles.fillColor = [235, 240, 248];
+              data.cell.styles.textColor = [40, 80, 140] as any;
+              data.cell.styles.fontStyle = 'bold';
+              data.cell.styles.fontSize = 8;
+              if (data.column.dataKey !== 'date') data.cell.text = [''];
+            }
+          },
+        });
+
+        // Post-pass footer with correct "Page X of Y"
+        const totalPages = (doc as any).internal.getNumberOfPages();
+        const genTime = new Date().toLocaleString();
+        for (let i = 1; i <= totalPages; i++) {
+          doc.setPage(i);
+          const footerY = doc.internal.pageSize.getHeight() - 8;
+          doc.setFillColor(255, 255, 255);
+          doc.rect(0, footerY - 5, pageWidth, 12, 'F');
+          doc.setFontSize(7.5); doc.setFont('helvetica', 'normal'); doc.setTextColor(150, 150, 150);
+          doc.text(genTime, 14, footerY);
+          doc.text(`Page ${i} of ${totalPages}`, pageWidth - 14, footerY, { align: 'right' });
+          doc.setDrawColor(220, 220, 220); doc.setLineWidth(0.2);
+          doc.line(14, footerY - 3, pageWidth - 14, footerY - 3);
+        }
+
+        const dateStr = new Date().toISOString().slice(0, 10);
+        doc.save(`folio_report_${data.portfolio.name.replace(/\s+/g, '_')}_${exportRange}_${dateStr}.pdf`);
         showNotification('success', 'PDF Downloaded', 'Your investment report is ready.');
         setIsExporting(false);
       } else {

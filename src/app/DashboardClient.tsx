@@ -93,6 +93,29 @@ interface DashboardClientProps {
 }
 
 
+
+// 根据数据 min/max 算出整齐的刻度值（如 0, 200, 400, 600）
+function calcYTicks(data: any[], key: string, tickCount = 5): number[] {
+  const values = data.map(d => d[key]).filter(v => typeof v === 'number' && isFinite(v));
+  if (values.length === 0) return [];
+  const min = Math.min(...values);
+  const max = Math.max(...values);
+  if (min === max) return [min];
+  const range = max - min;
+  const rawStep = range / (tickCount - 1);
+  // 取整到好看的步长
+  const magnitude = Math.pow(10, Math.floor(Math.log10(rawStep)));
+  const step = Math.ceil(rawStep / magnitude) * magnitude;
+  const start = Math.floor(min / step) * step;
+  const ticks: number[] = [];
+  for (let i = 0; ticks.length < tickCount + 1; i++) {
+    const v = start + i * step;
+    ticks.push(v);
+    if (v >= max) break;
+  }
+  return ticks;
+}
+
 const CustomXAxisTick = (props: any) => {
   const { x, y, payload, visibleTicksCount, index } = props;
   
@@ -143,6 +166,18 @@ export default function DashboardClient({ portfolioId, portfolioName, holdingsDa
   const [localChartData, setLocalChartData] = useState<any[]>(chartData);
   
   const [filteredChartData, setFilteredChartData] = useState(chartData);
+
+  const yTicks = useMemo(() => {
+    const key = chartMode === 'return' ? 'Return' : portfolioId === 'local-portfolio' ? 'Local' : 'Total';
+    return calcYTicks(filteredChartData, key);
+  }, [filteredChartData, chartMode, portfolioId]);
+
+  const formatYTick = (value: number) => {
+    if (chartMode === 'return') return `${value > 0 ? '+' : ''}${value.toFixed(1)}%`;
+    return value >= 1000000 ? `${(value / 1000000).toFixed(1)}M`
+         : value >= 1000 ? `${(value / 1000).toFixed(0)}k`
+         : String(value);
+  };
 
   // --- 客户端异步获取实时价格 ---
   useEffect(() => {
@@ -576,67 +611,87 @@ export default function DashboardClient({ portfolioId, portfolioName, holdingsDa
           {/* 右侧：图表占据大块空间 */}
           <div className="col-span-12 lg:col-span-9">
             <div className="bg-card rounded-2xl p-6 border border-border shadow-sm h-full flex flex-col">
-              <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 sm:gap-0 mb-6">
-                <div>
-                  <h2 className="text-[15px] font-bold text-primary tracking-tight leading-none">Performance History</h2>
-                  {(() => {
-                    if (chartMode === 'return') return <p className="text-[12px] text-secondary font-medium mt-1">Time-weighted return (price movements only)</p>;
-                    const first = filteredChartData.find(d => d.date !== 'Today');
-                    if (!first || chartTimeRange === 'All') return <p className="text-[12px] text-secondary font-medium mt-1">Total portfolio value</p>;
-                    const now = new Date();
-                    const cutoff = new Date();
-                    switch (chartTimeRange) {
-                      case '1M': cutoff.setMonth(now.getMonth() - 1); break;
-                      case '3M': cutoff.setMonth(now.getMonth() - 3); break;
-                      case '6M': cutoff.setMonth(now.getMonth() - 6); break;
-                      case '1Y': cutoff.setFullYear(now.getFullYear() - 1); break;
-                    }
-                    const firstDate = new Date(first.date);
-                    const isConstrained = firstDate > cutoff;
-                    return isConstrained
-                      ? <p className="text-[12px] text-secondary font-medium mt-1">
-                          Showing data since {firstDate.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
-                        </p>
-                      : <p className="text-[12px] text-secondary font-medium mt-1">Total portfolio value</p>;
-                  })()}
-                </div>
-                <div className="flex items-center gap-2 w-full sm:w-auto">
-                  {portfolioId !== 'local-portfolio' && (
-                    <div className="flex bg-element rounded-lg p-0.5 border border-border">
-                      {(['value', 'return'] as const).map((mode) => (
+              <div className="flex flex-col gap-3 mb-6">
+                {/* 桌面端：一行；手机端：两行 */}
+                <div className="flex flex-col sm:flex-row sm:justify-between sm:items-start gap-3 sm:gap-0">
+                  <div>
+                    <h2 className="text-[15px] font-bold text-primary tracking-tight leading-none">Performance History</h2>
+                    {(() => {
+                      if (chartMode === 'return') {
+                        const todayPoint = filteredChartData[filteredChartData.length - 1];
+                        const returnVal = todayPoint?.Return ?? 0;
+                        const isPos = returnVal >= 0;
+                        return (
+                          <p className={`text-[12px] font-medium mt-1 ${isPos ? 'text-emerald-600' : 'text-rose-500'}`}>
+                            {isPos ? '+' : ''}{returnVal.toFixed(2)}% total return
+                          </p>
+                        );
+                      }
+                      const first = filteredChartData.find(d => d.date !== 'Today');
+                      if (!first || chartTimeRange === 'All') return <p className="text-[12px] text-secondary font-medium mt-1">Total portfolio value</p>;
+                      const now = new Date();
+                      const cutoff = new Date();
+                      switch (chartTimeRange) {
+                        case '1M': cutoff.setMonth(now.getMonth() - 1); break;
+                        case '3M': cutoff.setMonth(now.getMonth() - 3); break;
+                        case '6M': cutoff.setMonth(now.getMonth() - 6); break;
+                        case '1Y': cutoff.setFullYear(now.getFullYear() - 1); break;
+                      }
+                      const firstDate = new Date(first.date);
+                      const isConstrained = firstDate > cutoff;
+                      return isConstrained
+                        ? <p className="text-[12px] text-secondary font-medium mt-1">
+                            Showing data since {firstDate.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
+                          </p>
+                        : <p className="text-[12px] text-secondary font-medium mt-1">Total portfolio value</p>;
+                    })()}
+                  </div>
+                  <div className="flex items-center gap-2 sm:shrink-0">
+                    {portfolioId !== 'local-portfolio' && (
+                      <div className="flex bg-element rounded-lg p-0.5 border border-border">
+                        {(['value', 'return'] as const).map((mode) => (
+                          <button
+                            key={mode}
+                            onClick={() => setChartMode(mode)}
+                            className={`px-3 py-1.5 text-[11px] font-bold rounded-md transition-all whitespace-nowrap ${
+                              chartMode === mode ? 'bg-card text-primary shadow-sm' : 'text-secondary hover:text-primary'
+                            }`}
+                          >
+                            {mode === 'value' ? 'Value' : 'Return %'}
+                          </button>
+                        ))}
+                      </div>
+                    )}
+                    <div className="flex bg-element rounded-lg p-0.5 border border-border overflow-x-auto no-scrollbar">
+                      {(['1M', '3M', '6M', '1Y', 'All'] as const).map((range) => (
                         <button
-                          key={mode}
-                          onClick={() => setChartMode(mode)}
-                          className={`px-3 py-1.5 text-[11px] font-bold rounded-md transition-all whitespace-nowrap capitalize ${
-                            chartMode === mode ? 'bg-card text-primary shadow-sm' : 'text-secondary hover:text-primary'
+                          key={range}
+                          onClick={() => setChartTimeRange(range)}
+                          className={`px-3 py-1.5 sm:py-1 text-[11px] font-bold rounded-md transition-all whitespace-nowrap text-center ${
+                            chartTimeRange === range
+                              ? 'bg-card text-primary shadow-sm'
+                              : 'text-secondary hover:text-primary'
                           }`}
                         >
-                          {mode === 'value' ? 'Value' : 'Return %'}
+                          {range}
                         </button>
                       ))}
                     </div>
-                  )}
-                  <div className="flex bg-element rounded-lg p-0.5 border border-border w-full sm:w-auto overflow-x-auto no-scrollbar justify-between sm:justify-start">
-                    {(['1M', '3M', '6M', '1Y', 'All'] as const).map((range) => (
-                      <button
-                        key={range}
-                        onClick={() => setChartTimeRange(range)}
-                        className={`flex-1 sm:flex-none px-3 py-1.5 sm:py-1 text-[11px] font-bold rounded-md transition-all whitespace-nowrap text-center ${
-                          chartTimeRange === range
-                            ? 'bg-card text-primary shadow-sm'
-                            : 'text-secondary hover:text-primary'
-                        }`}
-                      >
-                        {range}
-                      </button>
-                    ))}
                   </div>
                 </div>
               </div>
 
-              <div className="flex-1 min-h-[300px] w-full -ml-3 sm:ml-0">
+              <div className="flex-1 min-h-[300px] w-full relative">
+                {/* 自定义 Y 轴数字，绝对定位贴右边框 */}
+                <div className="absolute right-0 top-[10px] bottom-[20px] flex flex-col-reverse justify-between items-end pointer-events-none z-10">
+                  {yTicks.map((v, i) => (
+                    <span key={i} className="text-[10px] font-medium text-secondary leading-none">
+                      {formatYTick(v)}
+                    </span>
+                  ))}
+                </div>
                 <ResponsiveContainer width="100%" height="100%">
-                  <AreaChart data={filteredChartData} margin={{ top: 10, right: 0, left: -25, bottom: 0 }}>
+                  <AreaChart data={filteredChartData} margin={{ top: 10, right: 52, left: 0, bottom: 0 }}>
                     <defs>
                       <linearGradient id="colorTotal" x1="0" y1="0" x2="0" y2="1">
                         <stop offset="5%" stopColor="var(--text-primary)" stopOpacity={0.08}/>
@@ -652,17 +707,7 @@ export default function DashboardClient({ portfolioId, portfolioName, holdingsDa
                       interval="equidistantPreserveStart"
                       minTickGap={20}
                     />
-                    <YAxis
-                      axisLine={false}
-                      tickLine={false}
-                      tick={{ fontSize: 10, fill: 'var(--text-secondary)', fontWeight: 500 }}
-                      width={50}
-                      tickFormatter={(value) =>
-                        chartMode === 'return'
-                          ? `${value >= 0 ? '+' : ''}${Number(value).toFixed(1)}%`
-                          : value >= 1000 ? `${(value / 1000).toFixed(1)}k` : value
-                      }
-                    />
+                    <YAxis hide domain={[yTicks[0] ?? 'auto', yTicks[yTicks.length - 1] ?? 'auto']} ticks={yTicks} />
                     <Tooltip
                       contentStyle={{ borderRadius: '12px', border: '1px solid var(--border-subtle)', boxShadow: '0 8px 20px -5px rgb(0 0 0 / 0.2)', backgroundColor: 'var(--bg-card)', backdropFilter: 'blur(8px)', padding: '10px' }}
                       itemStyle={{ fontSize: '11px', fontWeight: 'bold', padding: '2px 0', color: 'var(--text-primary)' }}
