@@ -44,6 +44,7 @@ interface TransactionsClientProps {
   totalPages: number;
   currentPage: number;
   limit: number;
+  portfolioId: string;
   portfolioName: string;
   logoMap: Record<string, string | null>;
   searchTicker?: string;
@@ -74,12 +75,13 @@ function formatNumber(num: number, decimals: number = 4): string {
 
 export default function TransactionsClient({
   transactions: initialTransactions, total, totalPages, currentPage, limit,
-  portfolioName, logoMap, searchTicker, searchType,
+  portfolioId, portfolioName, logoMap, searchTicker, searchType,
   buyCount, sellCount, totalVolume, userDisplayName = '',
 }: TransactionsClientProps) {
   const { fmt, symbol } = useCurrency();
   const { colors } = usePreferences();
   const [transactions, setTransactions] = useState(initialTransactions);
+  const pidParam = portfolioId ? `&pid=${portfolioId}` : '';
   const [confirmingId, setConfirmingId] = useState<string | null>(null);
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const [editingId, setEditingId] = useState<string | null>(null);
@@ -157,7 +159,7 @@ export default function TransactionsClient({
       <header className="bg-card/70 backdrop-blur-xl border-b border-border px-6 h-[56px] flex items-center justify-between sticky top-0 z-50">
         <div className="flex items-center space-x-8">
           <div className="flex items-center space-x-2 text-primary font-bold text-[17px] tracking-tight cursor-pointer">
-            <Link href="/" className="flex items-center space-x-2">
+            <Link href={`/?${portfolioId ? `pid=${portfolioId}` : ''}`} className="flex items-center space-x-2">
               <div className="bg-primary text-on-primary p-1 rounded-md">
                 <TrendingUp className="w-4 h-4" />
               </div>
@@ -165,8 +167,8 @@ export default function TransactionsClient({
             </Link>
           </div>
           <nav className="hidden md:flex space-x-7 text-[14px] font-semibold text-secondary">
-            <Link href="/" className="hover:text-primary transition-colors py-[16px]">Investments</Link>
-            <Link href="/transactions" className="text-primary border-b-2 border-primary py-[16px]">Transactions</Link>
+            <Link href={`/${portfolioId ? `?pid=${portfolioId}` : ''}`} className="hover:text-primary transition-colors py-[16px]">Investments</Link>
+            <Link href={`/transactions?${portfolioId ? `pid=${portfolioId}` : ''}`} className="text-primary border-b-2 border-primary py-[16px]">Transactions</Link>
           </nav>
         </div>
         <div className="flex items-center space-x-5">
@@ -582,7 +584,7 @@ export default function TransactionsClient({
             </p>
             <div className="flex items-center bg-card border border-border rounded-full p-1 shadow-sm order-1 sm:order-2 w-full sm:w-auto justify-between sm:justify-start">
               <a
-                href={`/transactions?page=${currentPage - 1}${searchTicker ? `&ticker=${searchTicker}` : ''}${searchType ? `&type=${searchType}` : ''}`}
+                href={`/transactions?page=${currentPage - 1}${searchTicker ? `&ticker=${searchTicker}` : ''}${searchType ? `&type=${searchType}` : ''}${pidParam}`}
                 className={`flex-1 sm:flex-none text-center px-4 py-1.5 text-[13px] font-semibold rounded-full transition-all ${currentPage <= 1 ? 'text-gray-200 cursor-not-allowed' : 'text-secondary hover:text-primary hover:bg-element'}`}
               >
                 Previous
@@ -593,7 +595,7 @@ export default function TransactionsClient({
               </span>
               <div className="w-px h-4 bg-element-hover mx-1 hidden sm:block"></div>
               <a
-                href={`/transactions?page=${currentPage + 1}${searchTicker ? `&ticker=${searchTicker}` : ''}${searchType ? `&type=${searchType}` : ''}`}
+                href={`/transactions?page=${currentPage + 1}${searchTicker ? `&ticker=${searchTicker}` : ''}${searchType ? `&type=${searchType}` : ''}${pidParam}`}
                 className={`flex-1 sm:flex-none text-center px-4 py-1.5 text-[13px] font-semibold rounded-full transition-all ${currentPage >= totalPages ? 'text-gray-200 cursor-not-allowed' : 'text-secondary hover:text-primary hover:bg-element'}`}
               >
                 Next

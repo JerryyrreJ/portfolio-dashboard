@@ -75,7 +75,7 @@ async function fetchBatchQuotes(assets: any[]): Promise<Record<string, number>> 
   return prices;
 }
 
-export default async function Page() {
+export default async function Page({ searchParams }: { searchParams: Promise<{ pid?: string }> }) {
   const user = await getUser()
   const userDisplayName = user
     ? (user.user_metadata?.display_name || user.email?.split('@')[0] || '')
@@ -87,6 +87,7 @@ export default async function Page() {
       <DashboardClient
         portfolioId="local-portfolio"
         portfolioName="My Portfolio"
+        portfolios={[]}
         holdingsData={[]}
         chartData={[]}
         summary={{ totalValue: 0, totalCapGain: 0, totalCapGainPercentage: 0, totalRealizedGain: 0, totalDividendIncome: 0 }}
@@ -94,9 +95,29 @@ export default async function Page() {
     );
   }
 
-  // 已登录：查找当前用户的 Portfolio，没有则自动创建
-  let portfolio = await withRetry(() => prisma.portfolio.findFirst({
+  const { pid } = await searchParams;
+
+  // 已登录：查找当前用户所有 Portfolios，没有则自动创建
+  let allPortfolios = await withRetry(() => prisma.portfolio.findMany({
     where: { userId: user.id },
+    orderBy: { createdAt: 'asc' },
+  }))
+
+  if (allPortfolios.length === 0) {
+    const created = await withRetry(() => prisma.portfolio.create({
+      data: { userId: user.id, name: 'My Portfolio' },
+    }))
+    allPortfolios = [created]
+  }
+
+  const portfolioMeta = allPortfolios.map(p => ({ id: p.id, name: p.name }))
+
+  // 根据 ?pid= 选中 portfolio，找不到则 fallback 到第一个
+  const selectedMeta = allPortfolios.find(p => p.id === pid) ?? allPortfolios[0]
+
+  // 加载选中 portfolio 的完整交易数据
+  let portfolio = await withRetry(() => prisma.portfolio.findUnique({
+    where: { id: selectedMeta.id },
     include: {
       transactions: {
         include: { asset: true },
@@ -105,23 +126,14 @@ export default async function Page() {
     }
   }))
 
-  if (!portfolio) {
-    portfolio = await withRetry(() => prisma.portfolio.create({
-      data: { userId: user.id, name: 'My Portfolio' },
-      include: {
-        transactions: {
-          include: { asset: true },
-          orderBy: { date: 'asc' }
-        }
-      }
-    }))
-  }
+  if (!portfolio) portfolio = { ...selectedMeta, transactions: [], preferences: null, currency: 'USD', createdAt: new Date(), updatedAt: new Date(), settingsUpdatedAt: null }
 
   if (portfolio.transactions.length === 0) {
     return (
       <DashboardClient
         portfolioId={portfolio.id}
         portfolioName={portfolio.name}
+        portfolios={portfolioMeta}
         holdingsData={[]}
         chartData={[]}
         summary={{ totalValue: 0, totalCapGain: 0, totalCapGainPercentage: 0, totalRealizedGain: 0, totalDividendIncome: 0 }}
@@ -452,6 +464,7 @@ export default async function Page() {
     <DashboardClient
       portfolioId={portfolio.id}
       portfolioName={portfolio.name}
+      portfolios={portfolioMeta}
       holdingsData={holdingsData}
       chartData={chartData}
       summary={summary}

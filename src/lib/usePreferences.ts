@@ -43,12 +43,20 @@ export function usePreferences() {
     // 云端同步（仅登录用户）
     const sync = async () => {
       try {
-        const res = await fetch('/api/portfolio');
+        const pid = new URLSearchParams(window.location.search).get('pid') ?? '';
+        const idParam = pid ? `?id=${pid}` : '';
+
+        const res = await fetch(`/api/portfolio${idParam}`);
         if (!res.ok) return;
         const data = await res.json();
 
-        const cloudPrefsRaw: string | null = data.portfolio?.preferences ?? null;
-        const cloudUpdatedAt: string | null = data.portfolio?.settingsUpdatedAt ?? null;
+        // GET 现在返回 { portfolios: [...] }，取匹配的那个
+        const portfolios: any[] = data.portfolios ?? (data.portfolio ? [data.portfolio] : []);
+        const portfolio = pid ? portfolios.find((p: any) => p.id === pid) : portfolios[0];
+        if (!portfolio) return;
+
+        const cloudPrefsRaw: string | null = portfolio.preferences ?? null;
+        const cloudUpdatedAt: string | null = portfolio.settingsUpdatedAt ?? null;
         const localUpdatedAt = localStorage.getItem(SETTINGS_UPDATED_AT_KEY);
 
         const cloudMs = cloudUpdatedAt ? new Date(cloudUpdatedAt).getTime() : 0;
@@ -65,7 +73,7 @@ export function usePreferences() {
         } else if (localMs > cloudMs) {
           // 本地更新，上传云端
           const localPrefs = loadLocal();
-          fetch('/api/portfolio', {
+          fetch(`/api/portfolio${idParam}`, {
             method: 'PATCH',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ preferences: localPrefs }),
@@ -106,7 +114,9 @@ export function usePreferences() {
     setPrefs(updated);
 
     // 3. 上传云端（fire and forget）
-    fetch('/api/portfolio', {
+    const pid = new URLSearchParams(window.location.search).get('pid') ?? '';
+    const idParam = pid ? `?id=${pid}` : '';
+    fetch(`/api/portfolio${idParam}`, {
       method: 'PATCH',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ preferences: updated }),

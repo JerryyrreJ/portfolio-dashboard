@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState, useEffect, useRef } from 'react';
-import { useRouter } from 'next/navigation';
+import { useRouter, useSearchParams } from 'next/navigation';
 import { usePreferences } from '@/lib/usePreferences';
 import { useTheme } from 'next-themes';
 import Link from 'next/link';
@@ -45,6 +45,8 @@ export default function SettingsPage() {
   const [activeSection, setActiveSection] = useState('portfolio');
   const [user, setUser] = useState<User | null>(null);
   const router = useRouter();
+  const searchParams = useSearchParams();
+  const currentPortfolioId = searchParams.get('pid') ?? '';
 
   const supabase = createClient();
   const { prefs, updatePreference } = usePreferences();
@@ -91,9 +93,10 @@ export default function SettingsPage() {
 
   const handleExport = async () => {
     setExportLoading(true);
+    const pidParam = currentPortfolioId ? `&portfolioId=${currentPortfolioId}` : '';
     try {
       if (exportFormat === 'pdf') {
-        const response = await fetch(`/api/transactions/export?format=json&range=${exportRange}`);
+        const response = await fetch(`/api/transactions/export?format=json&range=${exportRange}${pidParam}`);
         if (!response.ok) throw new Error('Failed to fetch data for PDF');
         const data = await response.json();
 
@@ -243,7 +246,7 @@ export default function SettingsPage() {
         showNotification('success', 'PDF Downloaded', 'Your investment report is ready.');
         setIsExporting(false);
       } else {
-        const response = await fetch(`/api/transactions/export?format=${exportFormat}&range=${exportRange}`);
+        const response = await fetch(`/api/transactions/export?format=${exportFormat}&range=${exportRange}${pidParam}`);
         if (!response.ok) throw new Error('Export failed');
         
         const blob = await response.blob();
@@ -301,12 +304,18 @@ export default function SettingsPage() {
 
       if (user) {
         try {
-          const res = await fetch('/api/portfolio');
+          const idParam = currentPortfolioId ? `?id=${currentPortfolioId}` : '';
+          const res = await fetch(`/api/portfolio${idParam}`);
           if (res.ok) {
             const data = await res.json();
-            const cloudName: string = data.portfolio.name || '';
-            const cloudCurrency: string = data.portfolio.currency || 'USD';
-            const cloudSettingsUpdatedAt: string | null = data.portfolio.settingsUpdatedAt ?? null;
+            const portfolios: any[] = data.portfolios ?? (data.portfolio ? [data.portfolio] : []);
+            const portfolio = currentPortfolioId
+              ? portfolios.find((p: any) => p.id === currentPortfolioId)
+              : portfolios[0];
+            if (!portfolio) return;
+            const cloudName: string = portfolio.name || '';
+            const cloudCurrency: string = portfolio.currency || 'USD';
+            const cloudSettingsUpdatedAt: string | null = portfolio.settingsUpdatedAt ?? null;
             const localSettingsUpdatedAt = localStorage.getItem('settings_updated_at');
 
             // Sync settings using unified timestamp
@@ -330,7 +339,7 @@ export default function SettingsPage() {
                 if (cloudSettingsUpdatedAt) localStorage.setItem('settings_updated_at', cloudSettingsUpdatedAt);
               } else if (localMs > cloudMs) {
                 // Local is newer, update cloud
-                fetch('/api/portfolio', {
+                fetch(`/api/portfolio${idParam}`, {
                   method: 'PATCH',
                   headers: { 'Content-Type': 'application/json' },
                   body: JSON.stringify({
@@ -410,7 +419,7 @@ export default function SettingsPage() {
 
     try {
       const payload = field === 'name' ? { name: portfolioName } : { currency: baseCurrency };
-      const res = await fetch('/api/portfolio', {
+      const res = await fetch(`/api/portfolio${currentPortfolioId ? `?id=${currentPortfolioId}` : ''}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payload),

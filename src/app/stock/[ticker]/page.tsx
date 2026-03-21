@@ -7,12 +7,14 @@ import { get12MonthHistory, getLogo as getTwelveDataLogo } from '@/lib/twelvedat
 
 interface PageProps {
   params: Promise<{ ticker: string }>
+  searchParams: Promise<{ pid?: string }>
 }
 
 export default async function StockDetailPage(props: PageProps) {
-  const params = await props.params
+  const [params, searchParams] = await Promise.all([props.params, props.searchParams])
   const { ticker } = params
   const decodedTicker = decodeURIComponent(ticker).toUpperCase()
+  const pid = searchParams.pid
 
   const user = await getUser()
 
@@ -62,7 +64,9 @@ if (!companyProfile?.name && (!quote || quote.c === 0)) {
 let defaultPortfolioId = ''
 let defaultPortfolioName = ''
 if (user) {
-  const portfolio = await withRetry(() => prisma.portfolio.findFirst({ where: { userId: user.id } }))
+  const portfolio = pid
+    ? await withRetry(() => prisma.portfolio.findFirst({ where: { id: pid, userId: user.id } }))
+    : await withRetry(() => prisma.portfolio.findFirst({ where: { userId: user.id } }))
   if (portfolio) {
     defaultPortfolioId = portfolio.id
     defaultPortfolioName = portfolio.name
@@ -208,7 +212,9 @@ if (user) {
     defaultPortfolioId = asset.transactions[0].portfolioId
     defaultPortfolioName = asset.transactions[0].portfolio.name
   } else if (user) {
-    const portfolio = await withRetry(() => prisma.portfolio.findFirst({ where: { userId: user.id } }))
+    const portfolio = pid
+      ? await withRetry(() => prisma.portfolio.findFirst({ where: { id: pid, userId: user.id } }))
+      : await withRetry(() => prisma.portfolio.findFirst({ where: { userId: user.id } }))
     if (portfolio) {
       defaultPortfolioId = portfolio.id
       defaultPortfolioName = portfolio.name

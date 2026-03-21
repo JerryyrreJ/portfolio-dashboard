@@ -14,6 +14,7 @@ export async function GET(request: NextRequest) {
     const searchParams = request.nextUrl.searchParams;
     const formatType = searchParams.get('format') || 'csv';
     const range = searchParams.get('range') || 'all';
+    const portfolioId = searchParams.get('portfolioId');
 
     // Build the date filter based on range
     let dateFilter = {};
@@ -30,16 +31,18 @@ export async function GET(request: NextRequest) {
       };
     }
 
-    // Fetch the transactions
+    // Fetch the transactions — prefer portfolioId param, fallback to first portfolio
+    const portfolioWhere = portfolioId
+      ? { id: portfolioId, userId: user.id }
+      : { userId: user.id };
+
     const portfolio = await prisma.portfolio.findFirst({
-      where: { userId: user.id },
+      where: portfolioWhere,
       include: {
         transactions: {
           where: Object.keys(dateFilter).length > 0 ? { date: dateFilter } : undefined,
           orderBy: { date: 'desc' },
-          include: {
-            asset: true,
-          },
+          include: { asset: true },
         },
       },
     });

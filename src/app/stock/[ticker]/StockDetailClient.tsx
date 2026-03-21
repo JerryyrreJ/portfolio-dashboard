@@ -349,15 +349,15 @@ export default function StockDetailClient({ stockData }: { stockData: StockData 
       {/* 顶部导航栏 - 同步首页 */}
       <header className="bg-card/70 backdrop-blur-xl border-b border-border px-4 sm:px-6 h-[56px] flex items-center justify-between sticky top-0 z-50">
         <div className="flex items-center space-x-8">
-          <Link href="/" className="flex items-center space-x-2 text-primary font-bold text-[17px] tracking-tight">
+          <Link href={portfolioId ? `/?pid=${portfolioId}` : '/'} className="flex items-center space-x-2 text-primary font-bold text-[17px] tracking-tight">
             <div className="bg-primary text-on-primary p-1 rounded-md">
               <TrendingUp className="w-4 h-4" />
             </div>
             <span>Folio</span>
           </Link>
           <nav className="hidden md:flex space-x-7 text-[14px] font-semibold text-secondary">
-            <Link href="/" className="hover:text-primary transition-colors py-[16px]">Investments</Link>
-            <Link href="/transactions" className="hover:text-primary transition-colors py-[16px]">Transactions</Link>
+            <Link href={portfolioId ? `/?pid=${portfolioId}` : '/'} className="hover:text-primary transition-colors py-[16px]">Investments</Link>
+            <Link href={portfolioId ? `/transactions?pid=${portfolioId}` : '/transactions'} className="hover:text-primary transition-colors py-[16px]">Transactions</Link>
           </nav>
         </div>
         <div className="flex items-center space-x-5">

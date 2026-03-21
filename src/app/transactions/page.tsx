@@ -32,16 +32,25 @@ async function getPortfolioWithTransactions(
   const limit = parseInt(searchParams.limit || '20');
   const ticker = searchParams.ticker;
   const type = searchParams.type;
+  const pid = searchParams.pid;
 
-  const portfolio = await withRetry(() => prisma.portfolio.findFirst({
+  // 按 pid 查找，找不到则 fallback 到第一个
+  const portfolio = pid
+    ? await withRetry(() => prisma.portfolio.findFirst({
+        where: { id: pid, userId },
+        select: { id: true, name: true },
+      }))
+    : null;
+
+  const resolvedPortfolio = portfolio ?? await withRetry(() => prisma.portfolio.findFirst({
     where: { userId },
     select: { id: true, name: true },
     orderBy: { id: 'asc' },
   }));
 
-  if (!portfolio) return { portfolioId: '', portfolioName: 'Portfolio', transactions: [], total: 0 };
+  if (!resolvedPortfolio) return { portfolioId: '', portfolioName: 'Portfolio', transactions: [], total: 0 };
 
-  const where: any = { portfolioId: portfolio.id };
+  const where: any = { portfolioId: resolvedPortfolio.id };
   if (ticker) where.asset = { ticker: { contains: ticker, mode: 'insensitive' } };
   if (type && ['BUY', 'SELL'].includes(type)) where.type = type;
 
@@ -57,8 +66,8 @@ async function getPortfolioWithTransactions(
   ]);
 
   return {
-    portfolioId: portfolio.id,
-    portfolioName: portfolio.name,
+    portfolioId: resolvedPortfolio.id,
+    portfolioName: resolvedPortfolio.name,
     transactions: transactions as TransactionWithAsset[],
     total,
   };
@@ -142,6 +151,7 @@ export default async function TransactionsPage(props: {
       totalPages={totalPages}
       currentPage={currentPage}
       limit={limit}
+      portfolioId={portfolioId}
       portfolioName={portfolioName}
       logoMap={logoMap}
       searchTicker={searchParams.ticker}
