@@ -21,12 +21,12 @@ model Portfolio {
 }
 
 model Asset {
-  id                 String               @id @default(cuid())
-  ticker             String               @unique
+  id                 String              @id @default(cuid())
+  ticker             String              @unique
   name               String
   market             String
-  type               String               @default("STOCK")
-  currency           String               @default("USD")
+  type               String              @default("STOCK")
+  currency           String              @default("USD")
   historyLastUpdated DateTime?
   logo               String?
   lastPrice          Float?
@@ -71,4 +71,22 @@ model Transaction {
   notes        String?
   asset        Asset     @relation(fields: [assetId], references: [id])
   portfolio    Portfolio @relation(fields: [portfolioId], references: [id], onDelete: Cascade)
+}
+
+model PendingDividend {
+  id               String    @id @default(cuid())
+  portfolioId      String
+  ticker           String
+  exDate           DateTime  @db.Date
+  payDate          DateTime? @db.Date
+  sharesHeld       Float
+  dividendPerShare Float
+  calculatedAmount Float
+  currency         String    @default("USD")
+  status           String    @default("pending") // pending, confirmed, ignored
+  createdAt        DateTime  @default(now())
+  updatedAt        DateTime  @updatedAt
+
+  @@unique([portfolioId, ticker, exDate])
+  @@index([portfolioId, status])
 }

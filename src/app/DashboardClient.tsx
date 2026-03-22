@@ -28,6 +28,7 @@ import {
 import AddTransactionModal from './components/AddTransactionModal';
 import GlobalSearch from './components/GlobalSearch';
 import PortfolioSwitcher from './components/PortfolioSwitcher';
+import DividendConfirmationModal from './components/DividendConfirmationModal';
 import Link from 'next/link';
 import { useCurrency } from '@/lib/useCurrency';
 import { useStock } from '@/hooks/useStock';
@@ -149,6 +150,8 @@ export default function DashboardClient({ portfolioId, portfolioName, portfolios
   const { symbol, convert, fmt } = useCurrency();
   const { prefs, colors } = usePreferences();
   const [isModalOpen, setIsModalOpen] = useState(false);
+  const [isDividendModalOpen, setIsDividendModalOpen] = useState(false);
+  const [pendingDividendCount, setPendingDividendCount] = useState(0);
   const [userInitial] = useState<string>(userDisplayName[0]?.toUpperCase() || '');
   const [displayName] = useState<string>(userDisplayName);
 
@@ -265,6 +268,25 @@ export default function DashboardClient({ portfolioId, portfolioName, portfolios
 
     fetchLivePrices();
   }, []); // 仅在组件挂载后执行一次
+
+  // 获取待确认分红数量
+  useEffect(() => {
+    const fetchDividendStats = async () => {
+      if (portfolioId === 'local-portfolio') return;
+
+      try {
+        const response = await fetch(`/api/transactions/dividends/stats?portfolioId=${portfolioId}`);
+        if (response.ok) {
+          const data = await response.json();
+          setPendingDividendCount(data.pendingCount || 0);
+        }
+      } catch (err) {
+        console.error('Failed to fetch dividend stats:', err);
+      }
+    };
+
+    fetchDividendStats();
+  }, [portfolioId]);
 
   // 初始化和监听本地数据
   useEffect(() => {
@@ -709,10 +731,23 @@ export default function DashboardClient({ portfolioId, portfolioName, portfolios
               <div className="border-t border-border" />
               <div>
                 <p className="text-[11px] text-secondary font-bold uppercase tracking-wider mb-1">Dividends Collected</p>
-                <div className="flex items-baseline">
+                <div className="flex items-baseline justify-between">
                   <span className={`text-[20px] font-bold tracking-tight tabular-nums ${localSummary.totalDividendIncome > 0 ? colors.gain.tailwind.text : 'text-secondary'}`}>
                     {localSummary.totalDividendIncome > 0 ? '+' : ''}{fmt(localSummary.totalDividendIncome || 0)}
                   </span>
+                  {portfolioId !== 'local-portfolio' && (
+                    <button
+                      onClick={() => setIsDividendModalOpen(true)}
+                      className="relative text-[10px] font-bold text-indigo-600 hover:text-indigo-700 transition-colors px-2 py-1 rounded-lg hover:bg-indigo-50"
+                    >
+                      Review
+                      {pendingDividendCount > 0 && (
+                        <span className="absolute -top-1 -right-1 w-4 h-4 bg-indigo-500 text-white text-[9px] font-bold rounded-full flex items-center justify-center">
+                          {pendingDividendCount}
+                        </span>
+                      )}
+                    </button>
+                  )}
                 </div>
                 <p className="text-secondary text-[11px] font-medium mt-0.5">Cash reinvested or withdrawn</p>
               </div>
@@ -1006,6 +1041,17 @@ export default function DashboardClient({ portfolioId, portfolioName, portfolios
         onClose={() => setIsModalOpen(false)}
         portfolioName={portfolioName}
         portfolioId={portfolioId}
+      />
+
+      <DividendConfirmationModal
+        isOpen={isDividendModalOpen}
+        onClose={() => setIsDividendModalOpen(false)}
+        portfolioId={portfolioId}
+        onConfirmed={() => {
+          // Refresh the page to show updated dividend income
+          setPendingDividendCount(0);
+          window.location.reload();
+        }}
       />
     </div>
   );

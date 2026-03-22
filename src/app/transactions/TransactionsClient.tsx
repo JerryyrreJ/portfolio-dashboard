@@ -300,20 +300,35 @@ export default function TransactionsClient({
                           </Link>
                         </td>
                         <td className="px-6 py-4 whitespace-nowrap text-center">
-                          <span className={`inline-flex items-center px-2 py-0.5 rounded-md text-[10px] font-bold uppercase tracking-wide ${transaction.type === 'BUY' ? `${colors.gain.tailwind.bgLight} ${colors.gain.tailwind.text}` : `${colors.loss.tailwind.bgLight} ${colors.loss.tailwind.text}`}`}>
+                          <span className={`inline-flex items-center px-2 py-0.5 rounded-md text-[10px] font-bold uppercase tracking-wide ${
+                            transaction.type === 'BUY' ? `${colors.gain.tailwind.bgLight} ${colors.gain.tailwind.text}` :
+                            transaction.type === 'SELL' ? `${colors.loss.tailwind.bgLight} ${colors.loss.tailwind.text}` :
+                            'bg-indigo-50 text-indigo-600'
+                          }`}>
                             {transaction.type}
                           </span>
                         </td>
                         <td className="px-6 py-4 whitespace-nowrap text-right">
-                          <p className="text-[13px] font-semibold text-primary tabular-nums">{formatNumber(transaction.quantity)}</p>
+                          {transaction.type === 'DIVIDEND' ? (
+                            <p className="text-[13px] font-medium text-secondary">—</p>
+                          ) : (
+                            <p className="text-[13px] font-semibold text-primary tabular-nums">{formatNumber(transaction.quantity)}</p>
+                          )}
                         </td>
                         <td className="px-6 py-4 whitespace-nowrap text-right">
-                          <p className="text-[13px] font-medium text-secondary tabular-nums">{fmt(transaction.priceUSD || transaction.price)}</p>
+                          {transaction.type === 'DIVIDEND' ? (
+                            <p className="text-[13px] font-medium text-secondary">—</p>
+                          ) : (
+                            <p className="text-[13px] font-medium text-secondary tabular-nums">{fmt(transaction.priceUSD || transaction.price)}</p>
+                          )}
                         </td>
                         <td className="px-6 py-4 whitespace-nowrap text-right">
-                          <p className="text-[14px] font-bold text-primary tabular-nums">{fmt((transaction.priceUSD || transaction.price) * Math.abs(transaction.quantity))}</p>
-                          {transaction.fee > 0 && (
+                          <p className="text-[14px] font-bold text-primary tabular-nums">{fmt(transaction.type === 'DIVIDEND' ? transaction.price : (transaction.priceUSD || transaction.price) * Math.abs(transaction.quantity))}</p>
+                          {transaction.fee > 0 && transaction.type !== 'DIVIDEND' && (
                             <p className="text-[10px] text-secondary font-medium">Fee: {getCurrencySymbol(transaction.currency ?? 'USD')}{transaction.fee.toFixed(2)}</p>
+                          )}
+                          {transaction.type === 'DIVIDEND' && transaction.notes && (
+                            <p className="text-[10px] text-secondary font-medium">{transaction.notes}</p>
                           )}
                         </td>
                         <td className="px-6 py-4 whitespace-nowrap text-center">
@@ -360,64 +375,107 @@ export default function TransactionsClient({
                           <div className={`grid transition-all duration-300 ease-in-out ${editingId === transaction.id ? 'grid-rows-[1fr] opacity-100' : 'grid-rows-[0fr] opacity-0'}`}>
                             <div className="overflow-hidden">
                               <div className="px-6 pb-5 pt-3 border-t border-border/60">
-                                <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 mb-4">
-                                  <div className="space-y-1.5">
-                                    <label className="text-[10px] font-bold text-secondary uppercase tracking-widest">Date</label>
-                                    <input
-                                      type="date"
-                                      value={editState?.date ?? ''}
-                                      onChange={e => setEditState(s => s ? { ...s, date: e.target.value } : s)}
-                                      className="w-full px-3 py-2 bg-card rounded-xl text-[13px] font-semibold text-primary border border-border focus:border-primary focus:ring-1 focus:ring-black outline-none transition-all"
-                                    />
-                                  </div>
-                                  <div className="space-y-1.5">
-                                    <label className="text-[10px] font-bold text-secondary uppercase tracking-widest">Shares</label>
-                                    <input
-                                      type="number"
-                                      step="0.0001"
-                                      value={editState?.quantity ?? ''}
-                                      onChange={e => setEditState(s => s ? { ...s, quantity: e.target.value } : s)}
-                                      onWheel={e => (e.target as HTMLInputElement).blur()}
-                                      className="w-full px-3 py-2 bg-card rounded-xl text-[13px] font-semibold tabular-nums text-primary border border-border focus:border-primary focus:ring-1 focus:ring-black outline-none transition-all [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
-                                    />
-                                  </div>
-                                  <div className="space-y-1.5">
-                                    <label className="text-[10px] font-bold text-secondary uppercase tracking-widest flex items-center gap-1">
-                                      Unit Price <span className="text-secondary">·</span> {getCurrencySymbol(transaction.currency ?? 'USD')}
-                                    </label>
-                                    <input
-                                      type="number"
-                                      step="0.01"
-                                      value={editState?.price ?? ''}
-                                      onChange={e => setEditState(s => s ? { ...s, price: e.target.value } : s)}
-                                      onWheel={e => (e.target as HTMLInputElement).blur()}
-                                      className="w-full px-3 py-2 bg-card rounded-xl text-[13px] font-semibold tabular-nums text-primary border border-border focus:border-primary focus:ring-1 focus:ring-black outline-none transition-all [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
-                                    />
-                                  </div>
-                                  <div className="space-y-1.5">
-                                    <label className="text-[10px] font-bold text-secondary uppercase tracking-widest flex items-center gap-1">
-                                      Fee <span className="text-secondary">·</span> {getCurrencySymbol(transaction.currency ?? 'USD')}
-                                    </label>
-                                    <input
-                                      type="number"
-                                      step="0.01"
-                                      value={editState?.fee ?? ''}
-                                      onChange={e => setEditState(s => s ? { ...s, fee: e.target.value } : s)}
-                                      onWheel={e => (e.target as HTMLInputElement).blur()}
-                                      className="w-full px-3 py-2 bg-card rounded-xl text-[13px] font-semibold tabular-nums text-primary border border-border focus:border-primary focus:ring-1 focus:ring-black outline-none transition-all [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
-                                    />
-                                  </div>
-                                </div>
-                                <div className="space-y-1.5">
-                                  <label className="text-[10px] font-bold text-secondary uppercase tracking-widest">Notes</label>
-                                  <input
-                                    type="text"
-                                    value={editState?.notes ?? ''}
-                                    onChange={e => setEditState(s => s ? { ...s, notes: e.target.value } : s)}
-                                    placeholder="Optional"
-                                    className="w-full px-3 py-2 bg-card rounded-xl text-[13px] font-medium text-primary border border-border focus:border-primary focus:ring-1 focus:ring-black outline-none transition-all"
-                                  />
-                                </div>
+                                {transaction.type === 'DIVIDEND' ? (
+                                  /* Dividend Edit Form - Only Date and Amount */
+                                  <>
+                                    <div className="grid grid-cols-2 gap-3 mb-4">
+                                      <div className="space-y-1.5">
+                                        <label className="text-[10px] font-bold text-secondary uppercase tracking-widest">Date</label>
+                                        <input
+                                          type="date"
+                                          value={editState?.date ?? ''}
+                                          onChange={e => setEditState(s => s ? { ...s, date: e.target.value } : s)}
+                                          className="w-full px-3 py-2 bg-card rounded-xl text-[13px] font-semibold text-primary border border-border focus:border-primary focus:ring-1 focus:ring-black outline-none transition-all"
+                                        />
+                                      </div>
+                                      <div className="space-y-1.5">
+                                        <label className="text-[10px] font-bold text-secondary uppercase tracking-widest flex items-center gap-1">
+                                          Amount <span className="text-secondary">·</span> {getCurrencySymbol(transaction.currency ?? 'USD')}
+                                        </label>
+                                        <input
+                                          type="number"
+                                          step="0.01"
+                                          value={editState?.price ?? ''}
+                                          onChange={e => setEditState(s => s ? { ...s, price: e.target.value } : s)}
+                                          onWheel={e => (e.target as HTMLInputElement).blur()}
+                                          className="w-full px-3 py-2 bg-card rounded-xl text-[13px] font-semibold tabular-nums text-primary border border-border focus:border-primary focus:ring-1 focus:ring-black outline-none transition-all [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+                                        />
+                                      </div>
+                                    </div>
+                                    <div className="space-y-1.5 mb-4">
+                                      <label className="text-[10px] font-bold text-secondary uppercase tracking-widest">Notes</label>
+                                      <input
+                                        type="text"
+                                        value={editState?.notes ?? ''}
+                                        onChange={e => setEditState(s => s ? { ...s, notes: e.target.value } : s)}
+                                        placeholder="Optional"
+                                        className="w-full px-3 py-2 bg-card rounded-xl text-[13px] font-medium text-primary border border-border focus:border-primary focus:ring-1 focus:ring-black outline-none transition-all"
+                                      />
+                                    </div>
+                                  </>
+                                ) : (
+                                  /* Regular Transaction Edit Form */
+                                  <>
+                                    <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 mb-4">
+                                      <div className="space-y-1.5">
+                                        <label className="text-[10px] font-bold text-secondary uppercase tracking-widest">Date</label>
+                                        <input
+                                          type="date"
+                                          value={editState?.date ?? ''}
+                                          onChange={e => setEditState(s => s ? { ...s, date: e.target.value } : s)}
+                                          className="w-full px-3 py-2 bg-card rounded-xl text-[13px] font-semibold text-primary border border-border focus:border-primary focus:ring-1 focus:ring-black outline-none transition-all"
+                                        />
+                                      </div>
+                                      <div className="space-y-1.5">
+                                        <label className="text-[10px] font-bold text-secondary uppercase tracking-widest">Shares</label>
+                                        <input
+                                          type="number"
+                                          step="0.0001"
+                                          value={editState?.quantity ?? ''}
+                                          onChange={e => setEditState(s => s ? { ...s, quantity: e.target.value } : s)}
+                                          onWheel={e => (e.target as HTMLInputElement).blur()}
+                                          className="w-full px-3 py-2 bg-card rounded-xl text-[13px] font-semibold tabular-nums text-primary border border-border focus:border-primary focus:ring-1 focus:ring-black outline-none transition-all [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+                                        />
+                                      </div>
+                                      <div className="space-y-1.5">
+                                        <label className="text-[10px] font-bold text-secondary uppercase tracking-widest flex items-center gap-1">
+                                          Unit Price <span className="text-secondary">·</span> {getCurrencySymbol(transaction.currency ?? 'USD')}
+                                        </label>
+                                        <input
+                                          type="number"
+                                          step="0.01"
+                                          value={editState?.price ?? ''}
+                                          onChange={e => setEditState(s => s ? { ...s, price: e.target.value } : s)}
+                                          onWheel={e => (e.target as HTMLInputElement).blur()}
+                                          className="w-full px-3 py-2 bg-card rounded-xl text-[13px] font-semibold tabular-nums text-primary border border-border focus:border-primary focus:ring-1 focus:ring-black outline-none transition-all [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+                                        />
+                                      </div>
+                                      <div className="space-y-1.5">
+                                        <label className="text-[10px] font-bold text-secondary uppercase tracking-widest flex items-center gap-1">
+                                          Fee <span className="text-secondary">·</span> {getCurrencySymbol(transaction.currency ?? 'USD')}
+                                        </label>
+                                        <input
+                                          type="number"
+                                          step="0.01"
+                                          value={editState?.fee ?? ''}
+                                          onChange={e => setEditState(s => s ? { ...s, fee: e.target.value } : s)}
+                                          onWheel={e => (e.target as HTMLInputElement).blur()}
+                                          className="w-full px-3 py-2 bg-card rounded-xl text-[13px] font-semibold tabular-nums text-primary border border-border focus:border-primary focus:ring-1 focus:ring-black outline-none transition-all [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+                                        />
+                                      </div>
+                                    </div>
+                                    <div className="space-y-1.5 mb-4">
+                                      <label className="text-[10px] font-bold text-secondary uppercase tracking-widest">Notes</label>
+                                      <input
+                                        type="text"
+                                        value={editState?.notes ?? ''}
+                                        onChange={e => setEditState(s => s ? { ...s, notes: e.target.value } : s)}
+                                        placeholder="Optional"
+                                        className="w-full px-3 py-2 bg-card rounded-xl text-[13px] font-medium text-primary border border-border focus:border-primary focus:ring-1 focus:ring-black outline-none transition-all"
+                                      />
+                                    </div>
+                                  </>
+                                )}
                                 <div className="flex justify-end">
                                   <button
                                     onClick={() => handleSave(transaction)}
@@ -462,7 +520,11 @@ export default function TransactionsClient({
                         <div>
                           <div className="flex items-center gap-2">
                             <p className="text-[15px] font-bold text-primary leading-tight">{transaction.asset.ticker}</p>
-                            <span className={`px-1.5 py-0.5 rounded text-[9px] font-bold uppercase tracking-wide ${transaction.type === 'BUY' ? `${colors.gain.tailwind.bgLight} ${colors.gain.tailwind.text}` : `${colors.loss.tailwind.bgLight} ${colors.loss.tailwind.text}`}`}>
+                            <span className={`px-1.5 py-0.5 rounded text-[9px] font-bold uppercase tracking-wide ${
+                              transaction.type === 'BUY' ? `${colors.gain.tailwind.bgLight} ${colors.gain.tailwind.text}` :
+                              transaction.type === 'SELL' ? `${colors.loss.tailwind.bgLight} ${colors.loss.tailwind.text}` :
+                              'bg-indigo-50 text-indigo-600'
+                            }`}>
                               {transaction.type}
                             </span>
                           </div>
@@ -470,8 +532,12 @@ export default function TransactionsClient({
                         </div>
                       </div>
                       <div className="text-right">
-                        <p className="text-[15px] font-bold text-primary tabular-nums">{fmt((transaction.priceUSD || transaction.price) * Math.abs(transaction.quantity))}</p>
-                        <p className="text-[12px] text-secondary font-medium tabular-nums">{formatNumber(transaction.quantity)} shares</p>
+                        <p className="text-[15px] font-bold text-primary tabular-nums">{fmt(transaction.type === 'DIVIDEND' ? transaction.price : (transaction.priceUSD || transaction.price) * Math.abs(transaction.quantity))}</p>
+                        {transaction.type === 'DIVIDEND' ? (
+                          transaction.notes && <p className="text-[11px] text-secondary font-medium">{transaction.notes}</p>
+                        ) : (
+                          <p className="text-[12px] text-secondary font-medium tabular-nums">{formatNumber(transaction.quantity)} shares</p>
+                        )}
                       </div>
                     </div>
                     <div className="flex items-center justify-between mt-2">
@@ -501,64 +567,107 @@ export default function TransactionsClient({
                   <div className={`grid transition-all duration-300 ease-in-out ${editingId === transaction.id ? 'grid-rows-[1fr] opacity-100' : 'grid-rows-[0fr] opacity-0'}`}>
                     <div className="overflow-hidden">
                       <div className="px-4 pb-4 space-y-3 border-t border-border/60">
-                        <div className="grid grid-cols-2 gap-3 pt-3">
-                          <div className="space-y-1.5">
-                            <label className="text-[10px] font-bold text-secondary uppercase tracking-widest">Date</label>
-                            <input
-                              type="date"
-                              value={editState?.date ?? ''}
-                              onChange={e => setEditState(s => s ? { ...s, date: e.target.value } : s)}
-                              className="w-full px-3 py-2 bg-element/50 rounded-xl text-[13px] font-semibold text-primary border border-border focus:border-primary focus:ring-1 focus:ring-black outline-none transition-all"
-                            />
-                          </div>
-                          <div className="space-y-1.5">
-                            <label className="text-[10px] font-bold text-secondary uppercase tracking-widest">Shares</label>
-                            <input
-                              type="number"
-                              step="0.0001"
-                              value={editState?.quantity ?? ''}
-                              onChange={e => setEditState(s => s ? { ...s, quantity: e.target.value } : s)}
-                              onWheel={e => (e.target as HTMLInputElement).blur()}
-                              className="w-full px-3 py-2 bg-element/50 rounded-xl text-[13px] font-semibold tabular-nums text-primary border border-border focus:border-primary focus:ring-1 focus:ring-black outline-none transition-all [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
-                            />
-                          </div>
-                          <div className="space-y-1.5">
-                            <label className="text-[10px] font-bold text-secondary uppercase tracking-widest flex items-center gap-1">
-                              Unit Price <span className="text-secondary">·</span> {getCurrencySymbol(transaction.currency ?? 'USD')}
-                            </label>
-                            <input
-                              type="number"
-                              step="0.01"
-                              value={editState?.price ?? ''}
-                              onChange={e => setEditState(s => s ? { ...s, price: e.target.value } : s)}
-                              onWheel={e => (e.target as HTMLInputElement).blur()}
-                              className="w-full px-3 py-2 bg-element/50 rounded-xl text-[13px] font-semibold tabular-nums text-primary border border-border focus:border-primary focus:ring-1 focus:ring-black outline-none transition-all [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
-                            />
-                          </div>
-                          <div className="space-y-1.5">
-                            <label className="text-[10px] font-bold text-secondary uppercase tracking-widest flex items-center gap-1">
-                              Fee <span className="text-secondary">·</span> {getCurrencySymbol(transaction.currency ?? 'USD')}
-                            </label>
-                            <input
-                              type="number"
-                              step="0.01"
-                              value={editState?.fee ?? ''}
-                              onChange={e => setEditState(s => s ? { ...s, fee: e.target.value } : s)}
-                              onWheel={e => (e.target as HTMLInputElement).blur()}
-                              className="w-full px-3 py-2 bg-element/50 rounded-xl text-[13px] font-semibold tabular-nums text-primary border border-border focus:border-primary focus:ring-1 focus:ring-black outline-none transition-all [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
-                            />
-                          </div>
-                        </div>
-                        <div className="space-y-1.5">
-                          <label className="text-[10px] font-bold text-secondary uppercase tracking-widest">Notes</label>
-                          <input
-                            type="text"
-                            value={editState?.notes ?? ''}
-                            onChange={e => setEditState(s => s ? { ...s, notes: e.target.value } : s)}
-                            placeholder="Optional"
-                            className="w-full px-3 py-2 bg-element/50 rounded-xl text-[13px] font-medium text-primary border border-border focus:border-primary focus:ring-1 focus:ring-black outline-none transition-all"
-                          />
-                        </div>
+                        {transaction.type === 'DIVIDEND' ? (
+                          /* Dividend Mobile Edit - Only Date and Amount */
+                          <>
+                            <div className="grid grid-cols-2 gap-3 pt-3">
+                              <div className="space-y-1.5">
+                                <label className="text-[10px] font-bold text-secondary uppercase tracking-widest">Date</label>
+                                <input
+                                  type="date"
+                                  value={editState?.date ?? ''}
+                                  onChange={e => setEditState(s => s ? { ...s, date: e.target.value } : s)}
+                                  className="w-full px-3 py-2 bg-element/50 rounded-xl text-[13px] font-semibold text-primary border border-border focus:border-primary focus:ring-1 focus:ring-black outline-none transition-all"
+                                />
+                              </div>
+                              <div className="space-y-1.5">
+                                <label className="text-[10px] font-bold text-secondary uppercase tracking-widest flex items-center gap-1">
+                                  Amount <span className="text-secondary">·</span> {getCurrencySymbol(transaction.currency ?? 'USD')}
+                                </label>
+                                <input
+                                  type="number"
+                                  step="0.01"
+                                  value={editState?.price ?? ''}
+                                  onChange={e => setEditState(s => s ? { ...s, price: e.target.value } : s)}
+                                  onWheel={e => (e.target as HTMLInputElement).blur()}
+                                  className="w-full px-3 py-2 bg-element/50 rounded-xl text-[13px] font-semibold tabular-nums text-primary border border-border focus:border-primary focus:ring-1 focus:ring-black outline-none transition-all [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+                                />
+                              </div>
+                            </div>
+                            <div className="space-y-1.5">
+                              <label className="text-[10px] font-bold text-secondary uppercase tracking-widest">Notes</label>
+                              <input
+                                type="text"
+                                value={editState?.notes ?? ''}
+                                onChange={e => setEditState(s => s ? { ...s, notes: e.target.value } : s)}
+                                placeholder="Optional"
+                                className="w-full px-3 py-2 bg-element/50 rounded-xl text-[13px] font-medium text-primary border border-border focus:border-primary focus:ring-1 focus:ring-black outline-none transition-all"
+                              />
+                            </div>
+                          </>
+                        ) : (
+                          /* Regular Transaction Mobile Edit */
+                          <>
+                            <div className="grid grid-cols-2 gap-3 pt-3">
+                              <div className="space-y-1.5">
+                                <label className="text-[10px] font-bold text-secondary uppercase tracking-widest">Date</label>
+                                <input
+                                  type="date"
+                                  value={editState?.date ?? ''}
+                                  onChange={e => setEditState(s => s ? { ...s, date: e.target.value } : s)}
+                                  className="w-full px-3 py-2 bg-element/50 rounded-xl text-[13px] font-semibold text-primary border border-border focus:border-primary focus:ring-1 focus:ring-black outline-none transition-all"
+                                />
+                              </div>
+                              <div className="space-y-1.5">
+                                <label className="text-[10px] font-bold text-secondary uppercase tracking-widest">Shares</label>
+                                <input
+                                  type="number"
+                                  step="0.0001"
+                                  value={editState?.quantity ?? ''}
+                                  onChange={e => setEditState(s => s ? { ...s, quantity: e.target.value } : s)}
+                                  onWheel={e => (e.target as HTMLInputElement).blur()}
+                                  className="w-full px-3 py-2 bg-element/50 rounded-xl text-[13px] font-semibold tabular-nums text-primary border border-border focus:border-primary focus:ring-1 focus:ring-black outline-none transition-all [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+                                />
+                              </div>
+                              <div className="space-y-1.5">
+                                <label className="text-[10px] font-bold text-secondary uppercase tracking-widest flex items-center gap-1">
+                                  Unit Price <span className="text-secondary">·</span> {getCurrencySymbol(transaction.currency ?? 'USD')}
+                                </label>
+                                <input
+                                  type="number"
+                                  step="0.01"
+                                  value={editState?.price ?? ''}
+                                  onChange={e => setEditState(s => s ? { ...s, price: e.target.value } : s)}
+                                  onWheel={e => (e.target as HTMLInputElement).blur()}
+                                  className="w-full px-3 py-2 bg-element/50 rounded-xl text-[13px] font-semibold tabular-nums text-primary border border-border focus:border-primary focus:ring-1 focus:ring-black outline-none transition-all [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+                                />
+                              </div>
+                              <div className="space-y-1.5">
+                                <label className="text-[10px] font-bold text-secondary uppercase tracking-widest flex items-center gap-1">
+                                  Fee <span className="text-secondary">·</span> {getCurrencySymbol(transaction.currency ?? 'USD')}
+                                </label>
+                                <input
+                                  type="number"
+                                  step="0.01"
+                                  value={editState?.fee ?? ''}
+                                  onChange={e => setEditState(s => s ? { ...s, fee: e.target.value } : s)}
+                                  onWheel={e => (e.target as HTMLInputElement).blur()}
+                                  className="w-full px-3 py-2 bg-element/50 rounded-xl text-[13px] font-semibold tabular-nums text-primary border border-border focus:border-primary focus:ring-1 focus:ring-black outline-none transition-all [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+                                />
+                              </div>
+                            </div>
+                            <div className="space-y-1.5">
+                              <label className="text-[10px] font-bold text-secondary uppercase tracking-widest">Notes</label>
+                              <input
+                                type="text"
+                                value={editState?.notes ?? ''}
+                                onChange={e => setEditState(s => s ? { ...s, notes: e.target.value } : s)}
+                                placeholder="Optional"
+                                className="w-full px-3 py-2 bg-element/50 rounded-xl text-[13px] font-medium text-primary border border-border focus:border-primary focus:ring-1 focus:ring-black outline-none transition-all"
+                              />
+                            </div>
+                          </>
+                        )}
                         <button
                           onClick={() => handleSave(transaction)}
                           disabled={isSaving}

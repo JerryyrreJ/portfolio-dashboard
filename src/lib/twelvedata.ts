@@ -209,3 +209,46 @@ export async function get12MonthHistory(symbol: string): Promise<{ date: string;
       price: parseFloat(v.close),
     }));
 }
+
+// ---- Dividends ----
+
+export interface DividendData {
+  symbol: string;
+  ex_date: string;
+  payment_date?: string;
+  amount: number;
+  currency?: string;
+}
+
+/**
+ * 获取股票分红数据
+ * @param symbol 股票代码
+ * @param startDate 开始日期 YYYY-MM-DD (可选)
+ * @param endDate 结束日期 YYYY-MM-DD (可选)
+ */
+export async function getDividends(
+  symbol: string,
+  startDate?: string,
+  endDate?: string
+): Promise<DividendData[]> {
+  const params: Record<string, string> = {
+    symbol: symbol.toUpperCase(),
+  };
+
+  if (startDate) params.start_date = startDate;
+  if (endDate) params.end_date = endDate;
+
+  const data = await fetchTwelveData('/dividends', params);
+
+  if (!data || !data.dividends || data.dividends.length === 0) {
+    return [];
+  }
+
+  return data.dividends.map((d: any) => ({
+    symbol: data.symbol || symbol.toUpperCase(),
+    ex_date: d.ex_date,
+    payment_date: d.payment_date,
+    amount: parseFloat(d.amount),
+    currency: data.currency,
+  }));
+}

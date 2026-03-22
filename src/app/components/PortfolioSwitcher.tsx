@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useRef, useEffect } from 'react';
-import { useRouter } from 'next/navigation';
+import { useRouter, useSearchParams } from 'next/navigation';
 import { createPortal } from 'react-dom';
 import { ChevronDown, Plus, Trash2, Check, X } from 'lucide-react';
 
@@ -18,6 +18,7 @@ interface PortfolioSwitcherProps {
 
 export default function PortfolioSwitcher({ portfolios, currentId, variant = 'header' }: PortfolioSwitcherProps) {
   const router = useRouter();
+  const searchParams = useSearchParams();
   const [open, setOpen] = useState(false);
   const [creating, setCreating] = useState(false);
   const [newName, setNewName] = useState('');
@@ -46,10 +47,11 @@ export default function PortfolioSwitcher({ portfolios, currentId, variant = 'he
   }, []);
 
   function switchTo(id: string) {
-    const params = new URLSearchParams(window.location.search);
+    setOpen(false);
+    setCreating(false);
+    const params = new URLSearchParams(searchParams.toString());
     params.set('pid', id);
     router.push(`/?${params.toString()}`);
-    setOpen(false);
   }
 
   async function handleCreate() {
@@ -122,13 +124,25 @@ export default function PortfolioSwitcher({ portfolios, currentId, variant = 'he
         {localPortfolios.map(p => (
           <div
             key={p.id}
-            onClick={() => switchTo(p.id)}
-            className="flex items-center justify-between px-4 py-3 sm:py-2.5 hover:bg-element-hover cursor-pointer group/item transition-colors"
+            onClick={(e) => {
+              e.preventDefault();
+              e.stopPropagation();
+              switchTo(p.id);
+            }}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter' || e.key === ' ') {
+                e.preventDefault();
+                switchTo(p.id);
+              }
+            }}
+            role="button"
+            tabIndex={0}
+            className="w-full flex items-center justify-between px-4 py-3 sm:py-2.5 hover:bg-element-hover active:bg-element-hover cursor-pointer group/item transition-colors touch-manipulation outline-none"
           >
             <div className="flex items-center gap-3 min-w-0">
               <div className={`w-4 h-4 rounded-full border flex items-center justify-center transition-all ${
-                p.id === currentId 
-                  ? 'border-primary bg-primary text-on-primary scale-110' 
+                p.id === currentId
+                  ? 'border-primary bg-primary text-on-primary scale-110'
                   : 'border-border group-hover/item:border-gray-400'
               }`}>
                 {p.id === currentId && <Check className="w-2.5 h-2.5" />}
@@ -140,7 +154,7 @@ export default function PortfolioSwitcher({ portfolios, currentId, variant = 'he
             {localPortfolios.length > 1 && (
               <button
                 onClick={(e) => handleDelete(p.id, e)}
-                className="opacity-0 group-hover/item:opacity-100 p-1 rounded-lg text-secondary hover:text-rose-500 hover:bg-rose-50/50 transition-all"
+                className="opacity-100 sm:opacity-0 sm:group-hover/item:opacity-100 p-1 rounded-lg text-secondary hover:text-rose-500 hover:bg-rose-50/50 transition-all"
               >
                 <Trash2 className="w-4 h-4 sm:w-3.5 sm:h-3.5" />
               </button>
@@ -198,24 +212,35 @@ export default function PortfolioSwitcher({ portfolios, currentId, variant = 'he
       {/* Mobile Bottom Sheet */}
       {mounted && open && createPortal(
         <div className="sm:hidden fixed inset-0 z-[100] flex items-end justify-center animate-in fade-in duration-300">
-          <div 
+          <div
             className="absolute inset-0 bg-black/40 backdrop-blur-sm"
-            onClick={() => { setOpen(false); setCreating(false); }}
+            onClick={() => {
+              setOpen(false);
+              setCreating(false);
+            }}
           />
-          <div className="relative w-full bg-card rounded-t-[32px] shadow-2xl overflow-hidden animate-in slide-in-from-bottom duration-300 border-t border-border">
+          <div
+            className="relative w-full bg-card rounded-t-[32px] shadow-2xl overflow-hidden animate-in slide-in-from-bottom duration-300 border-t border-border"
+          >
             {/* Grab Handle */}
-            <div className="w-12 h-1.5 bg-border/60 rounded-full mx-auto mt-3 mb-1" />
-            
-            <div className="px-6 py-4 flex items-center justify-between">
+            <div
+              className="w-12 h-1.5 bg-border/60 rounded-full mx-auto mt-3 mb-1"
+              onClick={(e) => e.stopPropagation()}
+            />
+
+            <div
+              className="px-6 py-4 flex items-center justify-between"
+              onClick={(e) => e.stopPropagation()}
+            >
               <h3 className="text-[17px] font-bold text-primary">Switch Portfolio</h3>
-              <button 
-                onClick={() => setOpen(false)}
+              <button
+                onClick={() => { setOpen(false); setCreating(false); }}
                 className="w-8 h-8 rounded-full bg-element-hover flex items-center justify-center text-secondary"
               >
                 <X className="w-4 h-4" />
               </button>
             </div>
-            
+
             <div className="pb-8">
               {menuItems}
             </div>

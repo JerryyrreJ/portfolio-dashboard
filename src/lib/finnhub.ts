@@ -185,3 +185,35 @@ export async function getBasicFinancials(symbol: string): Promise<BasicFinancial
     metric: 'all',
   });
 }
+
+// ---- Dividends ----
+
+export interface DividendInfo {
+  symbol: string;
+  date: string;
+  amount: number;
+  adjustedAmount?: number;
+  currency?: string;
+  declarationDate?: string;
+  recordDate?: string;
+  payDate?: string;
+}
+
+/**
+ * 获取股票分红历史
+ * @param symbol 股票代码
+ * @param from 开始日期 YYYY-MM-DD
+ * @param to 结束日期 YYYY-MM-DD
+ */
+export async function getDividends(
+  symbol: string,
+  from: string,
+  to: string
+): Promise<DividendInfo[]> {
+  const data = await fetchFinnhub('/stock/dividend', {
+    symbol: symbol.toUpperCase(),
+    from,
+    to,
+  });
+  return data || [];
+}
