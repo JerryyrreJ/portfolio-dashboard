@@ -553,8 +553,8 @@ export default function SettingsPage() {
   };
 
   const renderToggle = (enabled: boolean = false) => (
-    <button className={`w-10 h-5 ${enabled ? 'bg-primary' : 'bg-gray-200'} rounded-full relative transition-colors`}>
-      <div className={`absolute ${enabled ? 'left-[22px]' : 'left-0.5'} top-0.5 w-4 h-4 bg-card rounded-full shadow-sm transition-all`}></div>
+    <button className={`w-10 h-5 ${enabled ? 'bg-primary' : 'bg-element shadow-inner'} rounded-full relative transition-all border border-border/50`}>
+      <div className={`absolute ${enabled ? 'left-[22px]' : 'left-0.5'} top-0.5 w-4 h-4 bg-white dark:bg-zinc-100 rounded-full shadow-[0_1px_3px_rgba(0,0,0,0.4)] transition-all`}></div>
     </button>
   );
 
@@ -646,7 +646,7 @@ export default function SettingsPage() {
                         }}
                         className={`text-[13px] font-bold px-3 py-1.5 rounded-lg transition-colors shadow-sm active:scale-95 border ${
                           isEditingPortfolioName 
-                            ? 'bg-element-hover border-border text-gray-700' 
+                            ? 'bg-element-hover border-border text-secondary' 
                             : 'bg-card border-border text-primary hover:bg-element-hover'
                         }`}
                       >
@@ -702,7 +702,7 @@ export default function SettingsPage() {
                         }}
                         className={`text-[13px] font-bold px-3 py-1.5 rounded-lg transition-colors shadow-sm active:scale-95 border ${
                           isEditingBaseCurrency 
-                            ? 'bg-element-hover border-border text-gray-700' 
+                            ? 'bg-element-hover border-border text-secondary' 
                             : 'bg-card border-border text-primary hover:bg-element-hover'
                         }`}
                       >
@@ -783,9 +783,9 @@ export default function SettingsPage() {
                     </div>
                     <button 
                       onClick={() => setIsExporting(!isExporting)}
-                      className={`flex-shrink-0 text-[13px] font-bold px-3 py-1.5 rounded-lg transition-colors shadow-sm active:scale-95 border ${
+                      className={`flex-shrink-0 text-[13px] font-bold px-3 py-1.5 rounded-lg transition-all shadow-sm active:scale-95 border ${
                         isExporting
-                          ? 'bg-element-hover border-border text-gray-700'
+                          ? 'bg-element-hover border-border text-secondary'
                           : 'bg-card border-border text-primary hover:bg-element-hover'
                       }`}
                     >
@@ -900,10 +900,11 @@ export default function SettingsPage() {
                         onClick={() => {
                           setIsEditingTheme(!isEditingTheme);
                           setIsEditingChartType(false);
+                          setIsEditingColorScheme(false);
                         }}
-                        className={`text-[12px] md:text-[13px] font-bold px-3 py-1.5 rounded-lg transition-colors shadow-sm active:scale-95 border ${
+                        className={`text-[12px] md:text-[13px] font-bold px-3 py-1.5 rounded-lg transition-all shadow-sm active:scale-95 border ${
                           isEditingTheme 
-                            ? 'bg-element-hover border-border text-gray-700' 
+                            ? 'bg-element-hover border-border text-secondary' 
                             : 'bg-card border-border text-primary hover:bg-element-hover'
                         }`}
                       >
@@ -913,27 +914,29 @@ export default function SettingsPage() {
                     {/* Expandable Theme Drawer */}
                     <div className={`grid transition-all duration-300 ease-in-out ${isEditingTheme ? 'grid-rows-[1fr] opacity-100' : 'grid-rows-[0fr] opacity-0'}`}>
                       <div className="overflow-hidden">
-                        <div className="p-4 md:p-5 bg-card border-t border-border/60 flex flex-wrap gap-2">
-                          {['Light', 'Dark', 'System'].map((t) => {
-                            const isSelected = mounted && theme === t.toLowerCase();
-                            return (
-                              <button
-                                key={t}
-                                onClick={() => {
-                                  setTheme(t.toLowerCase());
-                                  updatePreference('theme', t as 'Light' | 'Dark' | 'System');
-                                  setIsEditingTheme(false);
-                                }}
-                                className={`flex-1 min-w-[80px] text-[12px] font-bold py-2.5 rounded-xl transition-all active:scale-95 border ${
-                                  isSelected
-                                    ? 'bg-primary border-primary text-on-primary shadow-sm'
-                                    : 'bg-element border-border text-primary hover:border-border hover:bg-element-hover'
-                                }`}
-                              >
-                                {t}
-                              </button>
-                            );
-                          })}
+                        <div className="p-4 md:p-5 bg-card/50 border-t border-border/60 flex flex-wrap gap-2">
+                          <div className="flex w-full bg-element/50 p-1 rounded-2xl gap-1">
+                            {['Light', 'Dark', 'System'].map((t) => {
+                              const isSelected = mounted && theme === t.toLowerCase();
+                              return (
+                                <button
+                                  key={t}
+                                  onClick={() => {
+                                    setTheme(t.toLowerCase());
+                                    updatePreference('theme', t as 'Light' | 'Dark' | 'System');
+                                    setIsEditingTheme(false);
+                                  }}
+                                  className={`flex-1 text-[12px] font-bold py-2 rounded-xl transition-all active:scale-95 ${
+                                    isSelected
+                                      ? 'bg-white dark:bg-zinc-100 text-black shadow-[0_2px_10px_-3px_rgba(0,0,0,0.3)]'
+                                      : 'text-secondary hover:text-primary'
+                                  }`}
+                                >
+                                  {t}
+                                </button>
+                              );
+                            })}
+                          </div>
                         </div>
                       </div>
                     </div>
@@ -961,7 +964,7 @@ export default function SettingsPage() {
                         }}
                         className={`text-[12px] md:text-[13px] font-bold px-3 py-1.5 rounded-lg transition-colors shadow-sm active:scale-95 border ${
                           isEditingColorScheme 
-                            ? 'bg-element-hover border-border text-gray-700' 
+                            ? 'bg-element-hover border-border text-secondary' 
                             : 'bg-card border-border text-primary hover:bg-element-hover'
                         }`}
                       >
@@ -1024,7 +1027,7 @@ export default function SettingsPage() {
                         }}
                         className={`text-[12px] md:text-[13px] font-bold px-3 py-1.5 rounded-lg transition-colors shadow-sm active:scale-95 border ${
                           isEditingChartType 
-                            ? 'bg-element-hover border-border text-gray-700' 
+                            ? 'bg-element-hover border-border text-secondary' 
                             : 'bg-card border-border text-primary hover:bg-element-hover'
                         }`}
                       >
@@ -1034,23 +1037,28 @@ export default function SettingsPage() {
                     {/* Expandable Chart Type Drawer */}
                     <div className={`grid transition-all duration-300 ease-in-out ${isEditingChartType ? 'grid-rows-[1fr] opacity-100' : 'grid-rows-[0fr] opacity-0'}`}>
                       <div className="overflow-hidden">
-                        <div className="p-4 md:p-5 bg-card border-t border-border/60 flex flex-wrap gap-2">
-                          {['Area', 'Line', 'Bar'].map((c) => (
-                            <button
-                              key={c}
-                              onClick={() => {
-                                updatePreference('chartType', `${c} Chart` as 'Area Chart' | 'Line Chart' | 'Bar Chart');
-                                setIsEditingChartType(false);
-                              }}
-                              className={`flex-1 min-w-[80px] text-[12px] font-bold py-2.5 rounded-xl transition-all active:scale-95 border ${
-                                prefs.chartType.startsWith(c)
-                                  ? 'bg-primary border-primary text-on-primary shadow-sm'
-                                  : 'bg-element border-border text-primary hover:border-border hover:bg-element-hover'
-                              }`}
-                            >
-                              {c}
-                            </button>
-                          ))}
+                        <div className="p-4 md:p-5 bg-card/50 border-t border-border/60 flex flex-wrap gap-2">
+                          <div className="flex w-full bg-element/50 p-1 rounded-2xl gap-1">
+                            {['Area', 'Line', 'Bar'].map((c) => {
+                              const isSelected = prefs.chartType.startsWith(c);
+                              return (
+                                <button
+                                  key={c}
+                                  onClick={() => {
+                                    updatePreference('chartType', `${c} Chart` as 'Area Chart' | 'Line Chart' | 'Bar Chart');
+                                    setIsEditingChartType(false);
+                                  }}
+                                  className={`flex-1 text-[12px] font-bold py-2 rounded-xl transition-all active:scale-95 ${
+                                    isSelected
+                                      ? 'bg-white dark:bg-zinc-100 text-black shadow-sm'
+                                      : 'text-secondary hover:text-primary'
+                                  }`}
+                                >
+                                  {c}
+                                </button>
+                              );
+                            })}
+                          </div>
                         </div>
                       </div>
                     </div>
@@ -1069,10 +1077,11 @@ export default function SettingsPage() {
                     </div>
                     <button
                       onClick={() => updatePreference('hideSmallBalances', !prefs.hideSmallBalances)}
-                      className={`w-10 h-5 ${prefs.hideSmallBalances ? 'bg-primary' : 'bg-gray-200'} rounded-full relative transition-colors active:scale-90`}
+                      className={`w-10 h-5 ${prefs.hideSmallBalances ? 'bg-primary' : 'bg-element shadow-inner'} rounded-full relative transition-all active:scale-90 border border-border/50`}
                     >
-                      <div className={`absolute ${prefs.hideSmallBalances ? 'left-[22px]' : 'left-0.5'} top-0.5 w-4 h-4 bg-card rounded-full shadow-sm transition-all`}></div>
+                      <div className={`absolute ${prefs.hideSmallBalances ? 'left-[22px]' : 'left-0.5'} top-0.5 w-4 h-4 bg-white dark:bg-zinc-100 rounded-full shadow-[0_1px_3px_rgba(0,0,0,0.4)] transition-all`}></div>
                     </button>
+
                   </div>
                 </div>
               </div>
@@ -1093,9 +1102,9 @@ export default function SettingsPage() {
                     </div>
                     <button
                       onClick={() => updatePreference('realTimeSync', !prefs.realTimeSync)}
-                      className={`w-10 h-5 ${prefs.realTimeSync ? 'bg-primary' : 'bg-gray-200'} rounded-full relative transition-colors active:scale-90`}
+                      className={`w-10 h-5 ${prefs.realTimeSync ? 'bg-primary' : 'bg-element shadow-inner'} rounded-full relative transition-all active:scale-90 border border-border/50`}
                     >
-                      <div className={`absolute ${prefs.realTimeSync ? 'left-[22px]' : 'left-0.5'} top-0.5 w-4 h-4 bg-card rounded-full shadow-sm transition-all`}></div>
+                      <div className={`absolute ${prefs.realTimeSync ? 'left-[22px]' : 'left-0.5'} top-0.5 w-4 h-4 bg-white dark:bg-zinc-100 rounded-full shadow-[0_1px_3px_rgba(0,0,0,0.4)] transition-all`}></div>
                     </button>
                   </div>
                 </div>
@@ -1320,9 +1329,9 @@ export default function SettingsPage() {
                               setIsEditingPassword(false);
                               setAuthError(null);
                             }}
-                            className={`shrink-0 text-[12px] md:text-[13px] font-bold px-3 py-1.5 rounded-lg transition-colors shadow-sm active:scale-95 border ${
+                            className={`shrink-0 text-[12px] md:text-[13px] font-bold px-3 py-1.5 rounded-lg transition-all shadow-sm active:scale-95 border ${
                               isEditingDisplayName
-                                ? 'bg-element-hover border-border text-gray-700'
+                                ? 'bg-element-hover border-border text-secondary'
                                 : 'bg-card border-border text-primary hover:bg-element-hover'
                             }`}
                           >
@@ -1387,7 +1396,7 @@ export default function SettingsPage() {
                             }}
                             className={`shrink-0 text-[12px] md:text-[13px] font-bold px-3 py-1.5 rounded-lg transition-colors shadow-sm active:scale-95 border ${
                               isEditingEmail 
-                                ? 'bg-element-hover border-border text-gray-700' 
+                                ? 'bg-element-hover border-border text-secondary' 
                                 : 'bg-card border-border text-primary hover:bg-element-hover'
                             }`}
                           >
@@ -1455,7 +1464,7 @@ export default function SettingsPage() {
                             }}
                             className={`text-[12px] md:text-[13px] font-bold px-3 py-1.5 rounded-lg transition-colors shadow-sm active:scale-95 border ${
                               isEditingPassword 
-                                ? 'bg-element-hover border-border text-gray-700' 
+                                ? 'bg-element-hover border-border text-secondary' 
                                 : 'bg-card border-border text-primary hover:bg-element-hover'
                             }`}
                           >

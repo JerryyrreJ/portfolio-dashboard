@@ -438,15 +438,12 @@ export default function DashboardClient({ portfolioId, portfolioName, portfolios
               </div>
               <span>Folio</span>
             </div>
-            {portfolios.length > 0 && (
-              <PortfolioSwitcher portfolios={portfolios} currentId={portfolioId} />
-            )}
           </div>
         </header>
         <main className="flex-1 max-w-[1400px] w-full mx-auto px-6 py-6 animate-pulse">
           <div className="flex justify-between items-center mb-6">
             <div className="flex items-baseline space-x-3">
-              <div className="h-8 w-40 bg-border rounded-lg"></div>
+              <div className="h-10 w-48 bg-border rounded-xl"></div>
               <div className="hidden sm:inline-block h-5 w-16 bg-border rounded-md"></div>
             </div>
             <div className="flex items-center space-x-2">
@@ -553,9 +550,6 @@ export default function DashboardClient({ portfolioId, portfolioName, portfolios
               </div>
               <span>Folio</span>
             </div>
-          {portfolios.length > 0 && (
-            <PortfolioSwitcher portfolios={portfolios} currentId={portfolioId} />
-          )}
           <nav className="hidden md:flex space-x-7 text-[14px] font-semibold text-secondary">
             <a href={`/${portfolioId !== 'local-portfolio' ? `?pid=${portfolioId}` : ''}`} className="text-primary border-b-2 border-primary py-[16px]">Investments</a>
             <a href={`/transactions${portfolioId !== 'local-portfolio' ? `?pid=${portfolioId}` : ''}`} className="hover:text-primary transition-colors py-[16px]">Transactions</a>
@@ -624,7 +618,11 @@ export default function DashboardClient({ portfolioId, portfolioName, portfolios
         {/* 标题 & 操作按钮 - 紧凑布局 */}
         <div className="flex justify-between items-center mb-6">
           <div className="flex items-baseline space-x-3">
-            <h1 className="text-[28px] font-bold text-primary tracking-tight leading-none">{portfolioName}</h1>
+            <PortfolioSwitcher 
+              portfolios={portfolios} 
+              currentId={portfolioId} 
+              variant="title" 
+            />
             <span className="hidden sm:inline-block text-[13px] text-secondary font-medium bg-element-hover px-2 py-0.5 rounded-md">Real-time</span>
           </div>
           <div className="flex items-center space-x-2">

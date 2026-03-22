@@ -193,8 +193,11 @@ export default function PasskeySection({ user }: PasskeySectionProps) {
               setError(null);
             }
           }}
-          className="text-[12px] md:text-[13px] font-bold px-3 py-1.5 rounded-lg transition-colors shadow-sm active:scale-95 border bg-card border-border text-primary hover:bg-element-hover data-[active=true]:bg-element-hover data-[active=true]:border-border data-[active=true]:text-gray-700"
-          data-active={isEditOpen || isAddingNew}
+          className={`text-[12px] md:text-[13px] font-bold px-3 py-1.5 rounded-lg transition-all shadow-sm active:scale-95 border ${
+            isEditOpen || isAddingNew
+              ? 'bg-element-hover border-border text-secondary'
+              : 'bg-card border-border text-primary hover:bg-element-hover'
+          }`}
         >
           {isAddingNew ? 'Cancel' : !hasPasskeys ? 'Enable' : isEditOpen ? 'Done' : 'Edit'}
         </button>

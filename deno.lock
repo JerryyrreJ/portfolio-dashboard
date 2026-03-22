@@ -11,10 +11,12 @@
   "workspace": {
     "packageJson": {
       "dependencies": [
+        "npm:@github/webauthn-json@^2.1.1",
         "npm:@prisma/client@^6.19.2",
         "npm:@supabase/ssr@0.9",
         "npm:@supabase/supabase-js@^2.98.0",
         "npm:@tailwindcss/postcss@4",
+        "npm:@teamhanko/passkeys-next-auth-provider@~0.3.1",
         "npm:@types/node@20",
         "npm:@types/react-dom@19",
         "npm:@types/react@19",
@@ -23,7 +25,11 @@
         "npm:dotenv@^17.3.1",
         "npm:eslint-config-next@16.1.6",
         "npm:eslint@9",
+        "npm:html-to-image@^1.11.13",
+        "npm:jspdf-autotable@^5.0.7",
+        "npm:jspdf@^4.2.1",
         "npm:lucide-react@0.575",
+        "npm:next-themes@~0.4.6",
         "npm:next@16.1.6",
         "npm:prisma@^6.19.2",
         "npm:react-dom@19.2.3",

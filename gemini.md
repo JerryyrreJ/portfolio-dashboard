@@ -29,6 +29,22 @@ This project adheres to a strict "Restrained Minimalism" aesthetic, heavily insp
   - Use `duration-300 ease-in-out` for all transitions to ensure a "premium" feel.
 - **Destructive Actions**: Use `bg-rose-50/30` with `text-rose-500` for sign-out or delete buttons, adding a subtle icon translation (e.g., `group-hover:-translate-x-0.5`) on hover.
 
+### 5. Component Design Standards (Physicality & Depth)
+To maintain the Apple-inspired "Restrained Minimalism," all interactive components must follow these physical interaction laws:
+
+- **Segmented Controls (Tab Switchers)**:
+    - **The Track**: Always use a recessed container: `bg-element/50 p-1 rounded-2xl gap-1`.
+    - **The Floating Pill**: The selected item must look "elevated" using `bg-white dark:bg-zinc-100 text-black shadow-sm rounded-xl`. 
+    - **Unselected items**: Use `text-secondary hover:text-primary` with no background.
+- **Physical Switches (Toggles)**:
+    - **OFF State**: Use a neutral, recessed track: `bg-element shadow-inner border border-border/50`.
+    - **ON State**: Use the primary high-contrast track: `bg-primary`.
+    - **The Knob**: Always high-contrast (`bg-white dark:bg-zinc-100`) with a distinct shadow (`shadow-[0_1px_3px_rgba(0,0,0,0.4)]`) to suggest it sits *on top* of the track.
+- **Secondary & Cancel Actions**:
+    - **Clarity over Contrast**: For "Cancel" or secondary buttons, use `text-secondary`.
+    - **Active State**: When in "Edit Mode" or "Active," the button can take a subtle `bg-element-hover` to show context, but the text must remain `text-secondary` to avoid visual competition with the "Save/Confirm" action.
+    - **Dark Mode**: Never use `text-gray-700` on dark backgrounds; always use the adaptive `text-secondary`.
+
 ---
 
 ## 🏗️ Architecture (System Context)

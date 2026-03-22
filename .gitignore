@@ -12,6 +12,9 @@
 
 # testing
 /coverage
+/tests/
+*.test.ts
+*.spec.ts
 
 # next.js
 /.next/
