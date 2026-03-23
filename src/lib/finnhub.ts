@@ -6,6 +6,17 @@
 const API_KEY = process.env.FINNHUB_API_KEY || '';
 const BASE_URL = 'https://finnhub.io/api/v1';
 
+// 速率限制追踪
+let isRateLimited = false;
+
+export function isFinnhubRateLimited() {
+  return isRateLimited;
+}
+
+export function resetFinnhubRateLimit() {
+  isRateLimited = false;
+}
+
 // 统一的请求函数
 async function fetchFinnhub(endpoint: string, params: Record<string, string> = {}) {
   const url = new URL(`${BASE_URL}${endpoint}`);
@@ -25,6 +36,10 @@ async function fetchFinnhub(endpoint: string, params: Record<string, string> = {
     });
     
     clearTimeout(timeoutId);
+
+    if (response.status === 429) {
+      isRateLimited = true;
+    }
 
     if (!response.ok) {
       console.warn(`Finnhub API error: ${response.status} ${response.statusText} for ${endpoint}`);

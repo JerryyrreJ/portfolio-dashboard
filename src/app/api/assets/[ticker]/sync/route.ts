@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import prisma from '@/lib/prisma';
-import { getCompanyProfile, getBasicFinancials } from '@/lib/finnhub';
-import { getLogo as getTwelveDataLogo } from '@/lib/twelvedata';
+import { getCompanyProfile, getBasicFinancials, isFinnhubRateLimited, resetFinnhubRateLimit } from '@/lib/finnhub';
+import { getLogo as getTwelveDataLogo, isTwelveDataRateLimited, resetTwelveDataRateLimit } from '@/lib/twelvedata';
 import { getQuote as getTDQuote, get12MonthHistory } from '@/lib/twelvedata';
 import { getQuote as getFinnhubQuote } from '@/lib/finnhub';
 
@@ -12,6 +12,10 @@ export async function POST(
   try {
     const { ticker } = await params;
     const decodedTicker = decodeURIComponent(ticker).toUpperCase();
+
+    // Reset rate limit trackers for this request
+    resetFinnhubRateLimit();
+    resetTwelveDataRateLimit();
 
     const asset = await prisma.asset.findUnique({
       where: { ticker: decodedTicker }
@@ -139,12 +143,18 @@ export async function POST(
       data: updateData,
     });
 
-    return NextResponse.json({
+    const nextResponse = NextResponse.json({
       success: true,
       ticker: decodedTicker,
       updatedAt: currentTime.toISOString(),
       historyUpserted,
     });
+
+    if (isFinnhubRateLimited() || isTwelveDataRateLimited()) {
+      nextResponse.headers.set('X-RateLimit-Exhausted', 'true');
+    }
+
+    return nextResponse;
 
   } catch (error) {
     console.error('Failed to sync asset data:', error);

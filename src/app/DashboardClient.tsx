@@ -159,6 +159,7 @@ export default function DashboardClient({ portfolioId, portfolioName, portfolios
   const [showMobileSearch, setShowMobileSearch] = useState(false);
   const { searchStock } = useStock();
   const [isRefreshing, setIsRefreshing] = useState(false);
+  const [isRateLimited, setIsRateLimited] = useState(false);
   const [returnDisplayMode, setReturnDisplayMode] = useState<'percentage' | 'currency'>('percentage');
 
   // 图表时间范围状态
@@ -217,6 +218,11 @@ export default function DashboardClient({ portfolioId, portfolioName, portfolios
       try {
         const symbolParam = Array.from(tickers).join(',');
         const res = await fetch(`/api/stock/batch-quote?symbols=${symbolParam}`);
+        
+        if (res.headers.get('X-RateLimit-Exhausted') === 'true' || res.status === 429) {
+          setIsRateLimited(true);
+        }
+
         if (!res.ok) return;
 
         const livePrices: Record<string, number> = await res.json();
@@ -464,7 +470,7 @@ export default function DashboardClient({ portfolioId, portfolioName, portfolios
         </header>
         <main className="flex-1 max-w-[1400px] w-full mx-auto px-6 py-6 animate-pulse">
           <div className="flex justify-between items-center mb-6">
-            <div className="flex items-baseline space-x-3">
+            <div className="flex items-center space-x-3">
               <div className="h-10 w-48 bg-border rounded-xl"></div>
               <div className="hidden sm:inline-block h-5 w-16 bg-border rounded-md"></div>
             </div>
@@ -639,15 +645,16 @@ export default function DashboardClient({ portfolioId, portfolioName, portfolios
         
         {/* 标题 & 操作按钮 - 紧凑布局 */}
         <div className="flex justify-between items-center mb-6">
-          <div className="flex items-baseline space-x-3">
-            <PortfolioSwitcher 
-              portfolios={portfolios} 
-              currentId={portfolioId} 
-              variant="title" 
+          <div className="flex items-center space-x-3">
+            <PortfolioSwitcher
+              portfolios={portfolios}
+              currentId={portfolioId}
+              variant="title"
             />
-            <span className="hidden sm:inline-block text-[13px] text-secondary font-medium bg-element-hover px-2 py-0.5 rounded-md">Real-time</span>
-          </div>
-          <div className="flex items-center space-x-2">
+            <span className={`hidden sm:inline-block text-[13px] font-medium px-2 py-0.5 rounded-md transition-colors ${isRateLimited ? 'text-rose-500 bg-rose-50/50' : 'text-secondary bg-element-hover'}`}>
+              {isRateLimited ? 'API Limit Reached' : 'Real-time'}
+            </span>
+            </div>          <div className="flex items-center space-x-2">
             <button
               onClick={handleRefresh}
               disabled={isRefreshing}
@@ -664,6 +671,32 @@ export default function DashboardClient({ portfolioId, portfolioName, portfolios
             </button>
           </div>
         </div>
+
+        {/* Pending Dividends Banner */}
+        {pendingDividendCount > 0 && portfolioId !== 'local-portfolio' && (
+          <div className="mb-6 animate-in fade-in slide-in-from-top-4 duration-500">
+            <div 
+              onClick={() => setIsDividendModalOpen(true)}
+              className="group cursor-pointer bg-element hover:bg-element-hover border border-border rounded-2xl p-4 flex items-center justify-between transition-all active:scale-[0.99] shadow-sm"
+            >
+              <div className="flex items-center space-x-4">
+                <div className="w-10 h-10 rounded-full bg-primary/5 flex items-center justify-center text-primary group-hover:scale-110 transition-transform duration-300 ring-4 ring-black/5">
+                  <TrendingUp className="w-5 h-5" />
+                </div>
+                <div>
+                  <h3 className="text-[14px] font-bold text-primary tracking-tight">Pending Dividends</h3>
+                  <p className="text-[12px] text-secondary font-medium">You have {pendingDividendCount} dividend payment{pendingDividendCount > 1 ? 's' : ''} to review and confirm.</p>
+                </div>
+              </div>
+              <div className="flex items-center space-x-3">
+                <span className="hidden sm:flex px-2.5 py-1 bg-primary text-on-primary text-[11px] font-bold rounded-full uppercase tracking-wider">
+                  Review Now
+                </span>
+                <ChevronRight className="w-5 h-5 text-secondary group-hover:translate-x-1 transition-transform" />
+              </div>
+            </div>
+          </div>
+        )}
 
         {totalHoldingsCount === 0 ? (
           /* 空状态面板 */
@@ -735,19 +768,6 @@ export default function DashboardClient({ portfolioId, portfolioName, portfolios
                   <span className={`text-[20px] font-bold tracking-tight tabular-nums ${localSummary.totalDividendIncome > 0 ? colors.gain.tailwind.text : 'text-secondary'}`}>
                     {localSummary.totalDividendIncome > 0 ? '+' : ''}{fmt(localSummary.totalDividendIncome || 0)}
                   </span>
-                  {portfolioId !== 'local-portfolio' && (
-                    <button
-                      onClick={() => setIsDividendModalOpen(true)}
-                      className="relative text-[10px] font-bold text-indigo-600 hover:text-indigo-700 transition-colors px-2 py-1 rounded-lg hover:bg-indigo-50"
-                    >
-                      Review
-                      {pendingDividendCount > 0 && (
-                        <span className="absolute -top-1 -right-1 w-4 h-4 bg-indigo-500 text-white text-[9px] font-bold rounded-full flex items-center justify-center">
-                          {pendingDividendCount}
-                        </span>
-                      )}
-                    </button>
-                  )}
                 </div>
                 <p className="text-secondary text-[11px] font-medium mt-0.5">Cash reinvested or withdrawn</p>
               </div>
@@ -793,7 +813,7 @@ export default function DashboardClient({ portfolioId, portfolioName, portfolios
                         const returnVal = todayPoint?.Return ?? 0;
                         const isPos = returnVal >= 0;
                         return (
-                          <p className={`text-[12px] font-medium mt-1 ${isPos ? 'text-emerald-600' : 'text-rose-500'}`}>
+                          <p className={`text-[12px] font-medium mt-1 ${isPos ? colors.gain.tailwind.text : colors.loss.tailwind.text}`}>
                             {isPos ? '+' : ''}{returnVal.toFixed(2)}% total return
                           </p>
                         );
@@ -862,45 +882,62 @@ export default function DashboardClient({ portfolioId, portfolioName, portfolios
                   ))}
                 </div>
                 <ResponsiveContainer width="100%" height="100%">
-                  <AreaChart data={filteredChartData} margin={{ top: 10, right: 52, left: 0, bottom: 0 }}>
-                    <defs>
-                      <linearGradient id="colorTotal" x1="0" y1="0" x2="0" y2="1">
-                        <stop offset="5%" stopColor="var(--text-primary)" stopOpacity={0.08}/>
-                        <stop offset="95%" stopColor="var(--text-primary)" stopOpacity={0}/>
-                      </linearGradient>
-                    </defs>
-                    <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="var(--border-subtle)" />
-                    <XAxis
-                      dataKey="date"
-                      axisLine={false}
-                      tickLine={false}
-                      tick={<CustomXAxisTick />}
-                      interval="equidistantPreserveStart"
-                      minTickGap={20}
-                    />
-                    <YAxis hide domain={[yTicks[0] ?? 'auto', yTicks[yTicks.length - 1] ?? 'auto']} ticks={yTicks} />
-                    <Tooltip
-                      contentStyle={{ borderRadius: '12px', border: '1px solid var(--border-subtle)', boxShadow: '0 8px 20px -5px rgb(0 0 0 / 0.2)', backgroundColor: 'var(--bg-card)', backdropFilter: 'blur(8px)', padding: '10px' }}
-                      itemStyle={{ fontSize: '11px', fontWeight: 'bold', padding: '2px 0', color: 'var(--text-primary)' }}
-                      labelStyle={{ marginBottom: '4px', color: 'var(--text-secondary)', fontSize: '10px', fontWeight: '600' }}
-                      labelFormatter={(dateStr) => {
-                        if (dateStr === 'Today') return 'Today';
-                        const d = new Date(dateStr);
-                        if (isNaN(d.getTime())) return dateStr;
-                        return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
-                      }}
-                      formatter={(value: any) =>
-                        chartMode === 'return'
-                          ? [`${Number(value) >= 0 ? '+' : ''}${Number(value).toFixed(2)}%`, undefined as any]
-                          : [`${fmt(Number(value))}`, undefined as any]
+                  {(() => {
+                    const firstPoint = filteredChartData.find(d => d.date !== 'Today');
+                    const lastPoint = filteredChartData[filteredChartData.length - 1];
+                    let isGain = true;
+                    if (firstPoint && lastPoint) {
+                      if (chartMode === 'return') {
+                        isGain = (lastPoint.Return ?? 0) >= 0;
+                      } else {
+                        const key = portfolioId === 'local-portfolio' ? 'Local' : 'Total';
+                        isGain = (lastPoint[key] ?? 0) >= (firstPoint[key] ?? 0);
                       }
-                    />
-                    {portfolioId === 'local-portfolio' ? (
-                      <Area type="monotone" dataKey="Local" stroke="var(--text-primary)" strokeWidth={2} fill="var(--bg-element)" fillOpacity={1} activeDot={{ r: 4, strokeWidth: 0, fill: 'var(--text-primary)' }} />
-                    ) : (
-                      <Area type="monotone" dataKey={chartMode === 'return' ? 'Return' : 'Total'} stroke="var(--text-primary)" strokeWidth={2} fill="url(#colorTotal)" activeDot={{ r: 4, strokeWidth: 0, fill: 'var(--text-primary)' }} />
-                    )}
-                  </AreaChart>
+                    }
+                    const chartColorHex = isGain ? colors.gain.hex : colors.loss.hex;
+
+                    return (
+                      <AreaChart data={filteredChartData} margin={{ top: 10, right: 52, left: 0, bottom: 0 }}>
+                        <defs>
+                          <linearGradient id="colorTotal" x1="0" y1="0" x2="0" y2="1">
+                            <stop offset="5%" stopColor={chartColorHex} stopOpacity={0.08}/>
+                            <stop offset="95%" stopColor={chartColorHex} stopOpacity={0}/>
+                          </linearGradient>
+                        </defs>
+                        <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="var(--border-subtle)" />
+                        <XAxis
+                          dataKey="date"
+                          axisLine={false}
+                          tickLine={false}
+                          tick={<CustomXAxisTick />}
+                          interval="equidistantPreserveStart"
+                          minTickGap={20}
+                        />
+                        <YAxis hide domain={[yTicks[0] ?? 'auto', yTicks[yTicks.length - 1] ?? 'auto']} ticks={yTicks} />
+                        <Tooltip
+                          contentStyle={{ borderRadius: '12px', border: '1px solid var(--border-subtle)', boxShadow: '0 8px 20px -5px rgb(0 0 0 / 0.2)', backgroundColor: 'var(--bg-card)', backdropFilter: 'blur(8px)', padding: '10px' }}
+                          itemStyle={{ fontSize: '11px', fontWeight: 'bold', padding: '2px 0', color: 'var(--text-primary)' }}
+                          labelStyle={{ marginBottom: '4px', color: 'var(--text-secondary)', fontSize: '10px', fontWeight: '600' }}
+                          labelFormatter={(dateStr) => {
+                            if (dateStr === 'Today') return 'Today';
+                            const d = new Date(dateStr);
+                            if (isNaN(d.getTime())) return dateStr;
+                            return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+                          }}
+                          formatter={(value: any) =>
+                            chartMode === 'return'
+                              ? [`${Number(value) >= 0 ? '+' : ''}${Number(value).toFixed(2)}%`, undefined as any]
+                              : [`${fmt(Number(value))}`, undefined as any]
+                          }
+                        />
+                        {portfolioId === 'local-portfolio' ? (
+                          <Area type="monotone" dataKey="Local" stroke={chartColorHex} strokeWidth={2} fill="var(--bg-element)" fillOpacity={1} activeDot={{ r: 4, strokeWidth: 0, fill: chartColorHex }} />
+                        ) : (
+                          <Area type="monotone" dataKey={chartMode === 'return' ? 'Return' : 'Total'} stroke={chartColorHex} strokeWidth={2} fill="url(#colorTotal)" activeDot={{ r: 4, strokeWidth: 0, fill: chartColorHex }} />
+                        )}
+                      </AreaChart>
+                    );
+                  })()}
                 </ResponsiveContainer>
               </div>
               
@@ -942,7 +979,7 @@ export default function DashboardClient({ portfolioId, portfolioName, portfolios
                   <th className="px-4 sm:px-6 py-3 text-right w-10 hidden sm:table-cell"></th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-gray-50 bg-card">
+              <tbody className="divide-y divide-border bg-card">
                 {localHoldings.map((group) => (
                   <React.Fragment key={group.market}>
                     {/* 分组标题行 */}

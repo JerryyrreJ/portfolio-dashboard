@@ -37,6 +37,17 @@ export interface HistoricalCandle {
   s: string;   // 状态
 }
 
+// 速率限制追踪
+let isRateLimited = false;
+
+export function isTwelveDataRateLimited() {
+  return isRateLimited;
+}
+
+export function resetTwelveDataRateLimit() {
+  isRateLimited = false;
+}
+
 async function fetchTwelveData(endpoint: string, params: Record<string, string> = {}) {
   const url = new URL(`${BASE_URL}${endpoint}`);
   url.searchParams.append('apikey', API_KEY);
@@ -52,6 +63,10 @@ async function fetchTwelveData(endpoint: string, params: Record<string, string> 
     });
     clearTimeout(timeoutId);
 
+    if (response.status === 429) {
+      isRateLimited = true;
+    }
+
     if (!response.ok) {
       console.warn(`Twelve Data API error: ${response.status} ${response.statusText} for ${endpoint}`);
       return null;
@@ -59,7 +74,10 @@ async function fetchTwelveData(endpoint: string, params: Record<string, string> 
 
     const data = await response.json();
 
-    if (data.status === 'error') {
+    if (data.status === 'error' || data.code === 429) {
+      if (data.code === 429 || data.message?.includes('rate limit')) {
+        isRateLimited = true;
+      }
       console.warn(`Twelve Data API error: ${data.message} for ${endpoint}`);
       return null;
     }

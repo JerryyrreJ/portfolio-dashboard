@@ -225,6 +225,7 @@ export default function StockDetailClient({ stockData }: { stockData: StockData 
   const [activeTab, setActiveTab] = useState('summary');
   const [timeRange, setTimeRange] = useState('1Y');
   const [isRefreshing, setIsRefreshing] = useState(false);
+  const [isRateLimited, setIsRateLimited] = useState(false);
   const [isAddTradeOpen, setIsAddTradeOpen] = useState(false);
   const [isShareModalOpen, setIsShareModalOpen] = useState(false);
   const [chartData, setChartData] = useState<ChartPoint[]>(stockData.chartData);
@@ -315,6 +316,9 @@ export default function StockDetailClient({ stockData }: { stockData: StockData 
         try {
           console.log('Data is stale. Syncing silently in background...');
           const res = await fetch(`/api/assets/${ticker}/sync`, { method: 'POST' });
+          if (res.headers.get('X-RateLimit-Exhausted') === 'true' || res.status === 429) {
+            setIsRateLimited(true);
+          }
           if (res.ok) {
             router.refresh();
           }
@@ -331,7 +335,10 @@ export default function StockDetailClient({ stockData }: { stockData: StockData 
   const handleRefresh = async () => {
     setIsRefreshing(true);
     try {
-      await fetch(`/api/assets/${ticker}/sync`, { method: 'POST' });
+      const res = await fetch(`/api/assets/${ticker}/sync`, { method: 'POST' });
+      if (res.headers.get('X-RateLimit-Exhausted') === 'true' || res.status === 429) {
+        setIsRateLimited(true);
+      }
       router.refresh();
     } catch (e) {
       console.error(e);
@@ -605,7 +612,7 @@ export default function StockDetailClient({ stockData }: { stockData: StockData 
                 )}
 
                 {activeTab === 'news' && (
-                  <div className="divide-y divide-gray-50">
+                  <div className="divide-y divide-border">
                     {isNewsLoading ? <div className="py-20 text-center"><RefreshCw className="w-6 h-6 animate-spin mx-auto text-gray-200" /></div> : news.map(a => <NewsCard key={a.id} article={a} />)}
                   </div>
                 )}
@@ -622,7 +629,7 @@ export default function StockDetailClient({ stockData }: { stockData: StockData 
                           <th className="px-4 sm:px-6 py-3 text-right">Total</th>
                         </tr>
                       </thead>
-                      <tbody className="divide-y divide-gray-50 text-[13px]">
+                      <tbody className="divide-y divide-border text-[13px]">
                         {transactions.map(tx => (
                           <tr key={tx.id} className="hover:bg-element/50">
                             <td className="px-4 sm:px-6 py-4 font-semibold">{new Date(tx.date).toLocaleDateString()}</td>
@@ -675,22 +682,25 @@ export default function StockDetailClient({ stockData }: { stockData: StockData 
                   <span className="font-bold text-primary tabular-nums">{fmt(avgBuyPrice)}</span>
                 </div>
                 
-                <div className={`mt-2 p-3 rounded-xl border ${isProfit ? `bg-${profitColor.tw}-50/50 border-${profitColor.tw}-100/50` : `bg-${colors.loss.tw}-50/50 border-${colors.loss.tw}-100/50`}`}>
+                <div className={`mt-2 p-3 rounded-xl border transition-colors ${
+                  isProfit 
+                    ? `bg-emerald-500/10 border-emerald-500/20` 
+                    : `bg-rose-500/10 border-rose-500/20`
+                }`}>
                   <div className="flex justify-between items-center">
-                    <span className={`text-[12px] font-bold uppercase tracking-wider ${profitColor.tailwind.text}`}>
+                    <span className={`text-[12px] font-bold uppercase tracking-wider ${isProfit ? 'text-emerald-600 dark:text-emerald-500' : 'text-rose-600 dark:text-rose-500'}`}>
                       Total Return
                     </span>
                     <div className="text-right">
-                      <div className={`text-[16px] font-bold tracking-tight tabular-nums ${profitColor.tailwind.text}`}>
+                      <div className={`text-[16px] font-bold tracking-tight tabular-nums ${isProfit ? 'text-emerald-600 dark:text-emerald-500' : 'text-rose-600 dark:text-rose-500'}`}>
                         {isProfit ? '+' : '-'}{fmt(Math.abs(totalReturn))}
                       </div>
-                      <div className={`text-[11px] font-bold ${profitColor.tailwind.text}`}>
+                      <div className={`text-[11px] font-bold ${isProfit ? 'text-emerald-600/80 dark:text-emerald-400/80' : 'text-rose-600/80 dark:text-rose-400/80'}`}>
                         {isProfit ? '+' : ''}{totalReturnPercent.toFixed(2)}%
                       </div>
                     </div>
                   </div>
-                </div>
-              </div>
+                </div>              </div>
             </div>
 
             {/* Secondary Stats */}
@@ -704,9 +714,11 @@ export default function StockDetailClient({ stockData }: { stockData: StockData 
 
             {/* Market Status Bar */}
             <div className="bg-element-hover/50 rounded-2xl p-5 border border-border text-center">
-              <div className="flex items-center justify-center gap-2 text-[11px] font-bold text-secondary uppercase tracking-widest">
-                <div className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse"></div>
-                Market Data Live
+              <div className="flex items-center justify-center gap-2 text-[11px] font-bold uppercase tracking-widest">
+                <div className={`w-1.5 h-1.5 rounded-full ${isRateLimited ? 'bg-rose-500' : 'bg-emerald-500 animate-pulse'}`}></div>
+                <span className={isRateLimited ? 'text-rose-500' : 'text-secondary'}>
+                  {isRateLimited ? 'API Limit Reached' : 'Market Data Live'}
+                </span>
               </div>
               <p className="text-[10px] text-secondary font-medium mt-1">Last synced {new Date(lastUpdated).toLocaleTimeString()}</p>
             </div>

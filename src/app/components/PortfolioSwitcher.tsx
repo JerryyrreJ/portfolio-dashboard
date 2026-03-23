@@ -47,10 +47,12 @@ export default function PortfolioSwitcher({ portfolios, currentId, variant = 'he
   }, []);
 
   function switchTo(id: string) {
+    console.log('switchTo called with id:', id);
     setOpen(false);
     setCreating(false);
     const params = new URLSearchParams(searchParams.toString());
     params.set('pid', id);
+    console.log('Navigating to:', `/?${params.toString()}`);
     router.push(`/?${params.toString()}`);
   }
 
@@ -120,11 +122,18 @@ export default function PortfolioSwitcher({ portfolios, currentId, variant = 'he
 
   const menuItems = (
     <>
-      <div className="max-h-[300px] overflow-y-auto no-scrollbar py-1">
+      <div className="max-h-[300px] overflow-y-auto no-scrollbar py-1" style={{ pointerEvents: 'auto' }}>
         {localPortfolios.map(p => (
           <div
             key={p.id}
             onClick={(e) => {
+              console.log('Portfolio item clicked:', p.id, p.name);
+              e.preventDefault();
+              e.stopPropagation();
+              switchTo(p.id);
+            }}
+            onTouchEnd={(e) => {
+              console.log('Portfolio item touched:', p.id, p.name);
               e.preventDefault();
               e.stopPropagation();
               switchTo(p.id);
@@ -138,6 +147,7 @@ export default function PortfolioSwitcher({ portfolios, currentId, variant = 'he
             role="button"
             tabIndex={0}
             className="w-full flex items-center justify-between px-4 py-3 sm:py-2.5 hover:bg-element-hover active:bg-element-hover cursor-pointer group/item transition-colors touch-manipulation outline-none"
+            style={{ pointerEvents: 'auto' }}
           >
             <div className="flex items-center gap-3 min-w-0">
               <div className={`w-4 h-4 rounded-full border flex items-center justify-center transition-all ${
@@ -153,7 +163,12 @@ export default function PortfolioSwitcher({ portfolios, currentId, variant = 'he
             </div>
             {localPortfolios.length > 1 && (
               <button
-                onClick={(e) => handleDelete(p.id, e)}
+                onClick={(e) => {
+                  console.log('Delete button clicked for:', p.id);
+                  e.preventDefault();
+                  e.stopPropagation();
+                  handleDelete(p.id, e);
+                }}
                 className="opacity-100 sm:opacity-0 sm:group-hover/item:opacity-100 p-1 rounded-lg text-secondary hover:text-rose-500 hover:bg-rose-50/50 transition-all"
               >
                 <Trash2 className="w-4 h-4 sm:w-3.5 sm:h-3.5" />
@@ -163,32 +178,46 @@ export default function PortfolioSwitcher({ portfolios, currentId, variant = 'he
         ))}
       </div>
 
-      <div className="border-t border-border/60 p-1">
+      <div className="border-t border-border/60 p-1" style={{ pointerEvents: 'auto' }}>
         {creating ? (
-          <div className="px-3 py-2 flex items-center gap-2">
+          <div className="px-3 py-2 flex items-center gap-2" style={{ pointerEvents: 'auto' }}>
             <input
               autoFocus
               value={newName}
               onChange={e => setNewName(e.target.value)}
-              onKeyDown={e => { 
-                if (e.key === 'Enter') handleCreate(); 
-                if (e.key === 'Escape') { setCreating(false); setNewName(''); } 
+              onKeyDown={e => {
+                if (e.key === 'Enter') handleCreate();
+                if (e.key === 'Escape') { setCreating(false); setNewName(''); }
               }}
               placeholder="Portfolio name"
               className="flex-1 text-[15px] sm:text-[13px] bg-transparent border-b border-border outline-none text-primary placeholder:text-secondary py-1"
+              style={{ pointerEvents: 'auto' }}
             />
             <button
               onClick={handleCreate}
               disabled={!newName.trim() || loading}
               className="text-[13px] font-bold text-primary disabled:opacity-40 px-2 py-1"
+              style={{ pointerEvents: 'auto' }}
             >
               {loading ? '...' : 'Add'}
             </button>
           </div>
         ) : (
           <button
-            onClick={() => setCreating(true)}
+            onClick={(e) => {
+              console.log('New portfolio button clicked');
+              e.preventDefault();
+              e.stopPropagation();
+              setCreating(true);
+            }}
+            onTouchEnd={(e) => {
+              console.log('New portfolio button touched');
+              e.preventDefault();
+              e.stopPropagation();
+              setCreating(true);
+            }}
             className="w-full flex items-center gap-2 px-3 py-2.5 sm:py-2 text-[14px] sm:text-[13px] font-semibold text-secondary hover:text-primary hover:bg-element-hover rounded-lg transition-colors"
+            style={{ pointerEvents: 'auto' }}
           >
             <Plus className="w-4 h-4 sm:w-3.5 sm:h-3.5" />
             New portfolio
@@ -211,37 +240,61 @@ export default function PortfolioSwitcher({ portfolios, currentId, variant = 'he
 
       {/* Mobile Bottom Sheet */}
       {mounted && open && createPortal(
-        <div className="sm:hidden fixed inset-0 z-[100] flex items-end justify-center animate-in fade-in duration-300">
+        <div
+          className="sm:hidden fixed inset-0 z-[9999] flex items-end justify-center"
+          style={{ pointerEvents: 'auto' }}
+        >
           <div
             className="absolute inset-0 bg-black/40 backdrop-blur-sm"
             onClick={() => {
+              console.log('Overlay clicked - closing');
               setOpen(false);
               setCreating(false);
             }}
+            style={{ pointerEvents: 'auto' }}
           />
           <div
-            className="relative w-full bg-card rounded-t-[32px] shadow-2xl overflow-hidden animate-in slide-in-from-bottom duration-300 border-t border-border"
+            className="relative w-full bg-card rounded-t-[32px] shadow-2xl overflow-hidden border-t border-border max-h-[80vh]"
+            onClick={(e) => {
+              console.log('Bottom sheet container clicked');
+              e.stopPropagation();
+            }}
+            style={{ pointerEvents: 'auto' }}
           >
             {/* Grab Handle */}
             <div
               className="w-12 h-1.5 bg-border/60 rounded-full mx-auto mt-3 mb-1"
-              onClick={(e) => e.stopPropagation()}
+              onClick={(e) => {
+                console.log('Grab handle clicked');
+                e.stopPropagation();
+              }}
+              style={{ pointerEvents: 'auto' }}
             />
 
             <div
               className="px-6 py-4 flex items-center justify-between"
-              onClick={(e) => e.stopPropagation()}
+              onClick={(e) => {
+                console.log('Header clicked');
+                e.stopPropagation();
+              }}
+              style={{ pointerEvents: 'auto' }}
             >
               <h3 className="text-[17px] font-bold text-primary">Switch Portfolio</h3>
               <button
-                onClick={() => { setOpen(false); setCreating(false); }}
+                onClick={(e) => {
+                  console.log('Close button clicked');
+                  e.stopPropagation();
+                  setOpen(false);
+                  setCreating(false);
+                }}
                 className="w-8 h-8 rounded-full bg-element-hover flex items-center justify-center text-secondary"
+                style={{ pointerEvents: 'auto' }}
               >
                 <X className="w-4 h-4" />
               </button>
             </div>
 
-            <div className="pb-8">
+            <div className="pb-8" style={{ pointerEvents: 'auto' }}>
               {menuItems}
             </div>
           </div>

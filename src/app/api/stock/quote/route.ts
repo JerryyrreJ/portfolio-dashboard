@@ -30,7 +30,12 @@ export async function GET(request: NextRequest) {
     if (!response.ok) {
       // 非美股在免费套餐下会返回 403，静默处理，前端价格留空让用户手动填
       console.warn(`Finnhub quote unavailable for ${symbol}: ${response.status}`);
-      return NextResponse.json({ c: 0 });
+      
+      const nextResponse = NextResponse.json({ c: 0 });
+      if (response.status === 429) {
+        nextResponse.headers.set('X-RateLimit-Exhausted', 'true');
+      }
+      return nextResponse;
     }
 
     const data = await response.json();

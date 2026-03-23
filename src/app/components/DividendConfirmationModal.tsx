@@ -268,7 +268,7 @@ export default function DividendConfirmationModal({
                 </div>
 
                 {/* Amount Section */}
-                <div className="bg-indigo-50/30 border border-indigo-100/50 rounded-xl p-4 mb-4">
+                <div className="bg-element border border-border rounded-xl p-4 mb-4">
                   <div className="flex items-center justify-between mb-2">
                     <p className="text-[11px] font-bold text-secondary uppercase tracking-widest">Calculated Amount</p>
                     {!isEditing && (
@@ -277,7 +277,7 @@ export default function DividendConfirmationModal({
                           setEditingId(dividend.id);
                           setEditedAmounts(prev => ({ ...prev, [dividend.id]: dividend.calculatedAmount }));
                         }}
-                        className="text-[11px] font-bold text-indigo-600 hover:text-indigo-700 transition-colors"
+                        className="text-[11px] font-bold text-secondary hover:text-primary transition-colors"
                       >
                         Edit
                       </button>
@@ -293,7 +293,7 @@ export default function DividendConfirmationModal({
                           step="0.01"
                           value={displayAmount}
                           onChange={(e) => setEditedAmounts(prev => ({ ...prev, [dividend.id]: parseFloat(e.target.value) || 0 }))}
-                          className="w-full pl-10 pr-4 py-2.5 bg-card border border-border rounded-xl text-[14px] font-bold tabular-nums outline-none focus:ring-2 focus:ring-indigo-500/20"
+                          className="w-full pl-10 pr-4 py-2.5 bg-card border border-border rounded-xl text-[14px] font-bold tabular-nums outline-none focus:ring-2 focus:ring-primary/20"
                           autoFocus
                         />
                       </div>
@@ -325,7 +325,7 @@ export default function DividendConfirmationModal({
                   <button
                     onClick={() => handleConfirm(dividend.id)}
                     disabled={isProcessing}
-                    className="flex-1 py-3 bg-indigo-500 hover:bg-indigo-600 text-white text-[14px] font-bold rounded-[16px] transition-all flex items-center justify-center gap-2 disabled:opacity-50"
+                    className="flex-1 py-3 bg-primary hover:bg-primary-hover text-on-primary text-[14px] font-bold rounded-[16px] transition-all flex items-center justify-center gap-2 disabled:opacity-50 shadow-sm"
                   >
                     {isProcessing ? (
                       <Loader2 className="w-4 h-4 animate-spin" />
@@ -339,7 +339,7 @@ export default function DividendConfirmationModal({
                   <button
                     onClick={() => handleIgnore(dividend.id)}
                     disabled={isProcessing}
-                    className="px-6 py-3 bg-element hover:bg-element-hover text-secondary text-[14px] font-bold rounded-[16px] transition-all disabled:opacity-50"
+                    className="px-6 py-3 bg-element hover:bg-element-hover text-secondary hover:text-primary text-[14px] font-bold rounded-[16px] transition-all disabled:opacity-50 border border-border"
                   >
                     Ignore
                   </button>

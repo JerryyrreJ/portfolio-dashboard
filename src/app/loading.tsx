@@ -144,7 +144,7 @@ export default function DashboardLoading() {
                   <th className="px-6 py-3 w-10"></th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-gray-50 bg-card">
+              <tbody className="divide-y divide-border bg-card">
                 {[1, 2, 3, 4, 5].map((row) => (
                   <tr key={row}>
                     <td className="px-6 py-4">

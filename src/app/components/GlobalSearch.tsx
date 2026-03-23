@@ -135,7 +135,7 @@ export default function GlobalSearch({ onClose, isMobileOnly = false }: GlobalSe
             </div>
           )}
 
-          <div className="py-4 divide-y divide-gray-50">
+          <div className="py-4 divide-y divide-border">
             {searchResults.map((r) => (
               <button
                 key={r.symbol}

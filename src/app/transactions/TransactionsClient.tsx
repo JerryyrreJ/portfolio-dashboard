@@ -268,7 +268,7 @@ export default function TransactionsClient({
                   <th className="px-6 py-4 text-center w-24">Actions</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-gray-50">
+              <tbody className="divide-y divide-border">
                 {transactions.length === 0 ? (
                   <tr>
                     <td colSpan={7} className="px-6 py-20 text-center text-secondary">
@@ -499,7 +499,7 @@ export default function TransactionsClient({
           </div>
 
           {/* Mobile List */}
-          <div className="md:hidden divide-y divide-gray-50">
+          <div className="md:hidden divide-y divide-border">
             {transactions.length === 0 ? (
               <div className="px-6 py-16 text-center text-secondary">
                 <EmptyState />

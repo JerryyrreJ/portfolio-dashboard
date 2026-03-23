@@ -25,33 +25,43 @@ export async function GET(request: NextRequest) {
 
   try {
     // 并发请求所有提供的股票代码
-    const fetchPromises = symbols.map(async (symbol) => {
-      const url = `${BASE_URL}/quote?symbol=${symbol}&token=${FINNHUB_API_KEY}`;
-      const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 2000); // 2秒短超时
+      let hasRateLimit = false;
 
-      try {
-        const response = await fetch(url, {
-          next: { revalidate: 60 },
-          signal: controller.signal
-        });
-        clearTimeout(timeoutId);
-        
-        if (response.ok) {
-          const data = await response.json();
-          if (data && data.c && data.c > 0) {
-            prices[symbol] = data.c;
+      const fetchPromises = symbols.map(async (symbol) => {
+        const url = `${BASE_URL}/quote?symbol=${symbol}&token=${FINNHUB_API_KEY}`;
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 2000); // 2秒短超时
+
+        try {
+          const response = await fetch(url, {
+            next: { revalidate: 60 },
+            signal: controller.signal
+          });
+          clearTimeout(timeoutId);
+          
+          if (response.status === 429) {
+            hasRateLimit = true;
           }
+
+          if (response.ok) {
+            const data = await response.json();
+            if (data && data.c && data.c > 0) {
+              prices[symbol] = data.c;
+            }
+          }
+        } catch (error) {
+          clearTimeout(timeoutId);
+          console.warn(`Failed to fetch real-time quote for ${symbol}:`, error);
         }
-      } catch (error) {
-        clearTimeout(timeoutId);
-        console.warn(`Failed to fetch real-time quote for ${symbol}:`, error);
+      });
+
+      await Promise.allSettled(fetchPromises);
+
+      const nextResponse = NextResponse.json(prices);
+      if (hasRateLimit) {
+        nextResponse.headers.set('X-RateLimit-Exhausted', 'true');
       }
-    });
-
-    await Promise.allSettled(fetchPromises);
-
-    return NextResponse.json(prices);
+      return nextResponse;
   } catch (error) {
     console.error('Batch quote error:', error);
     return NextResponse.json({ error: 'Failed to fetch batch quotes' }, { status: 500 });

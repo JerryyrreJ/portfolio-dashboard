@@ -77,7 +77,7 @@ export default function TransactionsLoading() {
                   <th className="px-6 py-4 w-24"></th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-gray-50 bg-card">
+              <tbody className="divide-y divide-border bg-card">
                 {[1, 2, 3, 4, 5, 6, 7, 8].map((row) => (
                   <tr key={row}>
                     <td className="px-6 py-4">

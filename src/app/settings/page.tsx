@@ -36,10 +36,151 @@ import PasskeySection from '@/app/components/settings/PasskeySection';
 import { createClient } from '@/lib/supabase';
 import { User } from '@supabase/supabase-js';
 import Notification from '@/app/components/Notification';
+import ConfirmationModal from '@/app/components/ConfirmationModal';
 
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
 import { getCurrencySymbol } from '@/lib/currency';
+
+function PortfoliosSkeleton() {
+  return (
+    <div className="divide-y divide-border/60">
+      {[1, 2].map((i) => (
+        <div key={i} className="px-5 py-4 flex items-center justify-between bg-card sm:bg-transparent">
+          <div className="flex items-center space-x-4">
+            <div className="w-8 h-8 rounded-lg bg-element animate-pulse" />
+            <div className="space-y-2">
+              <div className="h-4 w-24 bg-element rounded animate-pulse" />
+              <div className="h-3 w-16 bg-element rounded animate-pulse" />
+            </div>
+          </div>
+          <div className="h-8 w-12 bg-element rounded-lg animate-pulse" />
+        </div>
+      ))}
+    </div>
+  );
+}
+
+interface PortfolioItemProps {
+  portfolio: any;
+  isOnlyOne?: boolean;
+  onUpdate: (id: string, name: string, currency: string, field: 'name' | 'currency' | 'both') => Promise<void>;
+  onDelete: (id: string) => Promise<void>;
+}
+
+function PortfolioItem({ portfolio, isOnlyOne = false, onUpdate, onDelete }: PortfolioItemProps) {
+  const [isEditing, setIsEditing] = useState(false);
+  const [name, setName] = useState(portfolio.name);
+  const [currency, setCurrency] = useState(portfolio.currency);
+  const [loading, setLoading] = useState(false);
+  const router = useRouter();
+  const searchParams = useSearchParams();
+  const currentPid = searchParams.get('pid');
+
+  const handleToggle = () => {
+    if (!isEditing) {
+      // Switch context in URL when opening
+      const params = new URLSearchParams(searchParams.toString());
+      params.set('pid', portfolio.id);
+      router.replace(`/settings?${params.toString()}`, { scroll: false });
+    }
+    setIsEditing(!isEditing);
+  };
+
+  const handleSave = async (field: 'name' | 'currency') => {
+    setLoading(true);
+    try {
+      await onUpdate(portfolio.id, name, currency, field);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  return (
+    <div className="bg-card sm:bg-transparent">
+      <div className="px-5 py-4 flex items-center justify-between">
+        <div className="flex items-center space-x-4">
+          <div className={`w-8 h-8 rounded-lg bg-card border border-border shadow-sm flex items-center justify-center transition-all duration-300 ${isEditing ? 'scale-110 ring-4 ring-black/5' : ''}`}>
+            <Wallet className={`w-4 h-4 transition-colors duration-300 ${isEditing ? 'text-primary' : 'text-secondary'}`} />
+          </div>
+          <div>
+            <div className="text-[14px] font-bold text-primary leading-tight">{portfolio.name}</div>
+            <div className="text-[13px] text-secondary font-medium mt-0.5">{portfolio.currency}</div>
+          </div>
+        </div>
+        <div className="flex items-center space-x-2">
+          <button 
+            onClick={handleToggle}
+            className={`text-[12px] font-bold px-3 py-1.5 rounded-lg transition-colors shadow-sm active:scale-[0.97] border ${
+              isEditing 
+                ? 'bg-element-hover border-border text-secondary' 
+                : 'bg-card border-border text-primary hover:bg-element-hover'
+            }`}
+          >
+            {isEditing ? 'Cancel' : 'Edit'}
+          </button>
+          {!isOnlyOne && (
+            <button 
+              onClick={() => onDelete(portfolio.id)}
+              className="p-1.5 rounded-lg text-secondary hover:text-rose-500 hover:bg-rose-50/50 transition-all active:scale-[0.95]"
+              title="Delete Portfolio"
+            >
+              <Trash2 className="w-4 h-4" />
+            </button>
+          )}
+        </div>
+      </div>
+      
+      {/* Expandable Editor */}
+      <div className={`grid transition-all duration-300 ease-in-out will-change-[grid-template-rows] ${isEditing ? 'grid-rows-[1fr] opacity-100' : 'grid-rows-[0fr] opacity-0'}`}>
+        <div className="overflow-hidden">
+          <div className="p-5 bg-card border-t border-border/60 space-y-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <div>
+                <label className="block text-[11px] font-bold text-secondary uppercase tracking-wider mb-2">Portfolio Name</label>
+                <input 
+                  type="text" 
+                  value={name}
+                  onChange={(e) => setName(e.target.value)}
+                  className="w-full px-4 py-2.5 bg-element/50 rounded-xl text-[14px] text-primary font-medium border border-border focus:border-primary outline-none transition-all"
+                />
+              </div>
+              <div>
+                <label className="block text-[11px] font-bold text-secondary uppercase tracking-wider mb-2">Base Currency</label>
+                <select 
+                  value={currency}
+                  onChange={(e) => setCurrency(e.target.value)}
+                  className="w-full px-4 py-2.5 bg-element/50 rounded-xl text-[14px] text-primary font-medium border border-border focus:border-primary outline-none transition-all"
+                >
+                  {['USD', 'EUR', 'GBP', 'JPY', 'CNY', 'HKD', 'SGD', 'CAD', 'AUD'].map(c => (
+                    <option key={c} value={c}>{c}</option>
+                  ))}
+                </select>
+              </div>
+            </div>
+            <div className="flex gap-3">
+              <button 
+                onClick={() => handleSave('name')}
+                disabled={loading || !name.trim()}
+                className="flex-1 bg-primary text-on-primary text-[13px] font-bold py-2.5 rounded-xl hover:bg-primary-hover transition-all active:scale-[0.98] disabled:opacity-50 flex items-center justify-center gap-2"
+              >
+                {loading && <Loader2 className="w-4 h-4 animate-spin" />}
+                Update Name
+              </button>
+              <button 
+                onClick={() => handleSave('currency')}
+                disabled={loading}
+                className="flex-1 bg-element-hover text-primary border border-border text-[13px] font-bold py-2.5 rounded-xl hover:bg-element transition-all active:scale-[0.98]"
+              >
+                Update Currency
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
 
 export default function SettingsPage() {
   const [activeSection, setActiveSection] = useState('portfolio');
@@ -47,6 +188,11 @@ export default function SettingsPage() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const currentPortfolioId = searchParams.get('pid') ?? '';
+
+  const [deleteConfirm, setDeleteConfirm] = useState<{ isOpen: boolean; id: string | null }>({
+    isOpen: false,
+    id: null
+  });
 
   const supabase = createClient();
   const { prefs, updatePreference } = usePreferences();
@@ -80,6 +226,8 @@ export default function SettingsPage() {
   const [portfolioLoading, setPortfolioLoading] = useState(false);
   const [portfolioActionLoading, setPortfolioActionLoading] = useState(false);
   const [portfolioError, setPortfolioError] = useState<string | null>(null);
+  const [allPortfolios, setAllPortfolios] = useState<any[]>([]);
+  const [portfoliosLoading, setPortfoliosLoading] = useState(true);
 
   // Inline edit states for Preferences
   const [isEditingTheme, setIsEditingTheme] = useState(false);
@@ -290,12 +438,21 @@ export default function SettingsPage() {
     // Local-first: immediately show cached values from localStorage
     const cachedName = localStorage.getItem('portfolio_name');
     const cachedCurrency = localStorage.getItem('base_currency');
+    const cachedPortfoliosStr = localStorage.getItem('cached_portfolios');
+
     if (cachedName !== null) {
       setPortfolioName(cachedName);
       setPortfolioLoading(false);
     }
     if (cachedCurrency !== null) {
       setBaseCurrency(cachedCurrency);
+    }
+    if (cachedPortfoliosStr !== null) {
+      try {
+        setAllPortfolios(JSON.parse(cachedPortfoliosStr));
+      } catch (e) {
+        console.error('Failed to parse cached portfolios:', e);
+      }
     }
 
     const fetchUserAndPortfolio = async () => {
@@ -309,6 +466,8 @@ export default function SettingsPage() {
           if (res.ok) {
             const data = await res.json();
             const portfolios: any[] = data.portfolios ?? (data.portfolio ? [data.portfolio] : []);
+            setAllPortfolios(portfolios);
+            localStorage.setItem('cached_portfolios', JSON.stringify(portfolios));
             const portfolio = currentPortfolioId
               ? portfolios.find((p: any) => p.id === currentPortfolioId)
               : portfolios[0];
@@ -354,9 +513,11 @@ export default function SettingsPage() {
           console.error("Failed to fetch portfolio settings", e);
         } finally {
           setPortfolioLoading(false);
+          setPortfoliosLoading(false);
         }
       } else {
         setPortfolioLoading(false);
+        setPortfoliosLoading(false);
       }
     };
 
@@ -396,21 +557,23 @@ export default function SettingsPage() {
     await supabase.auth.signOut();
   };
 
-  const handleUpdatePortfolio = async (e: React.FormEvent, field: 'name' | 'currency') => {
-    e.preventDefault();
+  const handleUpdatePortfolio = async (id: string, newName: string, newCurrency: string, field: 'name' | 'currency' | 'both') => {
     if (!isLoggedIn) {
       const now = new Date().toISOString();
-      if (field === 'name') {
-        localStorage.setItem('portfolio_name', portfolioName);
-        localStorage.setItem('settings_updated_at', now);
-        showNotification('success', 'Name Saved', 'Portfolio name saved locally.');
-        setIsEditingPortfolioName(false);
-      } else if (field === 'currency') {
-        localStorage.setItem('base_currency', baseCurrency);
-        localStorage.setItem('settings_updated_at', now);
-        showNotification('success', 'Currency Saved', 'Base currency saved locally.');
-        setIsEditingBaseCurrency(false);
+      if (field === 'name' || field === 'both') {
+        localStorage.setItem('portfolio_name', newName);
+        setPortfolioName(newName);
       }
+      if (field === 'currency' || field === 'both') {
+        localStorage.setItem('base_currency', newCurrency);
+        setBaseCurrency(newCurrency);
+      }
+      localStorage.setItem('settings_updated_at', now);
+      
+      const msg = field === 'both' ? 'Portfolio settings saved locally.' : `${field === 'name' ? 'Name' : 'Currency'} saved locally.`;
+      showNotification('success', 'Settings Saved', msg);
+      setIsEditingPortfolioName(false);
+      setIsEditingBaseCurrency(false);
       return;
     }
 
@@ -418,23 +581,29 @@ export default function SettingsPage() {
     setPortfolioError(null);
 
     try {
-      const payload = field === 'name' ? { name: portfolioName } : { currency: baseCurrency };
-      const res = await fetch(`/api/portfolio${currentPortfolioId ? `?id=${currentPortfolioId}` : ''}`, {
+      const payload = field === 'name' ? { name: newName } : field === 'currency' ? { currency: newCurrency } : { name: newName, currency: newCurrency };
+      const res = await fetch(`/api/portfolio?id=${id}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payload),
       });
 
-      if (!res.ok) {
-        const errorData = await res.json();
-        throw new Error(errorData.error || 'Failed to update portfolio');
+      if (res.ok) {
+        const data = await res.json();
+        if (data.portfolio) {
+          setAllPortfolios(prev => prev.map(p => p.id === data.portfolio.id ? data.portfolio : p));
+        }
       }
 
       showNotification('success', 'Settings Saved', 'Your portfolio configuration has been updated successfully.');
 
       const now = new Date().toISOString();
-      localStorage.setItem('portfolio_name', portfolioName);
-      localStorage.setItem('base_currency', baseCurrency);
+      if (id === currentPortfolioId || (!currentPortfolioId && id === allPortfolios[0]?.id)) {
+        localStorage.setItem('portfolio_name', newName);
+        localStorage.setItem('base_currency', newCurrency);
+        setPortfolioName(newName);
+        setBaseCurrency(newCurrency);
+      }
       localStorage.setItem('settings_updated_at', now);
 
       if (field === 'name') {
@@ -447,6 +616,41 @@ export default function SettingsPage() {
       showNotification('error', 'Update Failed', err.message || 'We could not save your changes.');
     } finally {
       setPortfolioActionLoading(false);
+    }
+  };
+
+  const handleDeletePortfolio = async (id: string) => {
+    if (allPortfolios.length <= 1) {
+      showNotification('error', 'Cannot Delete', 'You must have at least one portfolio.');
+      return;
+    }
+    
+    setDeleteConfirm({ isOpen: true, id });
+  };
+
+  const confirmDelete = async () => {
+    if (!deleteConfirm.id) return;
+    const id = deleteConfirm.id;
+
+    setPortfolioActionLoading(true);
+    try {
+      const res = await fetch(`/api/portfolio?id=${id}`, { method: 'DELETE' });
+      if (!res.ok) {
+        const data = await res.json();
+        throw new Error(data.error || 'Failed to delete');
+      }
+
+      setAllPortfolios(prev => prev.filter(p => p.id !== id));
+      showNotification('success', 'Portfolio Deleted', 'The portfolio has been removed.');
+      
+      if (id === currentPortfolioId) {
+        router.push('/settings');
+      }
+    } catch (err: any) {
+      showNotification('error', 'Delete Failed', err.message);
+    } finally {
+      setPortfolioActionLoading(false);
+      setDeleteConfirm({ isOpen: false, id: null });
     }
   };
 
@@ -621,149 +825,34 @@ export default function SettingsPage() {
             </div>
             
             <div className="space-y-6 bg-card rounded-2xl md:rounded-[32px] p-5 md:p-8 shadow-sm border border-border mb-12 md:mb-16">
-              {/* General Group */}
+              {/* Portfolios Group */}
               <div className="space-y-4">
-                <h3 className="text-[11px] font-bold text-secondary uppercase tracking-[0.1em] pl-1">General</h3>
+                <h3 className="text-[11px] font-bold text-secondary uppercase tracking-[0.1em] pl-1">Portfolios</h3>
                 <div className="bg-element/50 rounded-2xl border border-border overflow-hidden transition-all duration-300">
-                  <div className="border-b border-border bg-card sm:bg-transparent">
-                    <div className="px-5 py-4 flex items-center justify-between">
-                      <div className="flex items-center space-x-4">
-                        <div className={`w-8 h-8 rounded-lg bg-card border border-border shadow-sm flex items-center justify-center transition-all duration-300 ${isEditingPortfolioName ? 'scale-110 border-border ring-4 ring-black/5' : ''}`}>
-                          <Wallet className={`w-4 h-4 transition-colors duration-300 ${isEditingPortfolioName ? 'text-primary' : 'text-secondary'}`} />
-                        </div>
-                        <div>
-                          <div className="text-[14px] font-bold text-primary leading-tight">Portfolio Name</div>
-                          <div className="text-[13px] text-secondary font-medium mt-0.5">
-                            {portfolioName}
-                          </div>
-                        </div>
-                      </div>
-                      <button 
-                        onClick={() => {
-                          setIsEditingPortfolioName(!isEditingPortfolioName);
-                          setIsEditingBaseCurrency(false);
-                          setPortfolioError(null);
-                        }}
-                        className={`text-[13px] font-bold px-3 py-1.5 rounded-lg transition-colors shadow-sm active:scale-95 border ${
-                          isEditingPortfolioName 
-                            ? 'bg-element-hover border-border text-secondary' 
-                            : 'bg-card border-border text-primary hover:bg-element-hover'
-                        }`}
-                      >
-                        {isEditingPortfolioName ? 'Cancel' : 'Edit'}
-                      </button>
+                  {portfoliosLoading && allPortfolios.length === 0 ? (
+                    <PortfoliosSkeleton />
+                  ) : !isLoggedIn ? (
+                    /* Guest Mode - Show single local portfolio component */
+                    <PortfolioItem 
+                      portfolio={{ id: 'local', name: portfolioName, currency: baseCurrency }}
+                      isOnlyOne={true}
+                      onUpdate={(id, n, c, f) => handleUpdatePortfolio(id, n, c, f)}
+                      onDelete={async () => {}} // Guest can't delete
+                    />
+                  ) : (
+                    /* Logged In - List all portfolios */
+                    <div className="divide-y divide-border/60">
+                      {allPortfolios.map((p) => (
+                        <PortfolioItem 
+                          key={p.id}
+                          portfolio={p}
+                          isOnlyOne={allPortfolios.length <= 1}
+                          onUpdate={handleUpdatePortfolio}
+                          onDelete={handleDeletePortfolio}
+                        />
+                      ))}
                     </div>
-                    {/* Expandable Portfolio Name Editor */}
-                    <div className={`grid transition-all duration-300 ease-in-out ${isEditingPortfolioName ? 'grid-rows-[1fr] opacity-100' : 'grid-rows-[0fr] opacity-0'}`}>
-                      <div className="overflow-hidden">
-                        <div className="p-5 bg-card border-t border-border/60 space-y-4">
-                          <form onSubmit={(e) => handleUpdatePortfolio(e, 'name')} className="space-y-4">
-                            <div>
-                              <label className="block text-[11px] font-bold text-secondary uppercase tracking-wider mb-2">Portfolio Name</label>
-                              <input 
-                                type="text" 
-                                required
-                                value={portfolioName}
-                                onChange={(e) => setPortfolioName(e.target.value)}
-                                placeholder="Enter portfolio name"
-                                className="w-full px-4 py-2.5 bg-element/50 rounded-xl text-[14px] text-primary font-medium border border-border focus:border-primary focus:ring-1 focus:ring-black outline-none transition-all placeholder:text-secondary"
-                              />
-                            </div>
-                            <button 
-                              type="submit"
-                              disabled={portfolioActionLoading || !portfolioName.trim()}
-                              className="w-full bg-primary text-on-primary text-[13px] font-bold py-2.5 rounded-xl hover:bg-primary-hover transition-colors active:scale-[0.98] disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2 shadow-sm"
-                            >
-                              {portfolioActionLoading && isEditingPortfolioName && <Loader2 className="w-4 h-4 animate-spin" />}
-                              {portfolioActionLoading && isEditingPortfolioName ? 'Updating...' : 'Save Name'}
-                            </button>
-                          </form>
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-
-                  <div className="bg-card sm:bg-transparent">
-                    <div className="px-5 py-4 flex items-center justify-between">
-                      <div className="flex items-center space-x-4">
-                        <div className={`w-8 h-8 rounded-lg bg-card border border-border shadow-sm flex items-center justify-center transition-all duration-300 ${isEditingBaseCurrency ? 'scale-110 border-border ring-4 ring-black/5' : ''}`}>
-                          <Globe className={`w-4 h-4 transition-colors duration-300 ${isEditingBaseCurrency ? 'text-primary' : 'text-secondary'}`} />
-                        </div>
-                        <div>
-                          <div className="text-[14px] font-bold text-primary leading-tight">Base Currency</div>
-                          <div className="text-[13px] text-secondary font-medium mt-0.5">{baseCurrency}</div>
-                        </div>
-                      </div>
-                      <button 
-                        onClick={() => {
-                          setIsEditingBaseCurrency(!isEditingBaseCurrency);
-                          setIsEditingPortfolioName(false);
-                          setPortfolioError(null);
-                        }}
-                        className={`text-[13px] font-bold px-3 py-1.5 rounded-lg transition-colors shadow-sm active:scale-95 border ${
-                          isEditingBaseCurrency 
-                            ? 'bg-element-hover border-border text-secondary' 
-                            : 'bg-card border-border text-primary hover:bg-element-hover'
-                        }`}
-                      >
-                        {isEditingBaseCurrency ? 'Cancel' : 'Change'}
-                      </button>
-                    </div>
-                    {/* Expandable Base Currency Editor */}
-                    <div className={`grid transition-all duration-300 ease-in-out ${isEditingBaseCurrency ? 'grid-rows-[1fr] opacity-100' : 'grid-rows-[0fr] opacity-0'}`}>
-                      <div className="overflow-hidden">
-                        <div className="p-5 bg-card border-t border-border/60 space-y-4">
-                          <form onSubmit={(e) => handleUpdatePortfolio(e, 'currency')} className="space-y-4">
-                            <div>
-                              <label className="block text-[11px] font-bold text-secondary uppercase tracking-wider mb-3">Select Currency</label>
-                              <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
-                                {[
-                                  { code: 'USD', name: 'US Dollar', symbol: '$' },
-                                  { code: 'EUR', name: 'Euro', symbol: '€' },
-                                  { code: 'GBP', name: 'British Pound', symbol: '£' },
-                                  { code: 'JPY', name: 'Japanese Yen', symbol: '¥' },
-                                  { code: 'CNY', name: 'Chinese Yuan', symbol: '¥' },
-                                  { code: 'HKD', name: 'Hong Kong Dollar', symbol: '$' },
-                                  { code: 'AUD', name: 'Australian Dollar', symbol: '$' },
-                                  { code: 'CAD', name: 'Canadian Dollar', symbol: '$' },
-                                  { code: 'CHF', name: 'Swiss Franc', symbol: 'Fr' },
-                                ].map((currency) => (
-                                  <button
-                                    key={currency.code}
-                                    type="button"
-                                    onClick={() => setBaseCurrency(currency.code)}
-                                    className={`flex items-center justify-between px-4 py-3 rounded-xl border text-[13px] transition-all active:scale-95 ${
-                                      baseCurrency === currency.code
-                                        ? 'border-primary bg-primary text-on-primary shadow-sm'
-                                        : 'border-border bg-card text-primary hover:border-border hover:bg-element'
-                                    }`}
-                                  >
-                                    <div className="flex flex-col items-start">
-                                      <span className="font-bold leading-none">{currency.code}</span>
-                                      <span className={`text-[10px] mt-1 font-medium ${baseCurrency === currency.code ? 'text-secondary' : 'text-secondary'}`}>
-                                        {currency.name}
-                                      </span>
-                                    </div>
-                                    <span className={`text-[14px] font-medium ${baseCurrency === currency.code ? 'text-secondary' : 'text-secondary'}`}>
-                                      {currency.symbol}
-                                    </span>
-                                  </button>
-                                ))}
-                              </div>
-                            </div>
-                            <button 
-                              type="submit"
-                              disabled={portfolioActionLoading}
-                              className="w-full bg-primary text-on-primary text-[13px] font-bold py-2.5 rounded-xl hover:bg-primary-hover transition-colors active:scale-[0.98] disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2 shadow-sm mt-4"
-                            >
-                              {portfolioActionLoading && isEditingBaseCurrency && <Loader2 className="w-4 h-4 animate-spin" />}
-                              {portfolioActionLoading && isEditingBaseCurrency ? 'Updating...' : 'Save Currency'}
-                            </button>
-                          </form>
-                        </div>
-                      </div>
-                    </div>
-                  </div>
+                  )}
                 </div>
               </div>
 
@@ -924,7 +1013,6 @@ export default function SettingsPage() {
                                   onClick={() => {
                                     setTheme(t.toLowerCase());
                                     updatePreference('theme', t as 'Light' | 'Dark' | 'System');
-                                    setIsEditingTheme(false);
                                   }}
                                   className={`flex-1 text-[12px] font-bold py-2 rounded-xl transition-all active:scale-95 ${
                                     isSelected
@@ -1583,6 +1671,16 @@ export default function SettingsPage() {
         {/* Right Spacer for physical centering */}
         <div className="hidden md:block w-64 flex-shrink-0 invisible pointer-events-none"></div>
       </main>
+
+      <ConfirmationModal
+        isOpen={deleteConfirm.isOpen}
+        onClose={() => setDeleteConfirm({ isOpen: false, id: null })}
+        onConfirm={confirmDelete}
+        title="Delete Portfolio"
+        description="Are you sure you want to delete this portfolio and all its transactions? This action cannot be undone."
+        confirmText="Delete Portfolio"
+        isLoading={portfolioActionLoading}
+      />
     </div>
   );
 }
