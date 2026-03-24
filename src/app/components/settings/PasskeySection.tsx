@@ -208,9 +208,9 @@ export default function PasskeySection({ user }: PasskeySectionProps) {
         <div className="overflow-hidden">
           <div className="px-4 md:px-5 pb-4 pt-1 bg-card border-t border-border/60 space-y-4">
             {error && (
-              <div className="p-3 bg-rose-50 border border-rose-100 rounded-xl flex items-start gap-3 select-text">
-                <AlertCircle className="w-4 h-4 text-rose-500 shrink-0 mt-0.5" />
-                <p className="text-[13px] text-rose-600 font-medium leading-tight">{error}</p>
+              <div className="p-3 bg-rose-500/10 border border-rose-500/20 rounded-xl flex items-start gap-3 select-text">
+                <AlertCircle className="w-4 h-4 text-rose-600 dark:text-rose-500 shrink-0 mt-0.5" />
+                <p className="text-[13px] text-rose-600/80 dark:text-rose-400/80 font-medium leading-tight">{error}</p>
               </div>
             )}
             <div>
@@ -254,9 +254,9 @@ export default function PasskeySection({ user }: PasskeySectionProps) {
               </div>
             )}
             {error && (
-              <div className="mx-4 md:mx-5 mt-4 p-3 bg-rose-50 border border-rose-100 rounded-xl flex items-start gap-3">
-                <AlertCircle className="w-4 h-4 text-rose-500 shrink-0 mt-0.5" />
-                <p className="text-[13px] text-rose-600 font-medium leading-tight">{error}</p>
+              <div className="mx-4 md:mx-5 mt-4 p-3 bg-rose-500/10 border border-rose-500/20 rounded-xl flex items-start gap-3">
+                <AlertCircle className="w-4 h-4 text-rose-600 dark:text-rose-500 shrink-0 mt-0.5" />
+                <p className="text-[13px] text-rose-600/80 dark:text-rose-400/80 font-medium leading-tight">{error}</p>
               </div>
             )}
 
@@ -269,13 +269,18 @@ export default function PasskeySection({ user }: PasskeySectionProps) {
                       {cred.name || 'Unnamed Passkey'}
                     </div>
                     <div className="text-[11px] text-secondary font-medium mt-0.5">
-                      Added {new Date(cred.created_at).toLocaleDateString()}
-                      {cred.last_used_at && ` · Last used ${new Date(cred.last_used_at).toLocaleDateString()}`}
+                      <span>Added {new Date(cred.created_at).toLocaleDateString()}</span>
+                      {cred.last_used_at && (
+                        <>
+                          <span className="hidden sm:inline"> · </span>
+                          <span className="block sm:inline">Last used {new Date(cred.last_used_at).toLocaleDateString()}</span>
+                        </>
+                      )}
                     </div>
                   </div>
                   <button
                     onClick={() => handleRemove(cred.id)}
-                    className="shrink-0 ml-3 text-[12px] font-bold text-rose-500 border border-rose-100/50 bg-rose-50/30 hover:bg-rose-50 px-3 py-1.5 rounded-lg transition-all shadow-sm active:scale-95 flex items-center gap-1.5"
+                    className="shrink-0 ml-3 text-[12px] font-bold text-rose-600 dark:text-rose-400 border border-rose-500/20 bg-rose-500/10 hover:bg-rose-500/15 px-3 py-1.5 rounded-lg transition-all shadow-sm active:scale-95 flex items-center gap-1.5"
                   >
                     <Trash2 className="w-3.5 h-3.5" />
                     Remove

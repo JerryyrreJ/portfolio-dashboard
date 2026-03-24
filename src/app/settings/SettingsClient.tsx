@@ -13,7 +13,6 @@ import {
   Bell,
   Globe,
   Download,
-  Trash2,
   Monitor,
   BarChart2,
   EyeOff,
@@ -51,17 +50,23 @@ interface SettingsClientProps {
 interface PortfolioItemProps {
   portfolio: any;
   isOnlyOne?: boolean;
+  isEditing: boolean;
   onUpdate: (id: string, name: string, currency: string, field: 'name' | 'currency' | 'both') => Promise<void>;
   onDelete: (id: string) => Promise<void>;
+  onToggle: (id: string) => void;
 }
 
-function PortfolioItem({ portfolio, isOnlyOne = false, onUpdate, onDelete }: PortfolioItemProps) {
-  const [isEditing, setIsEditing] = useState(false);
+function PortfolioItem({ portfolio, isOnlyOne = false, isEditing, onUpdate, onDelete, onToggle }: PortfolioItemProps) {
   const [name, setName] = useState(portfolio.name);
   const [currency, setCurrency] = useState(portfolio.currency);
   const [loading, setLoading] = useState(false);
   const router = useRouter();
   const searchParams = useSearchParams();
+
+  useEffect(() => {
+    setName(portfolio.name);
+    setCurrency(portfolio.currency);
+  }, [portfolio.currency, portfolio.name]);
 
   const handleToggle = () => {
     if (!isEditing) {
@@ -69,8 +74,11 @@ function PortfolioItem({ portfolio, isOnlyOne = false, onUpdate, onDelete }: Por
       const params = new URLSearchParams(searchParams.toString());
       params.set('pid', portfolio.id);
       router.replace(`/settings?${params.toString()}`, { scroll: false });
+    } else {
+      setName(portfolio.name);
+      setCurrency(portfolio.currency);
     }
-    setIsEditing(!isEditing);
+    onToggle(portfolio.id);
   };
 
   const handleSave = async (field: 'name' | 'currency') => {
@@ -105,15 +113,6 @@ function PortfolioItem({ portfolio, isOnlyOne = false, onUpdate, onDelete }: Por
           >
             {isEditing ? 'Cancel' : 'Edit'}
           </button>
-          {!isOnlyOne && (
-            <button 
-              onClick={() => onDelete(portfolio.id)}
-              className="p-1.5 rounded-lg text-secondary hover:text-rose-500 hover:bg-rose-50/50 transition-all active:scale-[0.95]"
-              title="Delete Portfolio"
-            >
-              <Trash2 className="w-4 h-4" />
-            </button>
-          )}
         </div>
       </div>
       
@@ -161,6 +160,27 @@ function PortfolioItem({ portfolio, isOnlyOne = false, onUpdate, onDelete }: Por
                 Update Currency
               </button>
             </div>
+
+            {!isOnlyOne && (
+              <div className="pt-2">
+                <div className="rounded-2xl border border-rose-500/20 bg-rose-500/10 p-4 transition-colors">
+                  <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                    <div>
+                      <div className="text-[11px] font-bold uppercase tracking-[0.1em] text-rose-600 dark:text-rose-500">Danger Zone</div>
+                      <div className="mt-1 text-[13px] font-medium text-rose-600/80 dark:text-rose-400/80">
+                        Delete this portfolio and all associated transactions.
+                      </div>
+                    </div>
+                    <button
+                      onClick={() => onDelete(portfolio.id)}
+                      className="text-[13px] font-bold px-3 py-2 rounded-xl border border-rose-500/20 bg-card text-rose-600 hover:bg-rose-500/10 dark:text-rose-400 transition-all active:scale-[0.98] sm:flex-shrink-0"
+                    >
+                      Delete Portfolio
+                    </button>
+                  </div>
+                </div>
+              </div>
+            )}
           </div>
         </div>
       </div>
@@ -210,16 +230,14 @@ export default function SettingsClient({ initialUser, initialPortfolios }: Setti
   const [portfolioActionLoading, setPortfolioActionLoading] = useState(false);
   const [portfolioError, setPortfolioError] = useState<string | null>(null);
   const [allPortfolios, setAllPortfolios] = useState<any[]>(initialPortfolios);
+  const [openPortfolioEditorId, setOpenPortfolioEditorId] = useState<string | null>(null);
   const [isCreatingPortfolio, setIsCreatingPortfolio] = useState(false);
   const [newPortfolioName, setNewPortfolioName] = useState('');
   const [newPortfolioCurrency, setNewPortfolioCurrency] = useState('USD');
   const [createPortfolioLoading, setCreatePortfolioLoading] = useState(false);
 
   // Inline edit states for Preferences
-  const [isEditingTheme, setIsEditingTheme] = useState(false);
-  const [isEditingChartType, setIsEditingChartType] = useState(false);
-  const [isEditingColorScheme, setIsEditingColorScheme] = useState(false);
-  const [isEditingCostBasis, setIsEditingCostBasis] = useState(false);
+  const [openPreferencesEditor, setOpenPreferencesEditor] = useState<'theme' | 'chartType' | 'colorScheme' | 'costBasis' | null>(null);
   const [isExporting, setIsExporting] = useState(false);
   const [exportRange, setExportRange] = useState('all');
   const [exportFormat, setExportFormat] = useState('csv');
@@ -564,6 +582,9 @@ export default function SettingsClient({ initialUser, initialPortfolios }: Setti
 
       const remaining = allPortfolios.filter((p) => p.id !== id);
       setAllPortfolios(remaining);
+      if (openPortfolioEditorId === id) {
+        setOpenPortfolioEditorId(null);
+      }
       localStorage.setItem('cached_portfolios', JSON.stringify(remaining));
       showNotification('success', 'Portfolio Deleted', 'The portfolio has been removed.');
       
@@ -576,6 +597,25 @@ export default function SettingsClient({ initialUser, initialPortfolios }: Setti
       setPortfolioActionLoading(false);
       setDeleteConfirm({ isOpen: false, id: null });
     }
+  };
+
+  const togglePortfolioEditor = (id: string) => {
+    setIsCreatingPortfolio(false);
+    setIsExporting(false);
+    setOpenPortfolioEditorId((currentId) => currentId === id ? null : id);
+  };
+
+  const toggleCreatePortfolio = () => {
+    setOpenPortfolioEditorId(null);
+    setIsExporting(false);
+    setIsCreatingPortfolio((prev) => !prev);
+    setPortfolioError(null);
+  };
+
+  const toggleExportDrawer = () => {
+    setOpenPortfolioEditorId(null);
+    setIsCreatingPortfolio(false);
+    setIsExporting((prev) => !prev);
   };
 
   const handleCreatePortfolio = async () => {
@@ -794,21 +834,15 @@ export default function SettingsClient({ initialUser, initialPortfolios }: Setti
                   <div className="bg-element/50 rounded-2xl border border-border overflow-hidden transition-all duration-300">
                     <div className="px-5 py-4 flex items-center justify-between gap-3">
                       <div className="flex items-center space-x-4 min-w-0">
-                        <div className={`w-8 h-8 rounded-lg bg-card border border-border shadow-sm flex items-center justify-center transition-all duration-300 ${isCreatingPortfolio ? 'scale-110 ring-4 ring-black/5' : ''}`}>
+                        <div className={`w-8 h-8 min-w-8 shrink-0 rounded-lg bg-card border border-border shadow-sm flex items-center justify-center transition-all duration-300 ${isCreatingPortfolio ? 'scale-110 ring-4 ring-black/5' : ''}`}>
                           <Plus className={`w-4 h-4 transition-colors duration-300 ${isCreatingPortfolio ? 'text-primary' : 'text-secondary'}`} />
                         </div>
                         <div className="min-w-0">
                           <div className="text-[14px] font-bold text-primary leading-tight">Create Portfolio</div>
-                          <div className="text-[12px] text-secondary font-medium mt-0.5 leading-snug">
-                            Add a new portfolio for a different account, strategy, or goal.
-                          </div>
                         </div>
                       </div>
                       <button
-                        onClick={() => {
-                          setIsCreatingPortfolio((prev) => !prev);
-                          setPortfolioError(null);
-                        }}
+                        onClick={toggleCreatePortfolio}
                         className={`flex-shrink-0 text-[13px] font-bold px-3 py-1.5 rounded-lg transition-colors shadow-sm active:scale-[0.97] border ${
                           isCreatingPortfolio
                             ? 'bg-element-hover border-border text-secondary'
@@ -868,8 +902,10 @@ export default function SettingsClient({ initialUser, initialPortfolios }: Setti
                     <PortfolioItem 
                       portfolio={{ id: 'local', name: portfolioName, currency: baseCurrency }}
                       isOnlyOne={true}
+                      isEditing={openPortfolioEditorId === 'local'}
                       onUpdate={(id, n, c, f) => handleUpdatePortfolio(id, n, c, f)}
                       onDelete={async () => {}} // Guest can't delete
+                      onToggle={togglePortfolioEditor}
                     />
                   ) : (
                     /* Logged In - List all portfolios */
@@ -879,8 +915,10 @@ export default function SettingsClient({ initialUser, initialPortfolios }: Setti
                           key={p.id}
                           portfolio={p}
                           isOnlyOne={allPortfolios.length <= 1}
+                          isEditing={openPortfolioEditorId === p.id}
                           onUpdate={handleUpdatePortfolio}
                           onDelete={handleDeletePortfolio}
+                          onToggle={togglePortfolioEditor}
                         />
                       ))}
                     </div>
@@ -894,16 +932,15 @@ export default function SettingsClient({ initialUser, initialPortfolios }: Setti
                 <div className="bg-element/50 rounded-2xl border border-border overflow-hidden">
                   <div className="px-5 py-4 flex items-center justify-between group/item transition-colors duration-300 gap-3">
                     <div className="flex items-center space-x-4 flex-1 min-w-0">
-                      <div className={`flex-shrink-0 w-8 h-8 rounded-lg bg-card border border-border shadow-sm flex items-center justify-center transition-all duration-300 ${isExporting ? 'scale-110 border-border ring-4 ring-black/5' : 'group-hover/item:border-border'}`}>
+                      <div className={`w-8 h-8 min-w-8 shrink-0 rounded-lg bg-card border border-border shadow-sm flex items-center justify-center transition-all duration-300 ${isExporting ? 'scale-110 border-border ring-4 ring-black/5' : 'group-hover/item:border-border'}`}>
                         <Download className={`w-4 h-4 transition-colors duration-300 ${isExporting ? 'text-primary' : 'text-secondary group-hover/item:text-primary'}`} />
                       </div>
                       <div className="flex-1 min-w-0 pr-2">
                         <div className="text-[14px] font-bold text-primary leading-tight truncate">Export Data</div>
-                        <div className="text-[12px] text-secondary font-medium mt-0.5 leading-snug truncate sm:whitespace-normal">Download your transaction history</div>
                       </div>
                     </div>
                     <button 
-                      onClick={() => setIsExporting(!isExporting)}
+                      onClick={toggleExportDrawer}
                       className={`flex-shrink-0 text-[13px] font-bold px-3 py-1.5 rounded-lg transition-all shadow-sm active:scale-95 border ${
                         isExporting
                           ? 'bg-element-hover border-border text-secondary'
@@ -1007,8 +1044,8 @@ export default function SettingsClient({ initialUser, initialPortfolios }: Setti
                   <div className="border-b border-border bg-card sm:bg-transparent">
                     <div className="px-4 md:px-5 py-4 flex items-center justify-between group/item">
                       <div className="flex items-center space-x-3 md:space-x-4">
-                        <div className={`w-8 h-8 rounded-lg bg-card border border-border shadow-sm flex items-center justify-center transition-all duration-300 ${isEditingTheme ? 'scale-110 border-border ring-4 ring-black/5' : 'group-hover/item:border-border'}`}>
-                          <Monitor className={`w-4 h-4 transition-colors duration-300 ${isEditingTheme ? 'text-primary' : 'text-secondary group-hover/item:text-primary'}`} />
+                        <div className={`w-8 h-8 rounded-lg bg-card border border-border shadow-sm flex items-center justify-center transition-all duration-300 ${openPreferencesEditor === 'theme' ? 'scale-110 border-border ring-4 ring-black/5' : 'group-hover/item:border-border'}`}>
+                          <Monitor className={`w-4 h-4 transition-colors duration-300 ${openPreferencesEditor === 'theme' ? 'text-primary' : 'text-secondary group-hover/item:text-primary'}`} />
                         </div>
                         <div>
                           <div className="text-[14px] font-bold text-primary leading-tight">Theme</div>
@@ -1019,21 +1056,19 @@ export default function SettingsClient({ initialUser, initialPortfolios }: Setti
                       </div>
                       <button 
                         onClick={() => {
-                          setIsEditingTheme(!isEditingTheme);
-                          setIsEditingChartType(false);
-                          setIsEditingColorScheme(false);
+                          setOpenPreferencesEditor((current) => current === 'theme' ? null : 'theme');
                         }}
                         className={`text-[12px] md:text-[13px] font-bold px-3 py-1.5 rounded-lg transition-all shadow-sm active:scale-95 border ${
-                          isEditingTheme 
+                          openPreferencesEditor === 'theme'
                             ? 'bg-element-hover border-border text-secondary' 
                             : 'bg-card border-border text-primary hover:bg-element-hover'
                         }`}
                       >
-                        {isEditingTheme ? 'Cancel' : 'Select'}
+                        {openPreferencesEditor === 'theme' ? 'Cancel' : 'Select'}
                       </button>
                     </div>
                     {/* Expandable Theme Drawer */}
-                    <div className={`grid transition-all duration-300 ease-in-out ${isEditingTheme ? 'grid-rows-[1fr] opacity-100' : 'grid-rows-[0fr] opacity-0'}`}>
+                    <div className={`grid transition-all duration-300 ease-in-out ${openPreferencesEditor === 'theme' ? 'grid-rows-[1fr] opacity-100' : 'grid-rows-[0fr] opacity-0'}`}>
                       <div className="overflow-hidden">
                         <div className="p-4 md:p-5 bg-card/50 border-t border-border/60 flex flex-wrap gap-2">
                           <div className="flex w-full bg-element/50 p-1 rounded-2xl gap-1">
@@ -1045,6 +1080,7 @@ export default function SettingsClient({ initialUser, initialPortfolios }: Setti
                                   onClick={() => {
                                     setTheme(t.toLowerCase());
                                     updatePreference('theme', t as 'Light' | 'Dark' | 'System');
+                                    setOpenPreferencesEditor(null);
                                   }}
                                   className={`flex-1 text-[12px] font-bold py-2 rounded-xl transition-all active:scale-95 ${
                                     isSelected
@@ -1066,8 +1102,8 @@ export default function SettingsClient({ initialUser, initialPortfolios }: Setti
                   <div className="border-b border-border bg-card sm:bg-transparent">
                     <div className="px-4 md:px-5 py-4 flex items-center justify-between group/item">
                       <div className="flex items-center space-x-3 md:space-x-4">
-                        <div className={`w-8 h-8 rounded-lg bg-card border border-border shadow-sm flex items-center justify-center transition-all duration-300 ${isEditingColorScheme ? 'scale-110 border-border ring-4 ring-black/5' : 'group-hover/item:border-border'}`}>
-                          <TrendingUp className={`w-4 h-4 transition-colors duration-300 ${isEditingColorScheme ? 'text-primary' : 'text-secondary group-hover/item:text-primary'}`} />
+                        <div className={`w-8 h-8 rounded-lg bg-card border border-border shadow-sm flex items-center justify-center transition-all duration-300 ${openPreferencesEditor === 'colorScheme' ? 'scale-110 border-border ring-4 ring-black/5' : 'group-hover/item:border-border'}`}>
+                          <TrendingUp className={`w-4 h-4 transition-colors duration-300 ${openPreferencesEditor === 'colorScheme' ? 'text-primary' : 'text-secondary group-hover/item:text-primary'}`} />
                         </div>
                         <div>
                           <div className="text-[14px] font-bold text-primary leading-tight">Market Colors</div>
@@ -1078,21 +1114,19 @@ export default function SettingsClient({ initialUser, initialPortfolios }: Setti
                       </div>
                       <button 
                         onClick={() => {
-                          setIsEditingColorScheme(!isEditingColorScheme);
-                          setIsEditingTheme(false);
-                          setIsEditingChartType(false);
+                          setOpenPreferencesEditor((current) => current === 'colorScheme' ? null : 'colorScheme');
                         }}
                         className={`text-[12px] md:text-[13px] font-bold px-3 py-1.5 rounded-lg transition-colors shadow-sm active:scale-95 border ${
-                          isEditingColorScheme 
+                          openPreferencesEditor === 'colorScheme'
                             ? 'bg-element-hover border-border text-secondary' 
                             : 'bg-card border-border text-primary hover:bg-element-hover'
                         }`}
                       >
-                        {isEditingColorScheme ? 'Cancel' : 'Change'}
+                        {openPreferencesEditor === 'colorScheme' ? 'Cancel' : 'Change'}
                       </button>
                     </div>
                     {/* Expandable Color Scheme Drawer */}
-                    <div className={`grid transition-all duration-300 ease-in-out ${isEditingColorScheme ? 'grid-rows-[1fr] opacity-100' : 'grid-rows-[0fr] opacity-0'}`}>
+                    <div className={`grid transition-all duration-300 ease-in-out ${openPreferencesEditor === 'colorScheme' ? 'grid-rows-[1fr] opacity-100' : 'grid-rows-[0fr] opacity-0'}`}>
                       <div className="overflow-hidden">
                         <div className="p-4 md:p-5 bg-card border-t border-border/60 flex flex-col space-y-2">
                           {[
@@ -1103,7 +1137,7 @@ export default function SettingsClient({ initialUser, initialPortfolios }: Setti
                               key={scheme.id}
                               onClick={() => {
                                 updatePreference('colorScheme', scheme.id as 'Emerald' | 'Rose');
-                                setIsEditingColorScheme(false);
+                                setOpenPreferencesEditor(null);
                               }}
                               className={`flex items-center justify-between px-4 py-3 rounded-xl transition-all active:scale-[0.98] border ${
                                 prefs.colorScheme === scheme.id
@@ -1132,8 +1166,8 @@ export default function SettingsClient({ initialUser, initialPortfolios }: Setti
                   <div className="border-b border-border bg-card sm:bg-transparent">
                     <div className="px-4 md:px-5 py-4 flex items-center justify-between group/item">
                       <div className="flex items-center space-x-3 md:space-x-4">
-                        <div className={`w-8 h-8 rounded-lg bg-card border border-border shadow-sm flex items-center justify-center transition-all duration-300 ${isEditingChartType ? 'scale-110 border-border ring-4 ring-black/5' : 'group-hover/item:border-border'}`}>
-                          <BarChart2 className={`w-4 h-4 transition-colors duration-300 ${isEditingChartType ? 'text-primary' : 'text-secondary group-hover/item:text-primary'}`} />
+                        <div className={`w-8 h-8 rounded-lg bg-card border border-border shadow-sm flex items-center justify-center transition-all duration-300 ${openPreferencesEditor === 'chartType' ? 'scale-110 border-border ring-4 ring-black/5' : 'group-hover/item:border-border'}`}>
+                          <BarChart2 className={`w-4 h-4 transition-colors duration-300 ${openPreferencesEditor === 'chartType' ? 'text-primary' : 'text-secondary group-hover/item:text-primary'}`} />
                         </div>
                         <div>
                           <div className="text-[14px] font-bold text-primary leading-tight">Default Chart Type</div>
@@ -1142,20 +1176,19 @@ export default function SettingsClient({ initialUser, initialPortfolios }: Setti
                       </div>
                       <button 
                         onClick={() => {
-                          setIsEditingChartType(!isEditingChartType);
-                          setIsEditingTheme(false);
+                          setOpenPreferencesEditor((current) => current === 'chartType' ? null : 'chartType');
                         }}
                         className={`text-[12px] md:text-[13px] font-bold px-3 py-1.5 rounded-lg transition-colors shadow-sm active:scale-95 border ${
-                          isEditingChartType 
+                          openPreferencesEditor === 'chartType'
                             ? 'bg-element-hover border-border text-secondary' 
                             : 'bg-card border-border text-primary hover:bg-element-hover'
                         }`}
                       >
-                        {isEditingChartType ? 'Cancel' : 'Switch'}
+                        {openPreferencesEditor === 'chartType' ? 'Cancel' : 'Switch'}
                       </button>
                     </div>
                     {/* Expandable Chart Type Drawer */}
-                    <div className={`grid transition-all duration-300 ease-in-out ${isEditingChartType ? 'grid-rows-[1fr] opacity-100' : 'grid-rows-[0fr] opacity-0'}`}>
+                    <div className={`grid transition-all duration-300 ease-in-out ${openPreferencesEditor === 'chartType' ? 'grid-rows-[1fr] opacity-100' : 'grid-rows-[0fr] opacity-0'}`}>
                       <div className="overflow-hidden">
                         <div className="p-4 md:p-5 bg-card/50 border-t border-border/60 flex flex-wrap gap-2">
                           <div className="flex w-full bg-element/50 p-1 rounded-2xl gap-1">
@@ -1166,7 +1199,7 @@ export default function SettingsClient({ initialUser, initialPortfolios }: Setti
                                   key={c}
                                   onClick={() => {
                                     updatePreference('chartType', `${c} Chart` as 'Area Chart' | 'Line Chart' | 'Bar Chart');
-                                    setIsEditingChartType(false);
+                                    setOpenPreferencesEditor(null);
                                   }}
                                   className={`flex-1 text-[12px] font-bold py-2 rounded-xl transition-all active:scale-95 ${
                                     isSelected
@@ -1236,8 +1269,8 @@ export default function SettingsClient({ initialUser, initialPortfolios }: Setti
                 <div className="bg-element/50 rounded-2xl border border-border overflow-hidden">
                   <div className="px-4 md:px-5 py-4 flex items-center justify-between group/item">
                     <div className="flex items-center space-x-3 md:space-x-4">
-                      <div className={`w-8 h-8 rounded-lg bg-card border border-border shadow-sm flex items-center justify-center transition-all duration-300 ${isEditingCostBasis ? 'scale-110 border-border ring-4 ring-black/5' : 'group-hover/item:border-border'}`}>
-                        <FileText className={`w-4 h-4 transition-colors duration-300 ${isEditingCostBasis ? 'text-primary' : 'text-secondary group-hover/item:text-primary'}`} />
+                      <div className={`w-8 h-8 rounded-lg bg-card border border-border shadow-sm flex items-center justify-center transition-all duration-300 ${openPreferencesEditor === 'costBasis' ? 'scale-110 border-border ring-4 ring-black/5' : 'group-hover/item:border-border'}`}>
+                        <FileText className={`w-4 h-4 transition-colors duration-300 ${openPreferencesEditor === 'costBasis' ? 'text-primary' : 'text-secondary group-hover/item:text-primary'}`} />
                       </div>
                       <div>
                         <div className="text-[14px] font-bold text-primary leading-tight">Cost Basis Method</div>
@@ -1247,18 +1280,18 @@ export default function SettingsClient({ initialUser, initialPortfolios }: Setti
                       </div>
                     </div>
                     <button
-                      onClick={() => setIsEditingCostBasis(!isEditingCostBasis)}
+                      onClick={() => setOpenPreferencesEditor((current) => current === 'costBasis' ? null : 'costBasis')}
                       className={`text-[12px] md:text-[13px] font-bold px-3 py-1.5 rounded-lg transition-colors shadow-sm active:scale-95 border ${
-                        isEditingCostBasis
-                          ? 'bg-element-hover border-border text-gray-700'
+                        openPreferencesEditor === 'costBasis'
+                          ? 'bg-element-hover border-border text-secondary'
                           : 'bg-card border-border text-primary hover:bg-element-hover'
                       }`}
                     >
-                      {isEditingCostBasis ? 'Cancel' : 'Change'}
+                      {openPreferencesEditor === 'costBasis' ? 'Cancel' : 'Change'}
                     </button>
                   </div>
                   {/* Expandable Cost Basis Drawer */}
-                  <div className={`grid transition-all duration-300 ease-in-out ${isEditingCostBasis ? 'grid-rows-[1fr] opacity-100' : 'grid-rows-[0fr] opacity-0'}`}>
+                  <div className={`grid transition-all duration-300 ease-in-out ${openPreferencesEditor === 'costBasis' ? 'grid-rows-[1fr] opacity-100' : 'grid-rows-[0fr] opacity-0'}`}>
                     <div className="overflow-hidden">
                       <div className="p-4 md:p-5 bg-card border-t border-border/60 flex gap-2">
                         {([
@@ -1269,7 +1302,7 @@ export default function SettingsClient({ initialUser, initialPortfolios }: Setti
                             key={method.id}
                             onClick={() => {
                               updatePreference('costBasisMethod', method.id);
-                              setIsEditingCostBasis(false);
+                              setOpenPreferencesEditor(null);
                             }}
                             className={`flex-1 flex flex-col items-start px-4 py-3 rounded-xl transition-all active:scale-[0.98] border ${
                               prefs.costBasisMethod === method.id
