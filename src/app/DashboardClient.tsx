@@ -95,6 +95,13 @@ interface DashboardClientProps {
   userDisplayName?: string;
 }
 
+interface ChartPoint {
+  date: string;
+  Total?: number;
+  Local?: number;
+  Return?: number;
+}
+
 
 
 // 根据数据 min/max 算出整齐的刻度值（如 0, 200, 400, 600）
@@ -191,11 +198,6 @@ export default function DashboardClient({ portfolioId, portfolioName, portfolios
     const t = requestAnimationFrame(() => setIsSwitching(false));
     return () => cancelAnimationFrame(t);
   }, [portfolioId]);
-
-  const yTicks = useMemo(() => {
-    const key = chartMode === 'return' ? 'Return' : portfolioId === 'local-portfolio' ? 'Local' : 'Total';
-    return calcYTicks(filteredChartData, key);
-  }, [filteredChartData, chartMode, portfolioId]);
 
   const formatYTick = (value: number) => {
     if (chartMode === 'return') return `${value > 0 ? '+' : ''}${value.toFixed(1)}%`;
@@ -436,6 +438,112 @@ export default function DashboardClient({ portfolioId, portfolioName, portfolios
     });
     setFilteredChartData(filtered);
   }, [chartTimeRange, localChartData]);
+
+  const chartDisplayData = useMemo<ChartPoint[]>(() => {
+    if (chartMode !== 'return' || chartTimeRange === 'All') {
+      return filteredChartData;
+    }
+
+    const baselinePoint = filteredChartData.find((point: ChartPoint) => point.date !== 'Today') ?? filteredChartData[0];
+    const baselineFactor = 1 + ((baselinePoint?.Return ?? 0) / 100);
+
+    return filteredChartData.map((point: ChartPoint) => {
+      const currentFactor = 1 + ((point.Return ?? 0) / 100);
+      const rebasedReturn = baselineFactor > 0 && currentFactor > 0
+        ? ((currentFactor / baselineFactor) - 1) * 100
+        : (point.Return ?? 0) - (baselinePoint?.Return ?? 0);
+
+      return {
+        ...point,
+        Return: Math.round(rebasedReturn * 100) / 100,
+      };
+    });
+  }, [chartMode, chartTimeRange, filteredChartData]);
+
+  const chartRangeMeta = useMemo(() => {
+    const firstPoint = filteredChartData.find((point: ChartPoint) => point.date !== 'Today');
+
+    if (!firstPoint || chartTimeRange === 'All') {
+      return {
+        firstDate: firstPoint ? new Date(firstPoint.date) : null,
+        isConstrained: false,
+      };
+    }
+
+    const cutoff = new Date();
+    switch (chartTimeRange) {
+      case '1M':
+        cutoff.setMonth(cutoff.getMonth() - 1);
+        break;
+      case '3M':
+        cutoff.setMonth(cutoff.getMonth() - 3);
+        break;
+      case '6M':
+        cutoff.setMonth(cutoff.getMonth() - 6);
+        break;
+      case '1Y':
+        cutoff.setFullYear(cutoff.getFullYear() - 1);
+        break;
+    }
+
+    const firstDate = new Date(firstPoint.date);
+
+    return {
+      firstDate,
+      isConstrained: firstDate > cutoff,
+    };
+  }, [chartTimeRange, filteredChartData]);
+
+  const chartSubtitle = useMemo(() => {
+    if (chartMode === 'return') {
+      const lastPoint = chartDisplayData[chartDisplayData.length - 1];
+      const returnVal = lastPoint?.Return ?? 0;
+      const isPositive = returnVal >= 0;
+
+      if (chartTimeRange === 'All') {
+        return {
+          className: isPositive ? colors.gain.tailwind.text : colors.loss.tailwind.text,
+          text: `${isPositive ? '+' : ''}${returnVal.toFixed(2)}% total return`,
+        };
+      }
+
+      if (chartRangeMeta.firstDate && chartRangeMeta.isConstrained) {
+        return {
+          className: isPositive ? colors.gain.tailwind.text : colors.loss.tailwind.text,
+          text: `${isPositive ? '+' : ''}${returnVal.toFixed(2)}% return since ${chartRangeMeta.firstDate.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}`,
+        };
+      }
+
+      return {
+        className: isPositive ? colors.gain.tailwind.text : colors.loss.tailwind.text,
+        text: `${isPositive ? '+' : ''}${returnVal.toFixed(2)}% return over ${chartTimeRange}`,
+      };
+    }
+
+    if (!chartRangeMeta.firstDate || chartTimeRange === 'All') {
+      return {
+        className: 'text-secondary',
+        text: 'Total portfolio value',
+      };
+    }
+
+    if (chartRangeMeta.isConstrained) {
+      return {
+        className: 'text-secondary',
+        text: `Showing data since ${chartRangeMeta.firstDate.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}`,
+      };
+    }
+
+    return {
+      className: 'text-secondary',
+      text: 'Total portfolio value',
+    };
+  }, [chartDisplayData, chartMode, chartRangeMeta, chartTimeRange, colors.gain.tailwind.text, colors.loss.tailwind.text]);
+
+  const yTicks = useMemo(() => {
+    const key = chartMode === 'return' ? 'Return' : portfolioId === 'local-portfolio' ? 'Local' : 'Total';
+    return calcYTicks(chartDisplayData, key);
+  }, [chartDisplayData, chartMode, portfolioId]);
 
   const handleRefresh = async () => {
     setIsRefreshing(true);
@@ -813,35 +921,9 @@ export default function DashboardClient({ portfolioId, portfolioName, portfolios
                 <div className="flex flex-col sm:flex-row sm:justify-between sm:items-start gap-3 sm:gap-0">
                   <div>
                     <h2 className="text-[15px] font-bold text-primary tracking-tight leading-none">Performance History</h2>
-                    {(() => {
-                      if (chartMode === 'return') {
-                        const todayPoint = filteredChartData[filteredChartData.length - 1];
-                        const returnVal = todayPoint?.Return ?? 0;
-                        const isPos = returnVal >= 0;
-                        return (
-                          <p className={`text-[12px] font-medium mt-1 ${isPos ? colors.gain.tailwind.text : colors.loss.tailwind.text}`}>
-                            {isPos ? '+' : ''}{returnVal.toFixed(2)}% total return
-                          </p>
-                        );
-                      }
-                      const first = filteredChartData.find(d => d.date !== 'Today');
-                      if (!first || chartTimeRange === 'All') return <p className="text-[12px] text-secondary font-medium mt-1">Total portfolio value</p>;
-                      const now = new Date();
-                      const cutoff = new Date();
-                      switch (chartTimeRange) {
-                        case '1M': cutoff.setMonth(now.getMonth() - 1); break;
-                        case '3M': cutoff.setMonth(now.getMonth() - 3); break;
-                        case '6M': cutoff.setMonth(now.getMonth() - 6); break;
-                        case '1Y': cutoff.setFullYear(now.getFullYear() - 1); break;
-                      }
-                      const firstDate = new Date(first.date);
-                      const isConstrained = firstDate > cutoff;
-                      return isConstrained
-                        ? <p className="text-[12px] text-secondary font-medium mt-1">
-                            Showing data since {firstDate.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
-                          </p>
-                        : <p className="text-[12px] text-secondary font-medium mt-1">Total portfolio value</p>;
-                    })()}
+                    <p className={`text-[12px] font-medium mt-1 ${chartSubtitle.className}`}>
+                      {chartSubtitle.text}
+                    </p>
                   </div>
                   <div className="flex items-center gap-2 sm:shrink-0">
                     {portfolioId !== 'local-portfolio' && (
@@ -889,8 +971,8 @@ export default function DashboardClient({ portfolioId, portfolioName, portfolios
                 </div>
                 <ResponsiveContainer width="100%" height="100%">
                   {(() => {
-                    const firstPoint = filteredChartData.find(d => d.date !== 'Today');
-                    const lastPoint = filteredChartData[filteredChartData.length - 1];
+                    const firstPoint = chartDisplayData.find((point: ChartPoint) => point.date !== 'Today');
+                    const lastPoint = chartDisplayData[chartDisplayData.length - 1];
                     let isGain = true;
                     if (firstPoint && lastPoint) {
                       if (chartMode === 'return') {
@@ -903,7 +985,7 @@ export default function DashboardClient({ portfolioId, portfolioName, portfolios
                     const chartColorHex = isGain ? colors.gain.hex : colors.loss.hex;
 
                     return (
-                      <AreaChart data={filteredChartData} margin={{ top: 10, right: 52, left: 0, bottom: 0 }}>
+                      <AreaChart data={chartDisplayData} margin={{ top: 10, right: 52, left: 0, bottom: 0 }}>
                         <defs>
                           <linearGradient id="colorTotal" x1="0" y1="0" x2="0" y2="1">
                             <stop offset="5%" stopColor={chartColorHex} stopOpacity={0.08}/>

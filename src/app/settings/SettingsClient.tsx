@@ -47,6 +47,37 @@ interface SettingsClientProps {
   initialPortfolios: any[];
 }
 
+const LEGACY_PORTFOLIO_CACHE_KEY = 'cached_portfolios';
+
+function getPortfolioCacheKey(userId: string) {
+  return `cached_portfolios:${userId}`;
+}
+
+function loadCachedPortfolios(userId: string) {
+  const raw = localStorage.getItem(getPortfolioCacheKey(userId)) ?? localStorage.getItem(LEGACY_PORTFOLIO_CACHE_KEY);
+  if (!raw) return [];
+
+  try {
+    const parsed = JSON.parse(raw);
+    return Array.isArray(parsed) ? parsed : [];
+  } catch {
+    return [];
+  }
+}
+
+function saveCachedPortfolios(userId: string, portfolios: any[]) {
+  const serialized = JSON.stringify(portfolios);
+  localStorage.setItem(getPortfolioCacheKey(userId), serialized);
+  localStorage.setItem(LEGACY_PORTFOLIO_CACHE_KEY, serialized);
+}
+
+function clearCachedPortfolios(userId?: string) {
+  localStorage.removeItem(LEGACY_PORTFOLIO_CACHE_KEY);
+  if (userId) {
+    localStorage.removeItem(getPortfolioCacheKey(userId));
+  }
+}
+
 interface PortfolioItemProps {
   portfolio: any;
   isOnlyOne?: boolean;
@@ -230,6 +261,7 @@ export default function SettingsClient({ initialUser, initialPortfolios }: Setti
   const [portfolioActionLoading, setPortfolioActionLoading] = useState(false);
   const [portfolioError, setPortfolioError] = useState<string | null>(null);
   const [allPortfolios, setAllPortfolios] = useState<any[]>(initialPortfolios);
+  const [portfoliosLoading, setPortfoliosLoading] = useState(() => !!initialUser && initialPortfolios.length === 0);
   const [openPortfolioEditorId, setOpenPortfolioEditorId] = useState<string | null>(null);
   const [isCreatingPortfolio, setIsCreatingPortfolio] = useState(false);
   const [newPortfolioName, setNewPortfolioName] = useState('');
@@ -444,7 +476,9 @@ export default function SettingsClient({ initialUser, initialPortfolios }: Setti
         ? allPortfolios.find((portfolio: any) => portfolio.id === currentPortfolioId)
         : allPortfolios[0];
 
-      localStorage.setItem('cached_portfolios', JSON.stringify(allPortfolios));
+      if (allPortfolios.length > 0 || !portfoliosLoading) {
+        saveCachedPortfolios(user.id, allPortfolios);
+      }
 
       if (selectedPortfolio) {
         const nextName = selectedPortfolio.name || '';
@@ -466,23 +500,119 @@ export default function SettingsClient({ initialUser, initialPortfolios }: Setti
       setPortfolioName(cachedName ?? '');
       setBaseCurrency(cachedCurrency ?? 'USD');
     }
-  }, [allPortfolios, currentPortfolioId, user]);
+  }, [allPortfolios, currentPortfolioId, portfoliosLoading, user]);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    const syncPortfolios = async () => {
+      if (!user) {
+        setAllPortfolios([]);
+        setPortfoliosLoading(false);
+        return;
+      }
+
+      const cached = loadCachedPortfolios(user.id);
+      if (cached.length > 0) {
+        setAllPortfolios(cached);
+        setPortfoliosLoading(false);
+      } else {
+        setPortfoliosLoading(true);
+      }
+
+      try {
+        let response = await fetch('/api/portfolio', { cache: 'no-store' });
+        if (!response.ok) throw new Error('Failed to load portfolios');
+
+        let payload = await response.json();
+        let cloudPortfolios = Array.isArray(payload.portfolios) ? payload.portfolios : [];
+
+        if (cloudPortfolios.length === 0) {
+          const createResponse = await fetch('/api/portfolio', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ name: 'My Portfolio', currency: 'USD' }),
+          });
+
+          if (createResponse.ok) {
+            const createPayload = await createResponse.json();
+            cloudPortfolios = createPayload.portfolio ? [createPayload.portfolio] : [];
+          }
+        }
+
+        const localById = new Map(cached.map((portfolio: any) => [portfolio.id, portfolio]));
+        const mergedPortfolios = [...cloudPortfolios];
+
+        await Promise.all(cloudPortfolios.map(async (cloudPortfolio: any) => {
+          const localPortfolio = localById.get(cloudPortfolio.id);
+          if (!localPortfolio) return;
+
+          const localMs = localPortfolio.settingsUpdatedAt ? new Date(localPortfolio.settingsUpdatedAt).getTime() : 0;
+          const cloudMs = cloudPortfolio.settingsUpdatedAt ? new Date(cloudPortfolio.settingsUpdatedAt).getTime() : 0;
+
+          if (localMs > cloudMs && (
+            localPortfolio.name !== cloudPortfolio.name ||
+            localPortfolio.currency !== cloudPortfolio.currency
+          )) {
+            const patchResponse = await fetch(`/api/portfolio?id=${cloudPortfolio.id}`, {
+              method: 'PATCH',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                name: localPortfolio.name,
+                currency: localPortfolio.currency,
+              }),
+            });
+
+            if (patchResponse.ok) {
+              const patchPayload = await patchResponse.json();
+              if (patchPayload.portfolio) {
+                const index = mergedPortfolios.findIndex((portfolio: any) => portfolio.id === cloudPortfolio.id);
+                if (index >= 0) {
+                  mergedPortfolios[index] = patchPayload.portfolio;
+                }
+              }
+            }
+          }
+        }));
+
+        if (!cancelled) {
+          setAllPortfolios(mergedPortfolios);
+          saveCachedPortfolios(user.id, mergedPortfolios);
+          setPortfoliosLoading(false);
+        }
+      } catch {
+        if (!cancelled) {
+          setPortfoliosLoading(false);
+        }
+      }
+    };
+
+    syncPortfolios();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [user]);
 
   useEffect(() => {
     const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+      const previousUserId = user?.id;
       setUser(session?.user ?? null);
       if (!session?.user) {
+        clearCachedPortfolios(previousUserId);
         localStorage.removeItem('portfolio_name');
         localStorage.removeItem('base_currency');
         localStorage.removeItem('settings_updated_at');
         localStorage.removeItem('passkey_credentials');
         setPortfolioName('');
         setBaseCurrency('USD');
+        setAllPortfolios([]);
+        setPortfoliosLoading(false);
       }
     });
 
     return () => subscription.unsubscribe();
-  }, [supabase.auth]);
+  }, [supabase.auth, user?.id]);
 
   const isLoggedIn = !!user;
 
@@ -500,6 +630,7 @@ export default function SettingsClient({ initialUser, initialPortfolios }: Setti
   ], []);
 
   const handleSignOut = async () => {
+    clearCachedPortfolios(user?.id);
     await supabase.auth.signOut();
   };
 
@@ -524,6 +655,20 @@ export default function SettingsClient({ initialUser, initialPortfolios }: Setti
     setPortfolioActionLoading(true);
     setPortfolioError(null);
 
+    const previousPortfolios = allPortfolios;
+    const now = new Date().toISOString();
+    const optimisticPortfolios = allPortfolios.map((portfolio) => portfolio.id === id ? {
+      ...portfolio,
+      name: field === 'currency' ? portfolio.name : newName,
+      currency: field === 'name' ? portfolio.currency : newCurrency,
+      settingsUpdatedAt: now,
+    } : portfolio);
+
+    setAllPortfolios(optimisticPortfolios);
+    if (user?.id) {
+      saveCachedPortfolios(user.id, optimisticPortfolios);
+    }
+
     try {
       const payload = field === 'name' ? { name: newName } : field === 'currency' ? { currency: newCurrency } : { name: newName, currency: newCurrency };
       const res = await fetch(`/api/portfolio?id=${id}`, {
@@ -535,15 +680,15 @@ export default function SettingsClient({ initialUser, initialPortfolios }: Setti
       if (res.ok) {
         const data = await res.json();
         if (data.portfolio) {
-          const updatedPortfolios = allPortfolios.map((p) => p.id === data.portfolio.id ? data.portfolio : p);
+          const updatedPortfolios = optimisticPortfolios.map((p) => p.id === data.portfolio.id ? data.portfolio : p);
           setAllPortfolios(updatedPortfolios);
-          localStorage.setItem('cached_portfolios', JSON.stringify(updatedPortfolios));
+          if (user?.id) {
+            saveCachedPortfolios(user.id, updatedPortfolios);
+          }
         }
       }
 
       showNotification('success', 'Settings Saved', 'Your portfolio configuration has been updated successfully.');
-
-      const now = new Date().toISOString();
       if (id === currentPortfolioId || (!currentPortfolioId && id === allPortfolios[0]?.id)) {
         localStorage.setItem('portfolio_name', newName);
         localStorage.setItem('base_currency', newCurrency);
@@ -552,6 +697,10 @@ export default function SettingsClient({ initialUser, initialPortfolios }: Setti
       }
       localStorage.setItem('settings_updated_at', now);
     } catch (err: any) {
+      setAllPortfolios(previousPortfolios);
+      if (user?.id) {
+        saveCachedPortfolios(user.id, previousPortfolios);
+      }
       setPortfolioError(err.message || 'Failed to update portfolio');
       showNotification('error', 'Update Failed', err.message || 'We could not save your changes.');
     } finally {
@@ -573,6 +722,15 @@ export default function SettingsClient({ initialUser, initialPortfolios }: Setti
     const id = deleteConfirm.id;
 
     setPortfolioActionLoading(true);
+    const previousPortfolios = allPortfolios;
+    const remaining = allPortfolios.filter((p) => p.id !== id);
+    setAllPortfolios(remaining);
+    if (openPortfolioEditorId === id) {
+      setOpenPortfolioEditorId(null);
+    }
+    if (user?.id) {
+      saveCachedPortfolios(user.id, remaining);
+    }
     try {
       const res = await fetch(`/api/portfolio?id=${id}`, { method: 'DELETE' });
       if (!res.ok) {
@@ -580,18 +738,16 @@ export default function SettingsClient({ initialUser, initialPortfolios }: Setti
         throw new Error(data.error || 'Failed to delete');
       }
 
-      const remaining = allPortfolios.filter((p) => p.id !== id);
-      setAllPortfolios(remaining);
-      if (openPortfolioEditorId === id) {
-        setOpenPortfolioEditorId(null);
-      }
-      localStorage.setItem('cached_portfolios', JSON.stringify(remaining));
       showNotification('success', 'Portfolio Deleted', 'The portfolio has been removed.');
       
       if (id === currentPortfolioId) {
         router.push('/settings');
       }
     } catch (err: any) {
+      setAllPortfolios(previousPortfolios);
+      if (user?.id) {
+        saveCachedPortfolios(user.id, previousPortfolios);
+      }
       showNotification('error', 'Delete Failed', err.message);
     } finally {
       setPortfolioActionLoading(false);
@@ -642,7 +798,9 @@ export default function SettingsClient({ initialUser, initialPortfolios }: Setti
       const { portfolio } = await res.json();
       const nextPortfolios = [...allPortfolios, portfolio];
       setAllPortfolios(nextPortfolios);
-      localStorage.setItem('cached_portfolios', JSON.stringify(nextPortfolios));
+      if (user?.id) {
+        saveCachedPortfolios(user.id, nextPortfolios);
+      }
       setNewPortfolioName('');
       setNewPortfolioCurrency('USD');
       setIsCreatingPortfolio(false);
@@ -897,7 +1055,22 @@ export default function SettingsClient({ initialUser, initialPortfolios }: Setti
                   </div>
                 ) : null}
                 <div className="bg-element/50 rounded-2xl border border-border overflow-hidden transition-all duration-300">
-                  {!isLoggedIn ? (
+                  {isLoggedIn && portfoliosLoading && allPortfolios.length === 0 ? (
+                    <div className="divide-y divide-border/60">
+                      {[1, 2].map((index) => (
+                        <div key={index} className="px-5 py-4 flex items-center justify-between bg-card sm:bg-transparent animate-pulse">
+                          <div className="flex items-center space-x-4 min-w-0">
+                            <div className="w-8 h-8 min-w-8 shrink-0 rounded-lg bg-card border border-border shadow-sm" />
+                            <div className="min-w-0">
+                              <div className="h-4 w-24 bg-border rounded mb-2" />
+                              <div className="h-3 w-12 bg-border rounded" />
+                            </div>
+                          </div>
+                          <div className="h-8 w-12 bg-border rounded-lg" />
+                        </div>
+                      ))}
+                    </div>
+                  ) : !isLoggedIn ? (
                     /* Guest Mode - Show single local portfolio component */
                     <PortfolioItem 
                       portfolio={{ id: 'local', name: portfolioName, currency: baseCurrency }}
