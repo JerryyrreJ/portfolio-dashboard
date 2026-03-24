@@ -646,11 +646,17 @@ export default function DashboardClient({ portfolioId, portfolioName, portfolios
         {/* 标题 & 操作按钮 - 紧凑布局 */}
         <div className="flex justify-between items-center mb-6">
           <div className="flex items-center space-x-3">
-            <PortfolioSwitcher
-              portfolios={portfolios}
-              currentId={portfolioId}
-              variant="title"
-            />
+            {portfolios.length > 1 ? (
+              <PortfolioSwitcher
+                portfolios={portfolios}
+                currentId={portfolioId}
+                variant="title"
+              />
+            ) : (
+              <h1 className="text-[28px] font-bold text-primary tracking-tight leading-none">
+                {portfolioName || 'Portfolio'}
+              </h1>
+            )}
             <span className={`hidden sm:inline-block text-[13px] font-medium px-2 py-0.5 rounded-md transition-colors ${isRateLimited ? 'text-rose-500 bg-rose-50/50' : 'text-secondary bg-element-hover'}`}>
               {isRateLimited ? 'API Limit Reached' : 'Real-time'}
             </span>

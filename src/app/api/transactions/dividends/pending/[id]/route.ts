@@ -1,5 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server';
 import prisma from '@/lib/prisma';
+import {
+  findOwnedPendingDividends,
+  requireAuthenticatedUser,
+} from '@/lib/ownership';
 
 /**
  * DELETE /api/transactions/dividends/pending/[id]
@@ -10,10 +14,23 @@ export async function DELETE(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    const user = await requireAuthenticatedUser();
+    if (!user) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
+
     const { id } = await params;
+    const [existing] = await findOwnedPendingDividends(user.id, [id]);
+
+    if (!existing) {
+      return NextResponse.json(
+        { error: 'Pending dividend not found' },
+        { status: 404 }
+      );
+    }
 
     const deleted = await prisma.pendingDividend.delete({
-      where: { id },
+      where: { id: existing.id },
     });
 
     return NextResponse.json({
@@ -39,6 +56,11 @@ export async function PATCH(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    const user = await requireAuthenticatedUser();
+    if (!user) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
+
     const { id } = await params;
     const body = await request.json();
     const { calculatedAmount } = body;
@@ -50,8 +72,16 @@ export async function PATCH(
       );
     }
 
+    const [existing] = await findOwnedPendingDividends(user.id, [id]);
+    if (!existing) {
+      return NextResponse.json(
+        { error: 'Pending dividend not found' },
+        { status: 404 }
+      );
+    }
+
     const updated = await prisma.pendingDividend.update({
-      where: { id },
+      where: { id: existing.id },
       data: { calculatedAmount: parseFloat(calculatedAmount) },
     });
 

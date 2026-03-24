@@ -1,6 +1,10 @@
 import { NextRequest, NextResponse } from 'next/server';
 
 import prisma from '@/lib/prisma';
+import {
+  findOwnedTransaction,
+  requireAuthenticatedUser,
+} from '@/lib/ownership';
 
 // PATCH /api/transactions/[id] - 编辑交易
 export async function PATCH(
@@ -8,11 +12,24 @@ export async function PATCH(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    const user = await requireAuthenticatedUser();
+    if (!user) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
+
     const { id } = await params;
     const body = await request.json();
 
+    const existingTransaction = await findOwnedTransaction(user.id, id);
+    if (!existingTransaction) {
+      return NextResponse.json(
+        { error: 'Transaction not found' },
+        { status: 404 }
+      );
+    }
+
     const updated = await prisma.transaction.update({
-      where: { id },
+      where: { id: existingTransaction.id },
       data: {
         date: body.date ? new Date(body.date) : undefined,
         quantity: body.quantity !== undefined ? parseFloat(body.quantity) : undefined,
@@ -35,6 +52,11 @@ export async function DELETE(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    const user = await requireAuthenticatedUser();
+    if (!user) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
+
     const { id } = await params;
 
     if (!id) {
@@ -45,9 +67,7 @@ export async function DELETE(
     }
 
     // 检查交易是否存在
-    const existingTransaction = await prisma.transaction.findUnique({
-      where: { id },
-    });
+    const existingTransaction = await findOwnedTransaction(user.id, id);
 
     if (!existingTransaction) {
       return NextResponse.json(

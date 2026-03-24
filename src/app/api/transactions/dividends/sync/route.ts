@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import prisma from '@/lib/prisma';
 import { getDividends as getTwelveDataDividends } from '@/lib/twelvedata';
 import { getDividends as getFinnhubDividends } from '@/lib/finnhub';
+import { findOwnedPortfolio, requireAuthenticatedUser } from '@/lib/ownership';
 
 /**
  * POST /api/transactions/dividends/sync
@@ -15,6 +16,11 @@ import { getDividends as getFinnhubDividends } from '@/lib/finnhub';
  */
 export async function POST(request: NextRequest) {
   try {
+    const user = await requireAuthenticatedUser();
+    if (!user) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
+
     const body = await request.json();
     const { portfolioId } = body;
 
@@ -22,6 +28,14 @@ export async function POST(request: NextRequest) {
       return NextResponse.json(
         { error: 'Missing portfolioId parameter' },
         { status: 400 }
+      );
+    }
+
+    const portfolio = await findOwnedPortfolio(user.id, portfolioId);
+    if (!portfolio) {
+      return NextResponse.json(
+        { error: 'Portfolio not found' },
+        { status: 404 }
       );
     }
 

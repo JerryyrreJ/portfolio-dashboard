@@ -1,10 +1,16 @@
 import { NextRequest, NextResponse } from 'next/server';
 
 import prisma from '@/lib/prisma';
+import { requireAuthenticatedUser } from '@/lib/ownership';
 
 // 计算投资组合的当前持仓
 export async function GET(request: NextRequest) {
   try {
+    const user = await requireAuthenticatedUser();
+    if (!user) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
+
     const searchParams = request.nextUrl.searchParams;
     const portfolioId = searchParams.get('portfolioId');
 
@@ -16,8 +22,11 @@ export async function GET(request: NextRequest) {
     }
 
     // 获取投资组合的所有交易
-    const portfolio = await prisma.portfolio.findUnique({
-      where: { id: portfolioId },
+    const portfolio = await prisma.portfolio.findFirst({
+      where: {
+        id: portfolioId,
+        userId: user.id,
+      },
       include: {
         transactions: {
           include: {

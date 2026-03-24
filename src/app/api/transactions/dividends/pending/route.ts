@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import prisma from '@/lib/prisma';
+import { findOwnedPortfolio, requireAuthenticatedUser } from '@/lib/ownership';
 
 /**
  * GET /api/transactions/dividends/pending
@@ -7,6 +8,11 @@ import prisma from '@/lib/prisma';
  */
 export async function GET(request: NextRequest) {
   try {
+    const user = await requireAuthenticatedUser();
+    if (!user) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
+
     const searchParams = request.nextUrl.searchParams;
     const portfolioId = searchParams.get('portfolioId');
 
@@ -14,6 +20,14 @@ export async function GET(request: NextRequest) {
       return NextResponse.json(
         { error: 'Missing portfolioId parameter' },
         { status: 400 }
+      );
+    }
+
+    const portfolio = await findOwnedPortfolio(user.id, portfolioId);
+    if (!portfolio) {
+      return NextResponse.json(
+        { error: 'Portfolio not found' },
+        { status: 404 }
       );
     }
 

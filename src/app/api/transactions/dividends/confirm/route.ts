@@ -1,5 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server';
 import prisma from '@/lib/prisma';
+import {
+  findOwnedPendingDividends,
+  requireAuthenticatedUser,
+} from '@/lib/ownership';
 
 /**
  * POST /api/transactions/dividends/confirm
@@ -9,10 +13,20 @@ import prisma from '@/lib/prisma';
  */
 export async function POST(request: NextRequest) {
   try {
+    const user = await requireAuthenticatedUser();
+    if (!user) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
+
     const body = await request.json();
 
     // 支持单个确认或批量确认
-    const ids = body.ids || (body.id ? [body.id] : []);
+    const requestedIds: string[] = Array.isArray(body.ids)
+      ? body.ids.filter((id: unknown): id is string => typeof id === 'string')
+      : typeof body.id === 'string'
+        ? [body.id]
+        : [];
+    const ids = Array.from(new Set<string>(requestedIds));
     const adjustments = body.adjustments || {};
     const finalAmount = body.finalAmount; // 单个确认时的金额调整
 
@@ -24,16 +38,14 @@ export async function POST(request: NextRequest) {
     }
 
     // 获取待确认的分红记录
-    const pendingDividends = await prisma.pendingDividend.findMany({
-      where: {
-        id: { in: ids },
-        status: 'pending',
-      },
-    });
+    const ownedPendingDividends = await findOwnedPendingDividends(user.id, ids);
+    const pendingDividends = ownedPendingDividends.filter(
+      (dividend) => dividend.status === 'pending'
+    );
 
-    if (pendingDividends.length === 0) {
+    if (pendingDividends.length !== ids.length) {
       return NextResponse.json(
-        { error: 'No pending dividends found' },
+        { error: 'Pending dividends not found' },
         { status: 404 }
       );
     }

@@ -20,6 +20,7 @@
         "npm:@types/node@20",
         "npm:@types/react-dom@19",
         "npm:@types/react@19",
+        "npm:@vitest/ui@^3.2.4",
         "npm:clsx@^2.1.1",
         "npm:date-fns@^4.1.0",
         "npm:dotenv@^17.3.1",
@@ -38,7 +39,8 @@
         "npm:tailwind-merge@^3.5.0",
         "npm:tailwindcss@4",
         "npm:tsx@^4.21.0",
-        "npm:typescript@5"
+        "npm:typescript@5",
+        "npm:vitest@^3.2.4"
       ]
     }
   }

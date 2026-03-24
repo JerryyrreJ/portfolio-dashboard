@@ -3,7 +3,7 @@
 import { useState, useRef, useEffect } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { createPortal } from 'react-dom';
-import { ChevronDown, Plus, Trash2, Check, X } from 'lucide-react';
+import { ChevronDown, Check, X, Settings2 } from 'lucide-react';
 
 interface Portfolio {
   id: string;
@@ -20,14 +20,10 @@ export default function PortfolioSwitcher({ portfolios, currentId, variant = 'he
   const router = useRouter();
   const searchParams = useSearchParams();
   const [open, setOpen] = useState(false);
-  const [creating, setCreating] = useState(false);
-  const [newName, setNewName] = useState('');
-  const [loading, setLoading] = useState(false);
-  const [localPortfolios, setLocalPortfolios] = useState(portfolios);
   const [mounted, setMounted] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
 
-  const current = localPortfolios.find(p => p.id === currentId) ?? localPortfolios[0];
+  const current = portfolios.find(p => p.id === currentId) ?? portfolios[0];
 
   useEffect(() => {
     setMounted(true);
@@ -38,8 +34,6 @@ export default function PortfolioSwitcher({ portfolios, currentId, variant = 'he
     function handleClick(e: MouseEvent) {
       if (ref.current && !ref.current.contains(e.target as Node)) {
         setOpen(false);
-        setCreating(false);
-        setNewName('');
       }
     }
     document.addEventListener('mousedown', handleClick);
@@ -49,52 +43,20 @@ export default function PortfolioSwitcher({ portfolios, currentId, variant = 'he
   function switchTo(id: string) {
     console.log('switchTo called with id:', id);
     setOpen(false);
-    setCreating(false);
     const params = new URLSearchParams(searchParams.toString());
     params.set('pid', id);
     console.log('Navigating to:', `/?${params.toString()}`);
     router.push(`/?${params.toString()}`);
   }
 
-  async function handleCreate() {
-    if (!newName.trim() || loading) return;
-    setLoading(true);
-    try {
-      const res = await fetch('/api/portfolio', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ name: newName.trim() }),
-      });
-      if (!res.ok) throw new Error('Failed');
-      const { portfolio } = await res.json();
-      setLocalPortfolios(prev => [...prev, portfolio]);
-      setCreating(false);
-      setNewName('');
-      switchTo(portfolio.id);
-    } catch {
-      // silent
-    } finally {
-      setLoading(false);
+  function goToManagePortfolios() {
+    setOpen(false);
+    const params = new URLSearchParams();
+    if (currentId && currentId !== 'local-portfolio') {
+      params.set('pid', currentId);
     }
-  }
-
-  async function handleDelete(id: string, e: React.MouseEvent) {
-    e.stopPropagation();
-    if (localPortfolios.length <= 1) return;
-    if (!confirm('Delete this portfolio and all its transactions?')) return;
-    try {
-      const res = await fetch(`/api/portfolio?id=${id}`, { method: 'DELETE' });
-      if (!res.ok) throw new Error('Failed');
-      const remaining = localPortfolios.filter(p => p.id !== id);
-      setLocalPortfolios(remaining);
-      if (id === currentId) {
-        switchTo(remaining[0].id);
-      } else {
-        router.refresh();
-      }
-    } catch {
-      // silent
-    }
+    const query = params.toString();
+    router.push(`/settings${query ? `?${query}` : ''}#portfolio`);
   }
 
   const isTitle = variant === 'title';
@@ -123,7 +85,7 @@ export default function PortfolioSwitcher({ portfolios, currentId, variant = 'he
   const menuItems = (
     <>
       <div className="max-h-[300px] overflow-y-auto no-scrollbar py-1" style={{ pointerEvents: 'auto' }}>
-        {localPortfolios.map(p => (
+        {portfolios.map(p => (
           <div
             key={p.id}
             onClick={(e) => {
@@ -161,68 +123,28 @@ export default function PortfolioSwitcher({ portfolios, currentId, variant = 'he
                 p.id === currentId ? 'text-primary' : 'text-secondary group-hover/item:text-primary'
               }`}>{p.name}</span>
             </div>
-            {localPortfolios.length > 1 && (
-              <button
-                onClick={(e) => {
-                  console.log('Delete button clicked for:', p.id);
-                  e.preventDefault();
-                  e.stopPropagation();
-                  handleDelete(p.id, e);
-                }}
-                className="opacity-100 sm:opacity-0 sm:group-hover/item:opacity-100 p-1 rounded-lg text-secondary hover:text-rose-500 hover:bg-rose-50/50 transition-all"
-              >
-                <Trash2 className="w-4 h-4 sm:w-3.5 sm:h-3.5" />
-              </button>
-            )}
           </div>
         ))}
       </div>
 
       <div className="border-t border-border/60 p-1" style={{ pointerEvents: 'auto' }}>
-        {creating ? (
-          <div className="px-3 py-2 flex items-center gap-2" style={{ pointerEvents: 'auto' }}>
-            <input
-              autoFocus
-              value={newName}
-              onChange={e => setNewName(e.target.value)}
-              onKeyDown={e => {
-                if (e.key === 'Enter') handleCreate();
-                if (e.key === 'Escape') { setCreating(false); setNewName(''); }
-              }}
-              placeholder="Portfolio name"
-              className="flex-1 text-[15px] sm:text-[13px] bg-transparent border-b border-border outline-none text-primary placeholder:text-secondary py-1"
-              style={{ pointerEvents: 'auto' }}
-            />
-            <button
-              onClick={handleCreate}
-              disabled={!newName.trim() || loading}
-              className="text-[13px] font-bold text-primary disabled:opacity-40 px-2 py-1"
-              style={{ pointerEvents: 'auto' }}
-            >
-              {loading ? '...' : 'Add'}
-            </button>
-          </div>
-        ) : (
-          <button
-            onClick={(e) => {
-              console.log('New portfolio button clicked');
-              e.preventDefault();
-              e.stopPropagation();
-              setCreating(true);
-            }}
-            onTouchEnd={(e) => {
-              console.log('New portfolio button touched');
-              e.preventDefault();
-              e.stopPropagation();
-              setCreating(true);
-            }}
-            className="w-full flex items-center gap-2 px-3 py-2.5 sm:py-2 text-[14px] sm:text-[13px] font-semibold text-secondary hover:text-primary hover:bg-element-hover rounded-lg transition-colors"
-            style={{ pointerEvents: 'auto' }}
-          >
-            <Plus className="w-4 h-4 sm:w-3.5 sm:h-3.5" />
-            New portfolio
-          </button>
-        )}
+        <button
+          onClick={(e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            goToManagePortfolios();
+          }}
+          onTouchEnd={(e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            goToManagePortfolios();
+          }}
+          className="w-full flex items-center gap-2 px-3 py-2.5 sm:py-2 text-[14px] sm:text-[13px] font-semibold text-secondary hover:text-primary hover:bg-element-hover rounded-lg transition-colors"
+          style={{ pointerEvents: 'auto' }}
+        >
+          <Settings2 className="w-4 h-4 sm:w-3.5 sm:h-3.5" />
+          Manage portfolios
+        </button>
       </div>
     </>
   );
@@ -249,7 +171,6 @@ export default function PortfolioSwitcher({ portfolios, currentId, variant = 'he
             onClick={() => {
               console.log('Overlay clicked - closing');
               setOpen(false);
-              setCreating(false);
             }}
             style={{ pointerEvents: 'auto' }}
           />
@@ -285,7 +206,6 @@ export default function PortfolioSwitcher({ portfolios, currentId, variant = 'he
                   console.log('Close button clicked');
                   e.stopPropagation();
                   setOpen(false);
-                  setCreating(false);
                 }}
                 className="w-8 h-8 rounded-full bg-element-hover flex items-center justify-center text-secondary"
                 style={{ pointerEvents: 'auto' }}

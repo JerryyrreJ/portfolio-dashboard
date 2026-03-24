@@ -18,6 +18,7 @@ model Portfolio {
   preferences       String?
   settingsUpdatedAt DateTime?
   transactions      Transaction[]
+  pendingDividends  PendingDividend[]
 }
 
 model Asset {
@@ -86,6 +87,7 @@ model PendingDividend {
   status           String    @default("pending") // pending, confirmed, ignored
   createdAt        DateTime  @default(now())
   updatedAt        DateTime  @updatedAt
+  portfolio        Portfolio @relation(fields: [portfolioId], references: [id], onDelete: Cascade)
 
   @@unique([portfolioId, ticker, exDate])
   @@index([portfolioId, status])

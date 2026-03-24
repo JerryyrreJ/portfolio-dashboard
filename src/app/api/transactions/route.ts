@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { USD_RATES } from '@/lib/currency';
 import prisma from '@/lib/prisma';
+import { findOwnedPortfolio, requireAuthenticatedUser } from '@/lib/ownership';
 
 async function getPriceUSD(price: number, currency: string): Promise<{ priceUSD: number; exchangeRate: number }> {
   if (currency === 'USD') return { priceUSD: price, exchangeRate: 1 };
@@ -27,6 +28,11 @@ async function getPriceUSD(price: number, currency: string): Promise<{ priceUSD:
 // 创建新交易记录
 export async function POST(request: NextRequest) {
   try {
+    const user = await requireAuthenticatedUser();
+    if (!user) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
+
     const body = await request.json();
 
     // 验证必填字段
@@ -59,6 +65,14 @@ export async function POST(request: NextRequest) {
     // 服务端计算 priceUSD 和 exchangeRate
     const currency = body.currency || 'USD';
     const { priceUSD, exchangeRate } = await getPriceUSD(parseFloat(body.price), currency);
+
+    const portfolio = await findOwnedPortfolio(user.id, body.portfolioId);
+    if (!portfolio) {
+      return NextResponse.json(
+        { error: 'Portfolio not found' },
+        { status: 404 }
+      );
+    }
 
     // 创建交易记录
     const transaction = await prisma.transaction.create({
@@ -119,12 +133,30 @@ export async function POST(request: NextRequest) {
 // 获取交易记录列表
 export async function GET(request: NextRequest) {
   try {
+    const user = await requireAuthenticatedUser();
+    if (!user) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
+
     const searchParams = request.nextUrl.searchParams;
     const portfolioId = searchParams.get('portfolioId');
     const limit = parseInt(searchParams.get('limit') || '50');
     const offset = parseInt(searchParams.get('offset') || '0');
 
-    const where = portfolioId ? { portfolioId: portfolioId } : {};
+    if (portfolioId) {
+      const portfolio = await findOwnedPortfolio(user.id, portfolioId);
+      if (!portfolio) {
+        return NextResponse.json(
+          { error: 'Portfolio not found' },
+          { status: 404 }
+        );
+      }
+    }
+
+    const where = {
+      portfolio: { userId: user.id },
+      ...(portfolioId ? { portfolioId } : {}),
+    };
 
     const [transactions, total] = await Promise.all([
       prisma.transaction.findMany({
