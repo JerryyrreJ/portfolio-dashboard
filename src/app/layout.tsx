@@ -14,7 +14,16 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
+  metadataBase: new URL("https://folio.jerrylu.app"),
+  applicationName: "Folio",
   title: "Folio",
+  description: "Track your portfolio, holdings, transactions, and market data in one place.",
+  manifest: "/manifest.webmanifest",
+  appleWebApp: {
+    capable: true,
+    statusBarStyle: "default",
+    title: "Folio",
+  },
 };
 
 export default function RootLayout({
