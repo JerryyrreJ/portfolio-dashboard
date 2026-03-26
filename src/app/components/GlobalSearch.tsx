@@ -3,6 +3,7 @@
 import React, { useState, useRef, useCallback, useEffect } from 'react';
 import { Search, X, TrendingUp, History, Loader2, ChevronRight } from 'lucide-react';
 import { useRouter } from 'next/navigation';
+import { useTranslations } from 'next-intl';
 import { useStock } from '@/hooks/useStock';
 
 interface GlobalSearchProps {
@@ -11,6 +12,7 @@ interface GlobalSearchProps {
 }
 
 export default function GlobalSearch({ onClose, isMobileOnly = false }: GlobalSearchProps) {
+  const t = useTranslations('search');
   const [searchQuery, setSearchQuery] = useState<string>('');
   const [searchResults, setSearchResults] = useState<Array<{ description: string; displaySymbol: string; symbol: string; type: string }>>([]);
   const [showSearchResults, setShowSearchResults] = useState<boolean>(false);
@@ -95,7 +97,7 @@ export default function GlobalSearch({ onClose, isMobileOnly = false }: GlobalSe
               type="text"
               value={searchQuery}
               onChange={handleSearchChange}
-              placeholder="Search stocks..."
+              placeholder={t('placeholderStocks')}
               className="w-full bg-element-hover/80 border-none rounded-2xl py-3 pl-11 pr-4 text-[16px] font-medium outline-none focus:ring-2 focus:ring-black/5 transition-all"
             />
             {searchQuery && (
@@ -111,7 +113,7 @@ export default function GlobalSearch({ onClose, isMobileOnly = false }: GlobalSe
             onClick={onClose}
             className="text-[16px] font-bold text-primary px-1 active:opacity-50 transition-opacity"
           >
-            Cancel
+            {t('cancel')}
           </button>
         </div>
 
@@ -122,16 +124,16 @@ export default function GlobalSearch({ onClose, isMobileOnly = false }: GlobalSe
               <div className="w-16 h-16 bg-element rounded-full flex items-center justify-center mb-6">
                 <Search className="w-8 h-8 text-secondary" />
               </div>
-              <h3 className="text-[17px] font-bold text-primary tracking-tight mb-2">Search Portfolio</h3>
+              <h3 className="text-[17px] font-bold text-primary tracking-tight mb-2">{t('emptyTitle')}</h3>
               <p className="text-[14px] text-secondary max-w-[200px] text-center leading-relaxed font-medium">
-                Find tickers, company names or market symbols
+                {t('emptyDescription')}
               </p>
             </div>
           )}
           
           {searchQuery && searchResults.length === 0 && !isSearching && (
             <div className="pt-20 flex flex-col items-center justify-center opacity-50">
-              <p className="text-[15px] font-bold text-primary tracking-tight">No results for "{searchQuery}"</p>
+              <p className="text-[15px] font-bold text-primary tracking-tight">{t('noResults', { query: searchQuery })}</p>
             </div>
           )}
 
@@ -176,7 +178,7 @@ export default function GlobalSearch({ onClose, isMobileOnly = false }: GlobalSe
             setIsFocused(true);
             if (searchResults.length > 0) setShowSearchResults(true);
           }}
-          placeholder="Search stocks..."
+          placeholder={t('placeholderStocks')}
           className={`bg-element-hover border-none rounded-lg py-1.5 pl-9 pr-4 text-[13px] transition-all duration-300 outline-none ${
             isFocused ? 'w-60 ring-1 ring-black/5 bg-card' : 'w-44'
           }`}

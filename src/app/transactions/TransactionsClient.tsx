@@ -2,6 +2,7 @@
 
 import React, { useState } from 'react';
 import { format } from 'date-fns';
+import { useLocale, useTranslations } from 'next-intl';
 import Link from 'next/link';
 import Image from 'next/image';
 import {
@@ -56,18 +57,19 @@ interface TransactionsClientProps {
 }
 
 function EmptyState() {
+  const t = useTranslations('transactions');
   return (
     <div className="flex flex-col items-center gap-3">
       <div className="w-12 h-12 bg-element rounded-full flex items-center justify-center">
         <Search className="w-6 h-6 text-secondary" />
       </div>
-      <p className="font-medium">No transactions found</p>
+      <p className="font-medium">{t('noTransactionsFound')}</p>
     </div>
   );
 }
 
-function formatNumber(num: number, decimals: number = 4): string {
-  return num.toLocaleString('en-US', {
+function formatNumber(num: number, locale: string, decimals: number = 4): string {
+  return num.toLocaleString(locale, {
     minimumFractionDigits: 0,
     maximumFractionDigits: decimals,
   });
@@ -78,6 +80,8 @@ export default function TransactionsClient({
   portfolioId, portfolioName, logoMap, searchTicker, searchType,
   buyCount, sellCount, totalVolume, userDisplayName = '',
 }: TransactionsClientProps) {
+  const t = useTranslations('transactions');
+  const locale = useLocale();
   const { fmt } = useCurrency();
   const { colors } = usePreferences();
   const [transactions, setTransactions] = useState(initialTransactions);
@@ -87,6 +91,18 @@ export default function TransactionsClient({
   const [editState, setEditState] = useState<EditState | null>(null);
   const [isSaving, setIsSaving] = useState(false);
   const [failedLogos, setFailedLogos] = useState<Set<string>>(new Set());
+  const shortDateFormatter = new Intl.DateTimeFormat(locale, {
+    month: 'short',
+    day: '2-digit',
+    year: 'numeric',
+  });
+
+  const getTransactionTypeLabel = (type: string) => {
+    if (type === 'BUY') return t('types.buy');
+    if (type === 'SELL') return t('types.sell');
+    if (type === 'DIVIDEND') return t('types.dividend');
+    return type;
+  };
 
   const openEdit = (tx: TransactionWithAsset) => {
     setEditingId(tx.id);
@@ -155,7 +171,7 @@ export default function TransactionsClient({
       <header className="bg-card/70 backdrop-blur-xl border-b border-border px-6 h-[56px] flex items-center justify-between sticky top-0 z-50">
         <div className="flex items-center space-x-8">
           <div className="flex items-center space-x-2 text-primary font-bold text-[17px] tracking-tight cursor-pointer">
-            <Link href={`/?${portfolioId ? `pid=${portfolioId}` : ''}`} className="flex items-center space-x-2">
+            <Link href={`/app${portfolioId ? `?pid=${portfolioId}` : ''}`} className="flex items-center space-x-2">
               <div className="bg-primary text-on-primary p-1 rounded-md">
                 <TrendingUp className="w-4 h-4" />
               </div>
@@ -163,8 +179,8 @@ export default function TransactionsClient({
             </Link>
           </div>
           <nav className="hidden md:flex space-x-7 text-[14px] font-semibold text-secondary">
-            <Link href={`/${portfolioId ? `?pid=${portfolioId}` : ''}`} className="hover:text-primary transition-colors py-[16px]">Investments</Link>
-            <Link href={`/transactions?${portfolioId ? `pid=${portfolioId}` : ''}`} className="text-primary border-b-2 border-primary py-[16px]">Transactions</Link>
+            <Link href={`/app${portfolioId ? `?pid=${portfolioId}` : ''}`} className="hover:text-primary transition-colors py-[16px]">{t('nav.investments')}</Link>
+            <Link href={`/transactions${portfolioId ? `?pid=${portfolioId}` : ''}`} className="text-primary border-b-2 border-primary py-[16px]">{t('nav.transactions')}</Link>
           </nav>
         </div>
         <div className="flex items-center space-x-5">
@@ -172,7 +188,7 @@ export default function TransactionsClient({
             <Search className="w-3.5 h-3.5 absolute left-3 top-[10px] text-secondary" />
             <input
               type="text"
-              placeholder="Search transactions"
+              placeholder={t('searchPlaceholder')}
               className="bg-element-hover border-none rounded-lg py-1.5 pl-9 pr-4 text-[13px] w-44 focus:w-60 focus:ring-1 focus:ring-black/5 focus:bg-card transition-all duration-300"
             />
           </div>
@@ -195,7 +211,7 @@ export default function TransactionsClient({
                   <User className="w-3.5 h-3.5" />
                 </div>
                 <span className="text-[13px] font-bold text-secondary group-hover:text-primary transition-colors hidden sm:block">
-                  Guest
+                  {t('guest')}
                 </span>
               </>
             )}
@@ -209,21 +225,21 @@ export default function TransactionsClient({
         <div className="flex flex-col sm:flex-row justify-between items-start sm:items-end gap-4 mb-6 sm:mb-8">
           <div>
             <div className="flex items-center gap-2 text-[12px] sm:text-[13px] font-medium text-secondary mb-1.5 sm:mb-2">
-              <Link href="/" className="hover:text-primary transition-colors">Dashboard</Link>
+              <Link href="/app" className="hover:text-primary transition-colors">{t('breadcrumbDashboard')}</Link>
               <ChevronRight className="w-3 h-3" />
-              <span className="text-primary">Transactions</span>
+              <span className="text-primary">{t('breadcrumbCurrent')}</span>
             </div>
-            <h1 className="text-[28px] sm:text-[32px] font-bold text-primary tracking-tight leading-tight">Transaction History</h1>
-            <p className="text-secondary font-medium mt-1 text-[13px] sm:text-[15px]">{total} recorded activities in {portfolioName}</p>
+            <h1 className="text-[28px] sm:text-[32px] font-bold text-primary tracking-tight leading-tight">{t('title')}</h1>
+            <p className="text-secondary font-medium mt-1 text-[13px] sm:text-[15px]">{t('subtitle', { count: total, portfolioName })}</p>
           </div>
           <div className="flex items-center gap-2 sm:gap-3 w-full sm:w-auto">
             <button className="flex-1 sm:flex-none flex items-center justify-center gap-1.5 px-4 py-2 text-[13px] font-semibold text-secondary bg-card border border-border rounded-full hover:bg-element transition-all">
               <Filter className="w-3.5 h-3.5" />
-              Filter
+              {t('filter')}
             </button>
             <button className="flex-1 sm:flex-none flex items-center justify-center gap-1.5 px-4 py-2 text-[13px] font-semibold text-secondary bg-card border border-border rounded-full hover:bg-element transition-all">
               <Download className="w-3.5 h-3.5" />
-              Export
+              {t('export')}
             </button>
           </div>
         </div>
@@ -231,19 +247,19 @@ export default function TransactionsClient({
         {/* 统计卡片 */}
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-5 mb-6 sm:mb-8">
           <div className="bg-card p-4 sm:p-5 rounded-2xl border border-border shadow-sm">
-            <p className="text-[10px] sm:text-[11px] text-secondary font-bold uppercase tracking-wider mb-1 text-center">Total Volume</p>
+            <p className="text-[10px] sm:text-[11px] text-secondary font-bold uppercase tracking-wider mb-1 text-center">{t('totalVolume')}</p>
             <p className="text-[18px] sm:text-[20px] font-bold text-primary text-center tabular-nums">{fmt(totalVolume)}</p>
           </div>
           <div className="bg-card p-4 sm:p-5 rounded-2xl border border-border shadow-sm">
-            <p className="text-[10px] sm:text-[11px] text-secondary font-bold uppercase tracking-wider mb-1 text-center">Buy Activity</p>
-            <p className={`text-[18px] sm:text-[20px] font-bold text-center tabular-nums ${colors.gain.tailwind.text}`}>{buyCount} Orders</p>
+            <p className="text-[10px] sm:text-[11px] text-secondary font-bold uppercase tracking-wider mb-1 text-center">{t('buyActivity')}</p>
+            <p className={`text-[18px] sm:text-[20px] font-bold text-center tabular-nums ${colors.gain.tailwind.text}`}>{t('orders', { count: buyCount })}</p>
           </div>
           <div className="bg-card p-4 sm:p-5 rounded-2xl border border-border shadow-sm">
-            <p className="text-[10px] sm:text-[11px] text-secondary font-bold uppercase tracking-wider mb-1 text-center">Sell Activity</p>
-            <p className={`text-[18px] sm:text-[20px] font-bold text-center tabular-nums ${colors.loss.tailwind.text}`}>{sellCount} Orders</p>
+            <p className="text-[10px] sm:text-[11px] text-secondary font-bold uppercase tracking-wider mb-1 text-center">{t('sellActivity')}</p>
+            <p className={`text-[18px] sm:text-[20px] font-bold text-center tabular-nums ${colors.loss.tailwind.text}`}>{t('orders', { count: sellCount })}</p>
           </div>
           <div className="bg-card p-4 sm:p-5 rounded-2xl border border-border shadow-sm">
-            <p className="text-[10px] sm:text-[11px] text-secondary font-bold uppercase tracking-wider mb-1 text-center">Avg. Order</p>
+            <p className="text-[10px] sm:text-[11px] text-secondary font-bold uppercase tracking-wider mb-1 text-center">{t('avgOrder')}</p>
             <p className="text-[18px] sm:text-[20px] font-bold text-primary text-center tabular-nums">{fmt(total > 0 ? totalVolume / total : 0)}</p>
           </div>
         </div>
@@ -255,13 +271,13 @@ export default function TransactionsClient({
             <table className="w-full text-left border-collapse">
               <thead>
                 <tr className="bg-element/50 text-[10px] font-bold text-secondary uppercase tracking-widest border-b border-border">
-                  <th className="px-6 py-4">Date & Time</th>
-                  <th className="px-6 py-4">Asset</th>
-                  <th className="px-6 py-4 text-center">Side</th>
-                  <th className="px-6 py-4 text-right">Shares</th>
-                  <th className="px-6 py-4 text-right">Unit Price</th>
-                  <th className="px-6 py-4 text-right">Total Amount</th>
-                  <th className="px-6 py-4 text-center w-24">Actions</th>
+                  <th className="px-6 py-4">{t('dateTime')}</th>
+                  <th className="px-6 py-4">{t('asset')}</th>
+                  <th className="px-6 py-4 text-center">{t('side')}</th>
+                  <th className="px-6 py-4 text-right">{t('shares')}</th>
+                  <th className="px-6 py-4 text-right">{t('unitPrice')}</th>
+                  <th className="px-6 py-4 text-right">{t('totalAmount')}</th>
+                  <th className="px-6 py-4 text-center w-24">{t('actions')}</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-border">
@@ -277,7 +293,7 @@ export default function TransactionsClient({
                       <tr className={`transition-all group ${editingId === transaction.id ? 'bg-element/80' : 'hover:bg-element/80'}`}>
                         <td className="px-6 py-4 whitespace-nowrap">
                           <div className="text-[13px] font-semibold text-primary leading-tight">
-                            {format(new Date(transaction.date), 'MMM dd, yyyy')}
+                            {shortDateFormatter.format(new Date(transaction.date))}
                           </div>
                         </td>
                         <td className="px-6 py-4 whitespace-nowrap">
@@ -301,14 +317,14 @@ export default function TransactionsClient({
                             transaction.type === 'SELL' ? `${colors.loss.tailwind.bgLight} ${colors.loss.tailwind.text}` :
                             'bg-indigo-50 text-indigo-600'
                           }`}>
-                            {transaction.type}
+                            {getTransactionTypeLabel(transaction.type)}
                           </span>
                         </td>
                         <td className="px-6 py-4 whitespace-nowrap text-right">
                           {transaction.type === 'DIVIDEND' ? (
                             <p className="text-[13px] font-medium text-secondary">—</p>
                           ) : (
-                            <p className="text-[13px] font-semibold text-primary tabular-nums">{formatNumber(transaction.quantity)}</p>
+                            <p className="text-[13px] font-semibold text-primary tabular-nums">{formatNumber(transaction.quantity, locale)}</p>
                           )}
                         </td>
                         <td className="px-6 py-4 whitespace-nowrap text-right">
@@ -321,7 +337,7 @@ export default function TransactionsClient({
                         <td className="px-6 py-4 whitespace-nowrap text-right">
                           <p className="text-[14px] font-bold text-primary tabular-nums">{fmt(transaction.type === 'DIVIDEND' ? transaction.price : (transaction.priceUSD || transaction.price) * Math.abs(transaction.quantity))}</p>
                           {transaction.fee > 0 && transaction.type !== 'DIVIDEND' && (
-                            <p className="text-[10px] text-secondary font-medium">Fee: {getCurrencySymbol(transaction.currency ?? 'USD')}{transaction.fee.toFixed(2)}</p>
+                            <p className="text-[10px] text-secondary font-medium">{t('fee')}: {getCurrencySymbol(transaction.currency ?? 'USD')}{transaction.fee.toFixed(2)}</p>
                           )}
                           {transaction.type === 'DIVIDEND' && transaction.notes && (
                             <p className="text-[10px] text-secondary font-medium">{transaction.notes}</p>
@@ -334,13 +350,13 @@ export default function TransactionsClient({
                                 onClick={() => handleDelete(transaction.id)}
                                 className="px-2.5 py-1 text-[11px] font-bold text-rose-500 bg-rose-50 hover:bg-rose-100 rounded-md transition-colors"
                               >
-                                Confirm
+                                {t('confirm')}
                               </button>
                               <button
                                 onClick={() => setConfirmingId(null)}
                                 className="px-2.5 py-1 text-[11px] font-bold text-secondary hover:text-primary bg-element hover:bg-element-hover rounded-md transition-colors"
                               >
-                                Cancel
+                                {t('cancel')}
                               </button>
                             </div>
                           ) : (
@@ -376,7 +392,7 @@ export default function TransactionsClient({
                                   <>
                                     <div className="grid grid-cols-2 gap-3 mb-4">
                                       <div className="space-y-1.5">
-                                        <label className="text-[10px] font-bold text-secondary uppercase tracking-widest">Date</label>
+                                        <label className="text-[10px] font-bold text-secondary uppercase tracking-widest">{t('date')}</label>
                                         <input
                                           type="date"
                                           value={editState?.date ?? ''}
@@ -386,7 +402,7 @@ export default function TransactionsClient({
                                       </div>
                                       <div className="space-y-1.5">
                                         <label className="text-[10px] font-bold text-secondary uppercase tracking-widest flex items-center gap-1">
-                                          Amount <span className="text-secondary">·</span> {getCurrencySymbol(transaction.currency ?? 'USD')}
+                                          {t('amount')} <span className="text-secondary">·</span> {getCurrencySymbol(transaction.currency ?? 'USD')}
                                         </label>
                                         <input
                                           type="number"
@@ -399,12 +415,12 @@ export default function TransactionsClient({
                                       </div>
                                     </div>
                                     <div className="space-y-1.5 mb-4">
-                                      <label className="text-[10px] font-bold text-secondary uppercase tracking-widest">Notes</label>
+                                      <label className="text-[10px] font-bold text-secondary uppercase tracking-widest">{t('notes')}</label>
                                       <input
                                         type="text"
                                         value={editState?.notes ?? ''}
                                         onChange={e => setEditState(s => s ? { ...s, notes: e.target.value } : s)}
-                                        placeholder="Optional"
+                                        placeholder={t('optional')}
                                         className="w-full px-3 py-2 bg-card rounded-xl text-[13px] font-medium text-primary border border-border focus:border-primary focus:ring-1 focus:ring-black outline-none transition-all"
                                       />
                                     </div>
@@ -414,7 +430,7 @@ export default function TransactionsClient({
                                   <>
                                     <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 mb-4">
                                       <div className="space-y-1.5">
-                                        <label className="text-[10px] font-bold text-secondary uppercase tracking-widest">Date</label>
+                                        <label className="text-[10px] font-bold text-secondary uppercase tracking-widest">{t('date')}</label>
                                         <input
                                           type="date"
                                           value={editState?.date ?? ''}
@@ -423,7 +439,7 @@ export default function TransactionsClient({
                                         />
                                       </div>
                                       <div className="space-y-1.5">
-                                        <label className="text-[10px] font-bold text-secondary uppercase tracking-widest">Shares</label>
+                                        <label className="text-[10px] font-bold text-secondary uppercase tracking-widest">{t('shares')}</label>
                                         <input
                                           type="number"
                                           step="0.0001"
@@ -435,7 +451,7 @@ export default function TransactionsClient({
                                       </div>
                                       <div className="space-y-1.5">
                                         <label className="text-[10px] font-bold text-secondary uppercase tracking-widest flex items-center gap-1">
-                                          Unit Price <span className="text-secondary">·</span> {getCurrencySymbol(transaction.currency ?? 'USD')}
+                                          {t('unitPrice')} <span className="text-secondary">·</span> {getCurrencySymbol(transaction.currency ?? 'USD')}
                                         </label>
                                         <input
                                           type="number"
@@ -448,7 +464,7 @@ export default function TransactionsClient({
                                       </div>
                                       <div className="space-y-1.5">
                                         <label className="text-[10px] font-bold text-secondary uppercase tracking-widest flex items-center gap-1">
-                                          Fee <span className="text-secondary">·</span> {getCurrencySymbol(transaction.currency ?? 'USD')}
+                                          {t('fee')} <span className="text-secondary">·</span> {getCurrencySymbol(transaction.currency ?? 'USD')}
                                         </label>
                                         <input
                                           type="number"
@@ -461,12 +477,12 @@ export default function TransactionsClient({
                                       </div>
                                     </div>
                                     <div className="space-y-1.5 mb-4">
-                                      <label className="text-[10px] font-bold text-secondary uppercase tracking-widest">Notes</label>
+                                      <label className="text-[10px] font-bold text-secondary uppercase tracking-widest">{t('notes')}</label>
                                       <input
                                         type="text"
                                         value={editState?.notes ?? ''}
                                         onChange={e => setEditState(s => s ? { ...s, notes: e.target.value } : s)}
-                                        placeholder="Optional"
+                                        placeholder={t('optional')}
                                         className="w-full px-3 py-2 bg-card rounded-xl text-[13px] font-medium text-primary border border-border focus:border-primary focus:ring-1 focus:ring-black outline-none transition-all"
                                       />
                                     </div>
@@ -479,7 +495,7 @@ export default function TransactionsClient({
                                     className="flex items-center gap-1.5 px-4 py-2 text-[12px] font-bold text-on-primary bg-primary hover:bg-primary-hover rounded-xl transition-colors active:scale-95 disabled:opacity-50 shadow-sm"
                                   >
                                     <Check className="w-3.5 h-3.5" />
-                                    Save Changes
+                                    {t('saveChanges')}
                                   </button>
                                 </div>
                               </div>
@@ -521,7 +537,7 @@ export default function TransactionsClient({
                               transaction.type === 'SELL' ? `${colors.loss.tailwind.bgLight} ${colors.loss.tailwind.text}` :
                               'bg-indigo-50 text-indigo-600'
                             }`}>
-                              {transaction.type}
+                              {getTransactionTypeLabel(transaction.type)}
                             </span>
                           </div>
                           <p className="text-[12px] text-secondary font-medium truncate max-w-[140px]">{transaction.asset.name}</p>
@@ -532,28 +548,28 @@ export default function TransactionsClient({
                         {transaction.type === 'DIVIDEND' ? (
                           transaction.notes && <p className="text-[11px] text-secondary font-medium">{transaction.notes}</p>
                         ) : (
-                          <p className="text-[12px] text-secondary font-medium tabular-nums">{formatNumber(transaction.quantity)} shares</p>
+                          <p className="text-[12px] text-secondary font-medium tabular-nums">{formatNumber(transaction.quantity, locale)} {t('sharesUnit')}</p>
                         )}
                       </div>
                     </div>
                     <div className="flex items-center justify-between mt-2">
                       <div className="text-[12px] text-secondary font-medium">
-                        {format(new Date(transaction.date), 'MMM dd, yyyy')}
+                        {shortDateFormatter.format(new Date(transaction.date))}
                       </div>
                       <div className="flex items-center gap-3">
                         <button
                           onClick={() => editingId === transaction.id ? closeEdit() : openEdit(transaction)}
                           className={`text-[12px] font-semibold transition-colors ${editingId === transaction.id ? 'text-primary' : 'text-secondary'}`}
                         >
-                          {editingId === transaction.id ? 'Close' : 'Edit'}
+                          {editingId === transaction.id ? t('close') : t('edit')}
                         </button>
                         {confirmingId === transaction.id ? (
                           <>
-                            <button onClick={() => handleDelete(transaction.id)} className="text-[12px] font-bold text-rose-500">Confirm</button>
-                            <button onClick={() => setConfirmingId(null)} className="text-[12px] font-semibold text-secondary">Cancel</button>
+                            <button onClick={() => handleDelete(transaction.id)} className="text-[12px] font-bold text-rose-500">{t('confirm')}</button>
+                            <button onClick={() => setConfirmingId(null)} className="text-[12px] font-semibold text-secondary">{t('cancel')}</button>
                           </>
                         ) : (
-                          <button onClick={() => setConfirmingId(transaction.id)} className="text-[12px] font-semibold text-rose-400">Delete</button>
+                          <button onClick={() => setConfirmingId(transaction.id)} className="text-[12px] font-semibold text-rose-400">{t('delete')}</button>
                         )}
                       </div>
                     </div>
@@ -568,7 +584,7 @@ export default function TransactionsClient({
                           <>
                             <div className="grid grid-cols-2 gap-3 pt-3">
                               <div className="space-y-1.5">
-                                <label className="text-[10px] font-bold text-secondary uppercase tracking-widest">Date</label>
+                                <label className="text-[10px] font-bold text-secondary uppercase tracking-widest">{t('date')}</label>
                                 <input
                                   type="date"
                                   value={editState?.date ?? ''}
@@ -578,7 +594,7 @@ export default function TransactionsClient({
                               </div>
                               <div className="space-y-1.5">
                                 <label className="text-[10px] font-bold text-secondary uppercase tracking-widest flex items-center gap-1">
-                                  Amount <span className="text-secondary">·</span> {getCurrencySymbol(transaction.currency ?? 'USD')}
+                                  {t('amount')} <span className="text-secondary">·</span> {getCurrencySymbol(transaction.currency ?? 'USD')}
                                 </label>
                                 <input
                                   type="number"
@@ -591,12 +607,12 @@ export default function TransactionsClient({
                               </div>
                             </div>
                             <div className="space-y-1.5">
-                              <label className="text-[10px] font-bold text-secondary uppercase tracking-widest">Notes</label>
+                              <label className="text-[10px] font-bold text-secondary uppercase tracking-widest">{t('notes')}</label>
                               <input
                                 type="text"
                                 value={editState?.notes ?? ''}
                                 onChange={e => setEditState(s => s ? { ...s, notes: e.target.value } : s)}
-                                placeholder="Optional"
+                                placeholder={t('optional')}
                                 className="w-full px-3 py-2 bg-element/50 rounded-xl text-[13px] font-medium text-primary border border-border focus:border-primary focus:ring-1 focus:ring-black outline-none transition-all"
                               />
                             </div>
@@ -606,7 +622,7 @@ export default function TransactionsClient({
                           <>
                             <div className="grid grid-cols-2 gap-3 pt-3">
                               <div className="space-y-1.5">
-                                <label className="text-[10px] font-bold text-secondary uppercase tracking-widest">Date</label>
+                                <label className="text-[10px] font-bold text-secondary uppercase tracking-widest">{t('date')}</label>
                                 <input
                                   type="date"
                                   value={editState?.date ?? ''}
@@ -615,7 +631,7 @@ export default function TransactionsClient({
                                 />
                               </div>
                               <div className="space-y-1.5">
-                                <label className="text-[10px] font-bold text-secondary uppercase tracking-widest">Shares</label>
+                                <label className="text-[10px] font-bold text-secondary uppercase tracking-widest">{t('shares')}</label>
                                 <input
                                   type="number"
                                   step="0.0001"
@@ -627,7 +643,7 @@ export default function TransactionsClient({
                               </div>
                               <div className="space-y-1.5">
                                 <label className="text-[10px] font-bold text-secondary uppercase tracking-widest flex items-center gap-1">
-                                  Unit Price <span className="text-secondary">·</span> {getCurrencySymbol(transaction.currency ?? 'USD')}
+                                  {t('unitPrice')} <span className="text-secondary">·</span> {getCurrencySymbol(transaction.currency ?? 'USD')}
                                 </label>
                                 <input
                                   type="number"
@@ -640,7 +656,7 @@ export default function TransactionsClient({
                               </div>
                               <div className="space-y-1.5">
                                 <label className="text-[10px] font-bold text-secondary uppercase tracking-widest flex items-center gap-1">
-                                  Fee <span className="text-secondary">·</span> {getCurrencySymbol(transaction.currency ?? 'USD')}
+                                  {t('fee')} <span className="text-secondary">·</span> {getCurrencySymbol(transaction.currency ?? 'USD')}
                                 </label>
                                 <input
                                   type="number"
@@ -653,12 +669,12 @@ export default function TransactionsClient({
                               </div>
                             </div>
                             <div className="space-y-1.5">
-                              <label className="text-[10px] font-bold text-secondary uppercase tracking-widest">Notes</label>
+                              <label className="text-[10px] font-bold text-secondary uppercase tracking-widest">{t('notes')}</label>
                               <input
                                 type="text"
                                 value={editState?.notes ?? ''}
                                 onChange={e => setEditState(s => s ? { ...s, notes: e.target.value } : s)}
-                                placeholder="Optional"
+                                placeholder={t('optional')}
                                 className="w-full px-3 py-2 bg-element/50 rounded-xl text-[13px] font-medium text-primary border border-border focus:border-primary focus:ring-1 focus:ring-black outline-none transition-all"
                               />
                             </div>
@@ -670,7 +686,7 @@ export default function TransactionsClient({
                           className="w-full flex items-center justify-center gap-1.5 py-2.5 text-[13px] font-bold text-on-primary bg-primary hover:bg-primary-hover rounded-xl transition-colors active:scale-[0.98] disabled:opacity-50 shadow-sm"
                         >
                           <Check className="w-3.5 h-3.5" />
-                          Save Changes
+                          {t('saveChanges')}
                         </button>
                       </div>
                     </div>
@@ -685,14 +701,14 @@ export default function TransactionsClient({
         {totalPages > 1 && (
           <div className="flex flex-col sm:flex-row items-center justify-between mt-8 gap-4">
             <p className="text-[13px] font-medium text-secondary px-2 order-2 sm:order-1">
-              Showing {((currentPage - 1) * limit) + 1}–{Math.min(currentPage * limit, total)} of {total}
+              {t('showing', { from: ((currentPage - 1) * limit) + 1, to: Math.min(currentPage * limit, total), total })}
             </p>
             <div className="flex items-center bg-card border border-border rounded-full p-1 shadow-sm order-1 sm:order-2 w-full sm:w-auto justify-between sm:justify-start">
               <a
                 href={`/transactions?page=${currentPage - 1}${searchTicker ? `&ticker=${searchTicker}` : ''}${searchType ? `&type=${searchType}` : ''}${pidParam}`}
                 className={`flex-1 sm:flex-none text-center px-4 py-1.5 text-[13px] font-semibold rounded-full transition-all ${currentPage <= 1 ? 'text-gray-200 cursor-not-allowed' : 'text-secondary hover:text-primary hover:bg-element'}`}
               >
-                Previous
+                {t('previous')}
               </a>
               <div className="w-px h-4 bg-element-hover mx-1 hidden sm:block"></div>
               <span className="px-4 py-1.5 text-[13px] font-bold text-primary">
@@ -703,7 +719,7 @@ export default function TransactionsClient({
                 href={`/transactions?page=${currentPage + 1}${searchTicker ? `&ticker=${searchTicker}` : ''}${searchType ? `&type=${searchType}` : ''}${pidParam}`}
                 className={`flex-1 sm:flex-none text-center px-4 py-1.5 text-[13px] font-semibold rounded-full transition-all ${currentPage >= totalPages ? 'text-gray-200 cursor-not-allowed' : 'text-secondary hover:text-primary hover:bg-element'}`}
               >
-                Next
+                {t('next')}
               </a>
             </div>
           </div>

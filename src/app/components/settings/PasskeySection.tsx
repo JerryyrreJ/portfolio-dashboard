@@ -4,6 +4,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { Fingerprint, Loader2, CheckCircle2, AlertCircle, Plus, Trash2 } from 'lucide-react';
 import { create } from '@github/webauthn-json';
 import { User } from '@supabase/supabase-js';
+import { useLocale, useTranslations } from 'next-intl';
 
 interface PasskeySectionProps {
   user: User | null;
@@ -48,6 +49,8 @@ function saveCache(data: Credential[]) {
 }
 
 export default function PasskeySection({ user }: PasskeySectionProps) {
+  const t = useTranslations('settings.passkeys');
+  const locale = useLocale();
   const cached = typeof window !== 'undefined' ? loadCache() : [];
   const [credentials, setCredentials] = useState<Credential[]>(cached);
   const [isLoadingList, setIsLoadingList] = useState(cached.length === 0);
@@ -58,6 +61,11 @@ export default function PasskeySection({ user }: PasskeySectionProps) {
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState(false);
   const nameInputRef = useRef<HTMLInputElement>(null);
+  const dateFormatter = new Intl.DateTimeFormat(locale, {
+    year: 'numeric',
+    month: 'short',
+    day: 'numeric',
+  });
 
   useEffect(() => {
     if (user) fetchCredentials();
@@ -96,28 +104,28 @@ export default function PasskeySection({ user }: PasskeySectionProps) {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ displayName: newPasskeyName.trim() }),
       });
-      if (!initRes.ok) throw new Error('Failed to initialize passkey registration');
+      if (!initRes.ok) throw new Error(t('initFailed'));
 
       const options = await initRes.json();
-      const credential = await create(options as any);
+      const credential = await create(options as Parameters<typeof create>[0]);
 
       const finalRes = await fetch('/api/passkeys/register/finalize', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(credential),
       });
-      if (!finalRes.ok) throw new Error('Failed to finalize passkey registration');
+      if (!finalRes.ok) throw new Error(t('finalizeFailed'));
 
       setIsAddingNew(false);
       setNewPasskeyName('');
       setSuccess(true);
       setTimeout(() => setSuccess(false), 3000);
       await fetchCredentials();
-    } catch (err: any) {
-      if (err?.name === 'NotAllowedError') {
-        setError('Setup cancelled. Try again when you\'re ready.');
+    } catch (err: unknown) {
+      if (err instanceof Error && err.name === 'NotAllowedError') {
+        setError(t('setupCancelled'));
       } else {
-        setError(err.message || 'Failed to register passkey');
+        setError(err instanceof Error ? err.message : t('registerFailed'));
       }
     } finally {
       setIsRegistering(false);
@@ -133,12 +141,12 @@ export default function PasskeySection({ user }: PasskeySectionProps) {
     saveCache(next);
     try {
       const res = await fetch(`/api/passkeys/credentials/${credentialId}`, { method: 'DELETE' });
-      if (!res.ok) throw new Error('Failed to remove passkey');
-    } catch (err: any) {
+      if (!res.ok) throw new Error(t('removeFailed'));
+    } catch (err: unknown) {
       // Rollback on failure
       setCredentials(prev);
       saveCache(prev);
-      setError(err.message || 'Failed to remove passkey');
+      setError(err instanceof Error ? err.message : t('removeFailed'));
     }
   };
 
@@ -153,8 +161,8 @@ export default function PasskeySection({ user }: PasskeySectionProps) {
             <Fingerprint className="w-4 h-4 text-secondary" />
           </div>
           <div>
-            <div className="text-[14px] font-bold text-primary leading-tight">Passkeys</div>
-            <div className="text-[12px] text-secondary font-medium mt-0.5">FaceID / TouchID</div>
+            <div className="text-[14px] font-bold text-primary leading-tight">{t('title')}</div>
+            <div className="text-[12px] text-secondary font-medium mt-0.5">{t('faceIdTouchId')}</div>
           </div>
         </div>
         <Loader2 className="w-4 h-4 animate-spin text-secondary" />
@@ -171,9 +179,9 @@ export default function PasskeySection({ user }: PasskeySectionProps) {
             <Fingerprint className={`w-4 h-4 transition-colors duration-300 ${isEditOpen ? 'text-primary' : 'text-secondary'}`} />
           </div>
           <div>
-            <div className="text-[14px] font-bold text-primary leading-tight">Passkeys</div>
+            <div className="text-[14px] font-bold text-primary leading-tight">{t('title')}</div>
             <div className="text-[12px] text-secondary font-medium mt-0.5">
-              {hasPasskeys ? `${credentials.length} passkey${credentials.length > 1 ? 's' : ''} registered` : 'Disabled'}
+              {hasPasskeys ? t('registeredCount', { count: credentials.length }) : t('disabled')}
             </div>
           </div>
         </div>
@@ -199,7 +207,7 @@ export default function PasskeySection({ user }: PasskeySectionProps) {
               : 'bg-card border-border text-primary hover:bg-element-hover'
           }`}
         >
-          {isAddingNew ? 'Cancel' : !hasPasskeys ? 'Enable' : isEditOpen ? 'Done' : 'Edit'}
+          {isAddingNew ? t('cancel') : !hasPasskeys ? t('enable') : isEditOpen ? t('done') : t('edit')}
         </button>
       </div>
 
@@ -215,7 +223,7 @@ export default function PasskeySection({ user }: PasskeySectionProps) {
             )}
             <div>
               <label className="block text-[11px] font-bold text-secondary uppercase tracking-wider mb-2">
-                Passkey Name
+                {t('nameLabel')}
               </label>
               <input
                 ref={nameInputRef}
@@ -223,7 +231,7 @@ export default function PasskeySection({ user }: PasskeySectionProps) {
                 value={newPasskeyName}
                 onChange={(e) => setNewPasskeyName(e.target.value)}
                 onKeyDown={(e) => e.key === 'Enter' && handleRegister()}
-                placeholder="e.g., MacBook Pro, iPhone 15"
+                placeholder={t('namePlaceholder')}
                 className="w-full px-4 py-2.5 bg-element/50 rounded-xl text-[14px] text-primary font-medium border border-border focus:border-primary focus:ring-1 focus:ring-black outline-none transition-all placeholder:text-secondary select-text"
               />
             </div>
@@ -234,7 +242,7 @@ export default function PasskeySection({ user }: PasskeySectionProps) {
                 className="w-full bg-primary text-on-primary text-[13px] font-bold py-2.5 rounded-xl hover:bg-primary-hover transition-colors active:scale-[0.98] disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2 shadow-sm select-none touch-manipulation"
               >
                 {isRegistering && <Loader2 className="w-4 h-4 animate-spin" />}
-                {isRegistering ? 'Setting up...' : 'Register Passkey'}
+                {isRegistering ? t('settingUp') : t('register')}
               </button>
             </div>
           </div>
@@ -250,7 +258,7 @@ export default function PasskeySection({ user }: PasskeySectionProps) {
             {success && (
               <div className="mx-4 md:mx-5 mt-4 p-3 bg-emerald-50 border border-emerald-100 rounded-xl flex items-start gap-3">
                 <CheckCircle2 className="w-4 h-4 text-emerald-500 shrink-0 mt-0.5" />
-                <p className="text-[13px] text-emerald-600 font-medium leading-tight">Passkey registered successfully!</p>
+                <p className="text-[13px] text-emerald-600 font-medium leading-tight">{t('success')}</p>
               </div>
             )}
             {error && (
@@ -266,14 +274,14 @@ export default function PasskeySection({ user }: PasskeySectionProps) {
                 <div key={cred.id} className="px-4 md:px-5 py-3.5 flex items-center justify-between group">
                   <div className="min-w-0">
                     <div className="text-[13px] font-bold text-primary leading-tight">
-                      {cred.name || 'Unnamed Passkey'}
+                      {cred.name || t('unnamed')}
                     </div>
                     <div className="text-[11px] text-secondary font-medium mt-0.5">
-                      <span>Added {new Date(cred.created_at).toLocaleDateString()}</span>
+                      <span>{t('addedOn', { date: dateFormatter.format(new Date(cred.created_at)) })}</span>
                       {cred.last_used_at && (
                         <>
                           <span className="hidden sm:inline"> · </span>
-                          <span className="block sm:inline">Last used {new Date(cred.last_used_at).toLocaleDateString()}</span>
+                          <span className="block sm:inline">{t('lastUsed', { date: dateFormatter.format(new Date(cred.last_used_at)) })}</span>
                         </>
                       )}
                     </div>
@@ -283,7 +291,7 @@ export default function PasskeySection({ user }: PasskeySectionProps) {
                     className="shrink-0 ml-3 text-[12px] font-bold text-rose-600 dark:text-rose-400 border border-rose-500/20 bg-rose-500/10 hover:bg-rose-500/15 px-3 py-1.5 rounded-lg transition-all shadow-sm active:scale-95 flex items-center gap-1.5"
                   >
                     <Trash2 className="w-3.5 h-3.5" />
-                    Remove
+                    {t('remove')}
                   </button>
                 </div>
               ))}
@@ -297,13 +305,13 @@ export default function PasskeySection({ user }: PasskeySectionProps) {
                   className="w-full text-[13px] font-bold text-primary border border-border bg-element hover:bg-element-hover py-2.5 rounded-xl transition-colors active:scale-[0.98] flex items-center justify-center gap-2"
                 >
                   <Plus className="w-4 h-4" />
-                  Add Another Passkey
+                  {t('addAnother')}
                 </button>
               ) : (
                 <div className="space-y-3">
                   <div>
                     <label className="block text-[11px] font-bold text-secondary uppercase tracking-wider mb-2">
-                      Passkey Name
+                      {t('nameLabel')}
                     </label>
                     <input
                       ref={nameInputRef}
@@ -311,7 +319,7 @@ export default function PasskeySection({ user }: PasskeySectionProps) {
                       value={newPasskeyName}
                       onChange={(e) => setNewPasskeyName(e.target.value)}
                       onKeyDown={(e) => e.key === 'Enter' && handleRegister()}
-                      placeholder="e.g., MacBook Pro, iPhone 15"
+                      placeholder={t('namePlaceholder')}
                       className="w-full px-4 py-2.5 bg-element/50 rounded-xl text-[14px] text-primary font-medium border border-border focus:border-primary focus:ring-1 focus:ring-black outline-none transition-all placeholder:text-secondary select-text"
                     />
                   </div>
@@ -320,7 +328,7 @@ export default function PasskeySection({ user }: PasskeySectionProps) {
                       onClick={() => { setIsAddingNew(false); setError(null); setNewPasskeyName(''); }}
                       className="flex-1 text-[13px] font-bold py-2.5 rounded-xl border border-border bg-element text-gray-700 hover:bg-element-hover transition-colors active:scale-[0.98]"
                     >
-                      Cancel
+                      {t('cancel')}
                     </button>
                     <button
                       onClick={handleRegister}
@@ -328,7 +336,7 @@ export default function PasskeySection({ user }: PasskeySectionProps) {
                       className="flex-1 bg-primary text-on-primary text-[13px] font-bold py-2.5 rounded-xl hover:bg-primary-hover transition-colors active:scale-[0.98] disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2 shadow-sm select-none touch-manipulation"
                     >
                       {isRegistering && <Loader2 className="w-4 h-4 animate-spin" />}
-                      {isRegistering ? 'Setting up...' : 'Register Passkey'}
+                      {isRegistering ? t('settingUp') : t('register')}
                     </button>                  </div>
                 </div>
               )}

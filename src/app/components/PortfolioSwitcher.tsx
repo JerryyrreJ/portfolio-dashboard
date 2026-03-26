@@ -2,6 +2,7 @@
 
 import { useState, useRef, useEffect } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
+import { useTranslations } from 'next-intl';
 import { createPortal } from 'react-dom';
 import { ChevronDown, Check, X, Settings2 } from 'lucide-react';
 
@@ -17,6 +18,7 @@ interface PortfolioSwitcherProps {
 }
 
 export default function PortfolioSwitcher({ portfolios, currentId, variant = 'header' }: PortfolioSwitcherProps) {
+  const t = useTranslations('portfolioSwitcher');
   const router = useRouter();
   const searchParams = useSearchParams();
   const [open, setOpen] = useState(false);
@@ -41,12 +43,10 @@ export default function PortfolioSwitcher({ portfolios, currentId, variant = 'he
   }, []);
 
   function switchTo(id: string) {
-    console.log('switchTo called with id:', id);
     setOpen(false);
     const params = new URLSearchParams(searchParams.toString());
     params.set('pid', id);
-    console.log('Navigating to:', `/?${params.toString()}`);
-    router.push(`/?${params.toString()}`);
+    router.push(`/app?${params.toString()}`);
   }
 
   function goToManagePortfolios() {
@@ -74,7 +74,7 @@ export default function PortfolioSwitcher({ portfolios, currentId, variant = 'he
         ? 'text-[28px] font-bold text-primary tracking-tight leading-none' 
         : 'text-[13px] font-semibold text-secondary group-hover:text-primary max-w-[140px] truncate'
       }>
-        {current?.name ?? 'Portfolio'}
+        {current?.name ?? t('fallback')}
       </span>
       <ChevronDown className={`${
         isTitle ? 'w-5 h-5 text-secondary' : 'w-3.5 h-3.5 text-secondary'
@@ -89,13 +89,11 @@ export default function PortfolioSwitcher({ portfolios, currentId, variant = 'he
           <div
             key={p.id}
             onClick={(e) => {
-              console.log('Portfolio item clicked:', p.id, p.name);
               e.preventDefault();
               e.stopPropagation();
               switchTo(p.id);
             }}
             onTouchEnd={(e) => {
-              console.log('Portfolio item touched:', p.id, p.name);
               e.preventDefault();
               e.stopPropagation();
               switchTo(p.id);
@@ -143,7 +141,7 @@ export default function PortfolioSwitcher({ portfolios, currentId, variant = 'he
           style={{ pointerEvents: 'auto' }}
         >
           <Settings2 className="w-4 h-4 sm:w-3.5 sm:h-3.5" />
-          Manage portfolios
+          {t('manage')}
         </button>
       </div>
     </>
@@ -168,42 +166,29 @@ export default function PortfolioSwitcher({ portfolios, currentId, variant = 'he
         >
           <div
             className="absolute inset-0 bg-black/40 backdrop-blur-sm"
-            onClick={() => {
-              console.log('Overlay clicked - closing');
-              setOpen(false);
-            }}
+            onClick={() => setOpen(false)}
             style={{ pointerEvents: 'auto' }}
           />
           <div
             className="relative w-full bg-card rounded-t-[32px] shadow-2xl overflow-hidden border-t border-border max-h-[80vh]"
-            onClick={(e) => {
-              console.log('Bottom sheet container clicked');
-              e.stopPropagation();
-            }}
+            onClick={(e) => e.stopPropagation()}
             style={{ pointerEvents: 'auto' }}
           >
             {/* Grab Handle */}
             <div
               className="w-12 h-1.5 bg-border/60 rounded-full mx-auto mt-3 mb-1"
-              onClick={(e) => {
-                console.log('Grab handle clicked');
-                e.stopPropagation();
-              }}
+              onClick={(e) => e.stopPropagation()}
               style={{ pointerEvents: 'auto' }}
             />
 
             <div
               className="px-6 py-4 flex items-center justify-between"
-              onClick={(e) => {
-                console.log('Header clicked');
-                e.stopPropagation();
-              }}
+              onClick={(e) => e.stopPropagation()}
               style={{ pointerEvents: 'auto' }}
             >
-              <h3 className="text-[17px] font-bold text-primary">Switch Portfolio</h3>
+              <h3 className="text-[17px] font-bold text-primary">{t('mobileTitle')}</h3>
               <button
                 onClick={(e) => {
-                  console.log('Close button clicked');
                   e.stopPropagation();
                   setOpen(false);
                 }}

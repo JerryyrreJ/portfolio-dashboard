@@ -5,6 +5,7 @@ import { useRouter, useSearchParams } from 'next/navigation';
 import { usePreferences } from '@/lib/usePreferences';
 import { useTheme } from 'next-themes';
 import Link from 'next/link';
+import { useLocale, useTranslations } from 'next-intl';
 import { 
   ChevronLeft, 
   Wallet, 
@@ -142,6 +143,7 @@ interface PortfolioItemProps {
 }
 
 function PortfolioItem({ portfolio, isOnlyOne = false, isEditing, onUpdate, onDelete, onToggle }: PortfolioItemProps) {
+  const tPortfolio = useTranslations('settings.portfolio');
   const [name, setName] = useState(portfolio.name);
   const [currency, setCurrency] = useState(portfolio.currency);
   const [loading, setLoading] = useState(false);
@@ -196,7 +198,7 @@ function PortfolioItem({ portfolio, isOnlyOne = false, isEditing, onUpdate, onDe
                 : 'bg-card border-border text-primary hover:bg-element-hover'
             }`}
           >
-            {isEditing ? 'Cancel' : 'Edit'}
+            {isEditing ? tPortfolio('cancel') : tPortfolio('edit')}
           </button>
         </div>
       </div>
@@ -207,7 +209,7 @@ function PortfolioItem({ portfolio, isOnlyOne = false, isEditing, onUpdate, onDe
           <div className="p-5 bg-card border-t border-border/60 space-y-4">
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div>
-                <label className="block text-[11px] font-bold text-secondary uppercase tracking-wider mb-2">Portfolio Name</label>
+                <label className="block text-[11px] font-bold text-secondary uppercase tracking-wider mb-2">{tPortfolio('portfolioName')}</label>
                 <input 
                   type="text" 
                   value={name}
@@ -216,7 +218,7 @@ function PortfolioItem({ portfolio, isOnlyOne = false, isEditing, onUpdate, onDe
                 />
               </div>
               <div>
-                <label className="block text-[11px] font-bold text-secondary uppercase tracking-wider mb-2">Base Currency</label>
+                <label className="block text-[11px] font-bold text-secondary uppercase tracking-wider mb-2">{tPortfolio('baseCurrency')}</label>
                 <select 
                   value={currency}
                   onChange={(e) => setCurrency(e.target.value)}
@@ -235,14 +237,14 @@ function PortfolioItem({ portfolio, isOnlyOne = false, isEditing, onUpdate, onDe
                 className="flex-1 bg-primary text-on-primary text-[13px] font-bold py-2.5 rounded-xl hover:bg-primary-hover transition-all active:scale-[0.98] disabled:opacity-50 flex items-center justify-center gap-2"
               >
                 {loading && <Loader2 className="w-4 h-4 animate-spin" />}
-                Update Name
+                {tPortfolio('updateName')}
               </button>
               <button 
                 onClick={() => handleSave('currency')}
                 disabled={loading}
                 className="flex-1 bg-element-hover text-primary border border-border text-[13px] font-bold py-2.5 rounded-xl hover:bg-element transition-all active:scale-[0.98]"
               >
-                Update Currency
+                {tPortfolio('updateCurrency')}
               </button>
             </div>
 
@@ -251,16 +253,16 @@ function PortfolioItem({ portfolio, isOnlyOne = false, isEditing, onUpdate, onDe
                 <div className="rounded-2xl border border-rose-500/20 bg-rose-500/10 p-4 transition-colors">
                   <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                     <div>
-                      <div className="text-[11px] font-bold uppercase tracking-[0.1em] text-rose-600 dark:text-rose-500">Danger Zone</div>
+                      <div className="text-[11px] font-bold uppercase tracking-[0.1em] text-rose-600 dark:text-rose-500">{tPortfolio('dangerZone')}</div>
                       <div className="mt-1 text-[13px] font-medium text-rose-600/80 dark:text-rose-400/80">
-                        Delete this portfolio and all associated transactions.
+                        {tPortfolio('dangerDescription')}
                       </div>
                     </div>
                     <button
                       onClick={() => onDelete(portfolio.id)}
                       className="text-[13px] font-bold px-3 py-2 rounded-xl border border-rose-500/20 bg-card text-rose-600 hover:bg-rose-500/10 dark:text-rose-400 transition-all active:scale-[0.98] sm:flex-shrink-0"
                     >
-                      Delete Portfolio
+                      {tPortfolio('deletePortfolio')}
                     </button>
                   </div>
                 </div>
@@ -274,6 +276,13 @@ function PortfolioItem({ portfolio, isOnlyOne = false, isEditing, onUpdate, onDe
 }
 
 export default function SettingsClient({ initialUser, initialPortfolios }: SettingsClientProps) {
+  const t = useTranslations('settings');
+  const tPortfolio = useTranslations('settings.portfolio');
+  const tPreferences = useTranslations('settings.preferences');
+  const tNotificationCenter = useTranslations('settings.notificationCenter');
+  const tAccount = useTranslations('settings.account');
+  const tNotifications = useTranslations('settings.notifications');
+  const locale = useLocale();
   const [activeSection, setActiveSection] = useState('portfolio');
   const [user, setUser] = useState<User | null>(initialUser);
   const router = useRouter();
@@ -326,6 +335,45 @@ export default function SettingsClient({ initialUser, initialPortfolios }: Setti
   const [exportRange, setExportRange] = useState('all');
   const [exportFormat, setExportFormat] = useState('csv');
   const [exportLoading, setExportLoading] = useState(false);
+  const longDateFormatter = new Intl.DateTimeFormat(locale, {
+    year: 'numeric',
+    month: 'long',
+    day: 'numeric',
+  });
+  const sessionDateFormatter = new Intl.DateTimeFormat(locale, {
+    year: 'numeric',
+    month: 'short',
+    day: 'numeric',
+  });
+  const sessionTimeFormatter = new Intl.DateTimeFormat(locale, {
+    hour: '2-digit',
+    minute: '2-digit',
+  });
+
+  const getThemeLabel = (value?: string | null) => {
+    if (value === 'light') return tPreferences('themeLight');
+    if (value === 'dark') return tPreferences('themeDark');
+    return tPreferences('themeSystem');
+  };
+
+  const getChartTypeLabel = (value: string) => {
+    if (value === 'Area Chart') return tPreferences('chartAreaFull');
+    if (value === 'Line Chart') return tPreferences('chartLineFull');
+    if (value === 'Bar Chart') return tPreferences('chartBarFull');
+    return value;
+  };
+
+  const getCostBasisLabel = (value: string) => {
+    if (value === 'FIFO') return tPreferences('costBasisFifoDesc');
+    if (value === 'AVCO') return tPreferences('costBasisAvcoDesc');
+    return value;
+  };
+
+  const getExportRangeLabel = (value: string) => {
+    if (value === 'ytd') return tPortfolio('rangeYtd');
+    if (value === '12m') return tPortfolio('range12m');
+    return tPortfolio('rangeAll');
+  };
 
   const handleExport = async () => {
     setExportLoading(true);
@@ -333,7 +381,7 @@ export default function SettingsClient({ initialUser, initialPortfolios }: Setti
     try {
       if (exportFormat === 'pdf') {
         const response = await fetch(`/api/transactions/export?format=json&range=${exportRange}${pidParam}`);
-        if (!response.ok) throw new Error('Failed to fetch data for PDF');
+        if (!response.ok) throw new Error(tNotifications('fetchPdfFailedMessage'));
         const data = await response.json() as ExportPayload;
 
         const doc = new jsPDF();
@@ -348,8 +396,8 @@ export default function SettingsClient({ initialUser, initialPortfolios }: Setti
         doc.setTextColor(255, 255, 255);
         doc.text('Folio', 14, 12);
 
-        const rangeLabel = exportRange === 'ytd' ? `YTD ${new Date().getFullYear()}`
-          : exportRange === '12m' ? 'Last 12 Months' : 'All Time';
+        const rangeLabel = exportRange === 'ytd' ? `${tPortfolio('rangeYtd')} ${new Date().getFullYear()}`
+          : getExportRangeLabel(exportRange);
         doc.setFontSize(9);
         doc.setFont('helvetica', 'normal');
         doc.text(rangeLabel, pageWidth - 14, 12, { align: 'right' });
@@ -358,7 +406,7 @@ export default function SettingsClient({ initialUser, initialPortfolios }: Setti
         doc.setFontSize(9);
         doc.setTextColor(80, 80, 80);
         doc.text(`${data.portfolio.name}  ·  ${data.portfolio.currency}`, 14, 26);
-        doc.text(new Date().toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' }), pageWidth - 14, 26, { align: 'right' });
+        doc.text(longDateFormatter.format(new Date()), pageWidth - 14, 26, { align: 'right' });
 
         // Separator
         doc.setDrawColor(220, 220, 220);
@@ -375,8 +423,8 @@ export default function SettingsClient({ initialUser, initialPortfolios }: Setti
 
         const statBoxes = [
           { label: 'Transactions', value: String(totalCount) },
-          { label: 'Total Bought', value: `${portfolioSym}${totalBuy.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}` },
-          { label: 'Total Sold',   value: `${portfolioSym}${totalSell.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}` },
+          { label: 'Total Bought', value: `${portfolioSym}${totalBuy.toLocaleString(locale, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}` },
+          { label: 'Total Sold',   value: `${portfolioSym}${totalSell.toLocaleString(locale, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}` },
         ];
         const boxWidth = (pageWidth - 28) / 3;
 
@@ -480,7 +528,7 @@ export default function SettingsClient({ initialUser, initialPortfolios }: Setti
 
         const dateStr = new Date().toISOString().slice(0, 10);
         doc.save(`folio_report_${data.portfolio.name.replace(/\s+/g, '_')}_${exportRange}_${dateStr}.pdf`);
-        showNotification('success', 'PDF Downloaded', 'Your investment report is ready.');
+        showNotification('success', tNotifications('pdfDownloadedTitle'), tNotifications('pdfDownloadedMessage'));
         setIsExporting(false);
       } else {
         const response = await fetch(`/api/transactions/export?format=${exportFormat}&range=${exportRange}${pidParam}`);
@@ -496,11 +544,11 @@ export default function SettingsClient({ initialUser, initialPortfolios }: Setti
         window.URL.revokeObjectURL(url);
         document.body.removeChild(a);
         
-        showNotification('success', 'Export Complete', `Your data has been downloaded as ${exportFormat.toUpperCase()}.`);
+        showNotification('success', tNotifications('exportCompleteTitle'), tNotifications('exportCompleteMessage', { format: exportFormat.toUpperCase() }));
         setIsExporting(false);
       }
     } catch (error: unknown) {
-      showNotification('error', 'Export Failed', getErrorMessage(error, 'We could not export your data.'));
+      showNotification('error', tNotifications('exportFailedTitle'), getErrorMessage(error, tNotifications('exportFailedMessage')));
     } finally {
       setExportLoading(false);
     }
@@ -676,11 +724,11 @@ export default function SettingsClient({ initialUser, initialPortfolios }: Setti
   const notificationsRef = useRef<HTMLDivElement>(null);
 
   const navItems = React.useMemo(() => [
-    { id: 'portfolio', name: 'Portfolio', icon: <Wallet className="w-4 h-4" />, ref: portfolioRef },
-    { id: 'preferences', name: 'Preferences', icon: <Settings className="w-4 h-4" />, ref: preferencesRef },
-    { id: 'notifications', name: 'Notifications', icon: <Bell className="w-4 h-4" />, ref: notificationsRef },
-    { id: 'account', name: 'Account & Security', icon: <UserCircle className="w-4 h-4" />, ref: accountRef },
-  ], []);
+    { id: 'portfolio', name: t('navigation.portfolio'), icon: <Wallet className="w-4 h-4" />, ref: portfolioRef },
+    { id: 'preferences', name: t('navigation.preferences'), icon: <Settings className="w-4 h-4" />, ref: preferencesRef },
+    { id: 'notifications', name: t('navigation.notifications'), icon: <Bell className="w-4 h-4" />, ref: notificationsRef },
+    { id: 'account', name: t('navigation.account'), icon: <UserCircle className="w-4 h-4" />, ref: accountRef },
+  ], [t]);
 
   const handleSignOut = async () => {
     clearCachedPortfolios(user?.id);
@@ -700,8 +748,12 @@ export default function SettingsClient({ initialUser, initialPortfolios }: Setti
       }
       localStorage.setItem('settings_updated_at', now);
       
-      const msg = field === 'both' ? 'Portfolio settings saved locally.' : `${field === 'name' ? 'Name' : 'Currency'} saved locally.`;
-      showNotification('success', 'Settings Saved', msg);
+      const msg = field === 'both'
+        ? tPortfolio('localSettingsSaved')
+        : field === 'name'
+          ? tPortfolio('localNameSaved')
+          : tPortfolio('localCurrencySaved');
+      showNotification('success', tNotifications('settingsSavedTitle'), msg);
       return;
     }
 
@@ -741,7 +793,7 @@ export default function SettingsClient({ initialUser, initialPortfolios }: Setti
         }
       }
 
-      showNotification('success', 'Settings Saved', 'Your portfolio configuration has been updated successfully.');
+      showNotification('success', tNotifications('settingsSavedTitle'), tNotifications('settingsSavedMessage'));
       if (id === currentPortfolioId || (!currentPortfolioId && id === allPortfolios[0]?.id)) {
         localStorage.setItem('portfolio_name', newName);
         localStorage.setItem('base_currency', newCurrency);
@@ -754,9 +806,9 @@ export default function SettingsClient({ initialUser, initialPortfolios }: Setti
       if (user?.id) {
         saveCachedPortfolios(user.id, previousPortfolios);
       }
-      const message = getErrorMessage(err, 'Failed to update portfolio');
+      const message = getErrorMessage(err, tNotifications('updateFailedMessage'));
       setPortfolioError(message);
-      showNotification('error', 'Update Failed', message || 'We could not save your changes.');
+      showNotification('error', tNotifications('updateFailedTitle'), message || tNotifications('updateFailedMessage'));
     } finally {
       setPortfolioActionLoading(false);
     }
@@ -764,7 +816,7 @@ export default function SettingsClient({ initialUser, initialPortfolios }: Setti
 
   const handleDeletePortfolio = async (id: string) => {
     if (allPortfolios.length <= 1) {
-      showNotification('error', 'Cannot Delete', 'You must have at least one portfolio.');
+      showNotification('error', tNotifications('cannotDeleteTitle'), tNotifications('cannotDeleteMessage'));
       return;
     }
     
@@ -789,10 +841,10 @@ export default function SettingsClient({ initialUser, initialPortfolios }: Setti
       const res = await fetch(`/api/portfolio?id=${id}`, { method: 'DELETE' });
       if (!res.ok) {
         const data = await res.json();
-        throw new Error(data.error || 'Failed to delete');
+        throw new Error(data.error || tNotifications('deleteFailedMessage'));
       }
 
-      showNotification('success', 'Portfolio Deleted', 'The portfolio has been removed.');
+      showNotification('success', tNotifications('portfolioDeletedTitle'), tNotifications('portfolioDeletedMessage'));
       
       if (id === currentPortfolioId) {
         router.push('/settings');
@@ -802,7 +854,7 @@ export default function SettingsClient({ initialUser, initialPortfolios }: Setti
       if (user?.id) {
         saveCachedPortfolios(user.id, previousPortfolios);
       }
-      showNotification('error', 'Delete Failed', getErrorMessage(err, 'Failed to delete portfolio.'));
+      showNotification('error', tNotifications('deleteFailedTitle'), getErrorMessage(err, tNotifications('deleteFailedMessage')));
     } finally {
       setPortfolioActionLoading(false);
       setDeleteConfirm({ isOpen: false, id: null });
@@ -846,7 +898,7 @@ export default function SettingsClient({ initialUser, initialPortfolios }: Setti
 
       if (!res.ok) {
         const data = await res.json().catch(() => null);
-        throw new Error(data?.error || 'Failed to create portfolio');
+        throw new Error(data?.error || tNotifications('createFailedMessage'));
       }
 
       const { portfolio } = await res.json();
@@ -858,12 +910,12 @@ export default function SettingsClient({ initialUser, initialPortfolios }: Setti
       setNewPortfolioName('');
       setNewPortfolioCurrency('USD');
       setIsCreatingPortfolio(false);
-      showNotification('success', 'Portfolio Created', 'Your new portfolio is ready.');
+      showNotification('success', tNotifications('portfolioCreatedTitle'), tNotifications('portfolioCreatedMessage'));
       router.push(`/settings?pid=${portfolio.id}#portfolio`);
     } catch (err: unknown) {
-      const message = getErrorMessage(err, 'Failed to create portfolio');
+      const message = getErrorMessage(err, tNotifications('createFailedMessage'));
       setPortfolioError(message);
-      showNotification('error', 'Create Failed', message || 'We could not create the portfolio.');
+      showNotification('error', tNotifications('createFailedTitle'), message || tNotifications('createFailedMessage'));
     } finally {
       setCreatePortfolioLoading(false);
     }
@@ -880,11 +932,11 @@ export default function SettingsClient({ initialUser, initialPortfolios }: Setti
       if (error) throw error;
       setUser(data.user);
       setIsEditingDisplayName(false);
-      showNotification('success', 'Name Updated', 'Your display name has been updated.');
+      showNotification('success', tNotifications('nameUpdatedTitle'), tNotifications('nameUpdatedMessage'));
     } catch (err: unknown) {
-      const message = getErrorMessage(err, 'Failed to update display name');
+      const message = getErrorMessage(err, tNotifications('nameUpdateFailedMessage'));
       setAuthError(message);
-      showNotification('error', 'Update Failed', message || 'Failed to update your display name.');
+      showNotification('error', tNotifications('updateFailedTitle'), message || tNotifications('nameUpdateFailedMessage'));
     } finally {
       setAuthActionLoading(false);
     }
@@ -898,12 +950,12 @@ export default function SettingsClient({ initialUser, initialPortfolios }: Setti
     try {
       const { error } = await supabase.auth.updateUser({ email: newEmail });
       if (error) throw error;
-      showNotification('success', 'Verification Sent', 'We have sent a link to your new email. Please verify it to complete the change.');
+      showNotification('success', tNotifications('verificationSentTitle'), tNotifications('verificationSentMessage'));
       setIsEditingEmail(false);
     } catch (err: unknown) {
-      const message = getErrorMessage(err, 'Failed to update email');
+      const message = getErrorMessage(err, tNotifications('emailUpdateFailedMessage'));
       setAuthError(message);
-      showNotification('error', 'Update Failed', message || 'Failed to update your email address.');
+      showNotification('error', tNotifications('updateFailedTitle'), message || tNotifications('emailUpdateFailedMessage'));
     } finally {
       setAuthActionLoading(false);
     }
@@ -912,11 +964,11 @@ export default function SettingsClient({ initialUser, initialPortfolios }: Setti
   const handleUpdatePassword = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!newPassword || newPassword !== confirmPassword) {
-      setAuthError('Passwords do not match');
+      setAuthError(tAccount('passwordsDoNotMatch'));
       return;
     }
     if (newPassword.length < 6) {
-      setAuthError('Password must be at least 6 characters');
+      setAuthError(tAccount('passwordMinLength'));
       return;
     }
     setAuthActionLoading(true);
@@ -924,14 +976,14 @@ export default function SettingsClient({ initialUser, initialPortfolios }: Setti
     try {
       const { error } = await supabase.auth.updateUser({ password: newPassword });
       if (error) throw error;
-      showNotification('success', 'Password Updated', 'Your password has been changed successfully.');
+      showNotification('success', tNotifications('passwordUpdatedTitle'), tNotifications('passwordUpdatedMessage'));
       setIsEditingPassword(false);
       setNewPassword('');
       setConfirmPassword('');
     } catch (err: unknown) {
-      const message = getErrorMessage(err, 'Failed to update password');
+      const message = getErrorMessage(err, tNotifications('passwordUpdateFailedMessage'));
       setAuthError(message);
-      showNotification('error', 'Update Failed', message || 'Failed to change your password.');
+      showNotification('error', tNotifications('updateFailedTitle'), message || tNotifications('passwordUpdateFailedMessage'));
     } finally {
       setAuthActionLoading(false);
     }
@@ -991,11 +1043,11 @@ export default function SettingsClient({ initialUser, initialPortfolios }: Setti
       />
       {/* Header */}
       <header className="bg-card/80 backdrop-blur-xl border-b border-border px-4 sm:px-6 h-[56px] flex items-center sticky top-0 z-50 transition-all">
-        <Link href="/" className="flex items-center space-x-2 text-[14px] font-semibold text-secondary hover:text-primary transition-colors group">
+        <Link href="/app" className="flex items-center space-x-2 text-[14px] font-semibold text-secondary hover:text-primary transition-colors group">
           <div className="w-6 h-6 rounded-full bg-element-hover flex items-center justify-center group-hover:bg-gray-200 transition-colors">
             <ChevronLeft className="w-3.5 h-3.5 text-secondary group-hover:text-primary" />
           </div>
-          <span>Back to Dashboard</span>
+          <span>{t('backToDashboard')}</span>
         </Link>
       </header>
 
@@ -1004,7 +1056,7 @@ export default function SettingsClient({ initialUser, initialPortfolios }: Setti
         
         {/* Sidebar Navigation - Hidden on Mobile */}
         <aside className="hidden md:block w-64 flex-shrink-0 md:sticky md:top-28">
-          <h1 className="text-[24px] md:text-[28px] font-bold text-primary tracking-tight mb-6 md:mb-8 pl-4">Settings</h1>
+          <h1 className="text-[24px] md:text-[28px] font-bold text-primary tracking-tight mb-6 md:mb-8 pl-4">{t('title')}</h1>
           <nav className="flex flex-col space-y-1.5">
             {navItems.map((item) => {
               const isActive = activeSection === item.id;
@@ -1032,20 +1084,20 @@ export default function SettingsClient({ initialUser, initialPortfolios }: Setti
         <div className="w-full max-w-[720px] pb-32">
           {/* Mobile Title - Only visible on small screens */}
           <div className="md:hidden mb-8 px-1">
-            <h1 className="text-[32px] font-bold text-primary tracking-tight">Settings</h1>
+            <h1 className="text-[32px] font-bold text-primary tracking-tight">{t('title')}</h1>
           </div>
           
           {/* SECTION: PORTFOLIO */}
           <div id="portfolio" ref={portfolioRef} className="scroll-mt-24 md:scroll-mt-32">
             <div className="mb-6">
-              <h2 className="text-[18px] md:text-[20px] font-bold text-primary tracking-tight">Portfolio Management</h2>
-              <p className="text-[13px] text-secondary font-medium mt-1">Create, edit, and remove your portfolios from one place.</p>
+              <h2 className="text-[18px] md:text-[20px] font-bold text-primary tracking-tight">{tPortfolio('managementTitle')}</h2>
+              <p className="text-[13px] text-secondary font-medium mt-1">{tPortfolio('managementDescription')}</p>
             </div>
             
             <div className="space-y-6 bg-card rounded-2xl md:rounded-[32px] p-5 md:p-8 shadow-sm border border-border mb-12 md:mb-16">
               {/* Portfolios Group */}
               <div className="space-y-4">
-                <h3 className="text-[11px] font-bold text-secondary uppercase tracking-[0.1em] pl-1">Portfolios</h3>
+                <h3 className="text-[11px] font-bold text-secondary uppercase tracking-[0.1em] pl-1">{tPortfolio('portfoliosTitle')}</h3>
                 {isLoggedIn ? (
                   <div className="bg-element/50 rounded-2xl border border-border overflow-hidden transition-all duration-300">
                     <div className="px-5 py-4 flex items-center justify-between gap-3">
@@ -1054,7 +1106,7 @@ export default function SettingsClient({ initialUser, initialPortfolios }: Setti
                           <Plus className={`w-4 h-4 transition-colors duration-300 ${isCreatingPortfolio ? 'text-primary' : 'text-secondary'}`} />
                         </div>
                         <div className="min-w-0">
-                          <div className="text-[14px] font-bold text-primary leading-tight">Create Portfolio</div>
+                          <div className="text-[14px] font-bold text-primary leading-tight">{tPortfolio('createPortfolio')}</div>
                         </div>
                       </div>
                       <button
@@ -1065,7 +1117,7 @@ export default function SettingsClient({ initialUser, initialPortfolios }: Setti
                             : 'bg-card border-border text-primary hover:bg-element-hover'
                         }`}
                       >
-                        {isCreatingPortfolio ? 'Cancel' : 'Create'}
+                        {isCreatingPortfolio ? t('actions.cancel') : t('actions.create')}
                       </button>
                     </div>
 
@@ -1074,17 +1126,17 @@ export default function SettingsClient({ initialUser, initialPortfolios }: Setti
                         <div className="p-5 bg-card border-t border-border/60 space-y-4">
                           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                             <div>
-                              <label className="block text-[11px] font-bold text-secondary uppercase tracking-wider mb-2">Portfolio Name</label>
+                              <label className="block text-[11px] font-bold text-secondary uppercase tracking-wider mb-2">{tPortfolio('portfolioName')}</label>
                               <input
                                 type="text"
                                 value={newPortfolioName}
                                 onChange={(e) => setNewPortfolioName(e.target.value)}
-                                placeholder="Growth Portfolio"
+                                placeholder={tPortfolio('createPortfolioPlaceholder')}
                                 className="w-full px-4 py-2.5 bg-element/50 rounded-xl text-[14px] text-primary font-medium border border-border focus:border-primary outline-none transition-all"
                               />
                             </div>
                             <div>
-                              <label className="block text-[11px] font-bold text-secondary uppercase tracking-wider mb-2">Base Currency</label>
+                              <label className="block text-[11px] font-bold text-secondary uppercase tracking-wider mb-2">{tPortfolio('baseCurrency')}</label>
                               <select
                                 value={newPortfolioCurrency}
                                 onChange={(e) => setNewPortfolioCurrency(e.target.value)}
@@ -1105,7 +1157,7 @@ export default function SettingsClient({ initialUser, initialPortfolios }: Setti
                             className="w-full bg-primary text-on-primary text-[13px] font-bold py-2.5 rounded-xl hover:bg-primary-hover transition-all active:scale-[0.98] disabled:opacity-50 flex items-center justify-center gap-2"
                           >
                             {createPortfolioLoading && <Loader2 className="w-4 h-4 animate-spin" />}
-                            Create Portfolio
+                            {tPortfolio('createPortfolio')}
                           </button>
                         </div>
                       </div>
@@ -1159,7 +1211,7 @@ export default function SettingsClient({ initialUser, initialPortfolios }: Setti
 
               {/* Data Group */}
               <div className="space-y-4">
-                <h3 className="text-[11px] font-bold text-secondary uppercase tracking-[0.1em] pl-1">Data Management</h3>
+                <h3 className="text-[11px] font-bold text-secondary uppercase tracking-[0.1em] pl-1">{tPortfolio('dataManagementTitle')}</h3>
                 <div className="bg-element/50 rounded-2xl border border-border overflow-hidden">
                   <div className="px-5 py-4 flex items-center justify-between group/item transition-colors duration-300 gap-3">
                     <div className="flex items-center space-x-4 flex-1 min-w-0">
@@ -1167,7 +1219,7 @@ export default function SettingsClient({ initialUser, initialPortfolios }: Setti
                         <Download className={`w-4 h-4 transition-colors duration-300 ${isExporting ? 'text-primary' : 'text-secondary group-hover/item:text-primary'}`} />
                       </div>
                       <div className="flex-1 min-w-0 pr-2">
-                        <div className="text-[14px] font-bold text-primary leading-tight truncate">Export Data</div>
+                        <div className="text-[14px] font-bold text-primary leading-tight truncate">{tPortfolio('exportData')}</div>
                       </div>
                     </div>
                     <button 
@@ -1178,7 +1230,7 @@ export default function SettingsClient({ initialUser, initialPortfolios }: Setti
                           : 'bg-card border-border text-primary hover:bg-element-hover'
                       }`}
                     >
-                      {isExporting ? 'Cancel' : 'Export'}
+                      {isExporting ? t('actions.cancel') : tPortfolio('exportData')}
                     </button>
                   </div>
 
@@ -1188,12 +1240,12 @@ export default function SettingsClient({ initialUser, initialPortfolios }: Setti
                       <div className="p-5 bg-card border-t border-border/60 space-y-6">
                         {/* Range Selection */}
                         <div className="space-y-3">
-                          <label className="text-[11px] font-bold text-secondary uppercase tracking-[0.1em]">Time Range</label>
+                          <label className="text-[11px] font-bold text-secondary uppercase tracking-[0.1em]">{tPortfolio('timeRange')}</label>
                           <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 sm:gap-3">
                             {[
-                              { id: 'all', label: 'All Time' },
-                              { id: 'ytd', label: 'Year to Date' },
-                              { id: '12m', label: 'Past 12M' }
+                              { id: 'all', label: tPortfolio('rangeAll') },
+                              { id: 'ytd', label: tPortfolio('rangeYtd') },
+                              { id: '12m', label: tPortfolio('range12m') }
                             ].map((range) => (
                               <button
                                 key={range.id}
@@ -1212,12 +1264,12 @@ export default function SettingsClient({ initialUser, initialPortfolios }: Setti
 
                         {/* Format Selection */}
                         <div className="space-y-3">
-                          <label className="text-[11px] font-bold text-secondary uppercase tracking-[0.1em]">File Format</label>
+                          <label className="text-[11px] font-bold text-secondary uppercase tracking-[0.1em]">{tPortfolio('fileFormat')}</label>
                           <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 sm:gap-3">
                             {[
-                              { id: 'csv', label: 'CSV', sub: 'Excel / Sheets' },
-                              { id: 'json', label: 'JSON', sub: 'Developer' },
-                              { id: 'pdf', label: 'PDF', sub: 'Tax / Report' }
+                              { id: 'csv', label: 'CSV', sub: tPortfolio('formatCsvSub') },
+                              { id: 'json', label: 'JSON', sub: tPortfolio('formatJsonSub') },
+                              { id: 'pdf', label: 'PDF', sub: tPortfolio('formatPdfSub') }
                             ].map((format) => (
                               <button
                                 key={format.id}
@@ -1244,12 +1296,12 @@ export default function SettingsClient({ initialUser, initialPortfolios }: Setti
                           {exportLoading ? (
                             <>
                               <Loader2 className="w-4 h-4 animate-spin" />
-                              <span>Preparing...</span>
+                              <span>{t('actions.preparing')}</span>
                             </>
                           ) : (
                             <>
                               <Download className="w-4 h-4" />
-                              <span>Download {exportFormat.toUpperCase()}</span>
+                              <span>{t('actions.downloadFormat', { format: exportFormat.toUpperCase() })}</span>
                             </>
                           )}
                         </button>
@@ -1264,12 +1316,12 @@ export default function SettingsClient({ initialUser, initialPortfolios }: Setti
           {/* SECTION: PREFERENCES */}
           <div id="preferences" ref={preferencesRef} className="scroll-mt-24 md:scroll-mt-32">
             <div className="mb-6 flex items-center gap-3">
-              <h2 className="text-[18px] md:text-[20px] font-bold text-primary tracking-tight">Preferences</h2>
+              <h2 className="text-[18px] md:text-[20px] font-bold text-primary tracking-tight">{tPreferences('title')}</h2>
             </div>
             
             <div className="space-y-6 bg-card rounded-2xl md:rounded-[32px] p-5 md:p-8 shadow-sm border border-border mb-12 md:mb-16">
               <div className="space-y-4">
-                <h3 className="text-[11px] font-bold text-secondary uppercase tracking-[0.1em] pl-1">Appearance</h3>
+                <h3 className="text-[11px] font-bold text-secondary uppercase tracking-[0.1em] pl-1">{tPreferences('appearance')}</h3>
                 <div className="bg-element/50 rounded-2xl border border-border overflow-hidden">
                   {/* Theme Row */}
                   <div className="border-b border-border bg-card sm:bg-transparent">
@@ -1279,9 +1331,9 @@ export default function SettingsClient({ initialUser, initialPortfolios }: Setti
                           <Monitor className={`w-4 h-4 transition-colors duration-300 ${openPreferencesEditor === 'theme' ? 'text-primary' : 'text-secondary group-hover/item:text-primary'}`} />
                         </div>
                         <div>
-                          <div className="text-[14px] font-bold text-primary leading-tight">Theme</div>
+                          <div className="text-[14px] font-bold text-primary leading-tight">{tPreferences('theme')}</div>
                           <div className="text-[13px] text-secondary font-medium mt-0.5">
-                            {mounted && theme ? (theme.charAt(0).toUpperCase() + theme.slice(1)) : 'System'}
+                            {mounted ? getThemeLabel(theme) : tPreferences('themeSystem')}
                           </div>
                         </div>
                       </div>
@@ -1295,7 +1347,7 @@ export default function SettingsClient({ initialUser, initialPortfolios }: Setti
                             : 'bg-card border-border text-primary hover:bg-element-hover'
                         }`}
                       >
-                        {openPreferencesEditor === 'theme' ? 'Cancel' : 'Select'}
+                        {openPreferencesEditor === 'theme' ? t('actions.cancel') : t('actions.select')}
                       </button>
                     </div>
                     {/* Expandable Theme Drawer */}
@@ -1303,14 +1355,18 @@ export default function SettingsClient({ initialUser, initialPortfolios }: Setti
                       <div className="overflow-hidden">
                         <div className="p-4 md:p-5 bg-card/50 border-t border-border/60 flex flex-wrap gap-2">
                           <div className="flex w-full bg-element/50 p-1 rounded-2xl gap-1">
-                            {['Light', 'Dark', 'System'].map((t) => {
-                              const isSelected = mounted && theme === t.toLowerCase();
+                            {[
+                              { id: 'Light', label: tPreferences('themeLight') },
+                              { id: 'Dark', label: tPreferences('themeDark') },
+                              { id: 'System', label: tPreferences('themeSystem') },
+                            ].map((themeOption) => {
+                              const isSelected = mounted && theme === themeOption.id.toLowerCase();
                               return (
                                 <button
-                                  key={t}
+                                  key={themeOption.id}
                                   onClick={() => {
-                                    setTheme(t.toLowerCase());
-                                    updatePreference('theme', t as 'Light' | 'Dark' | 'System');
+                                    setTheme(themeOption.id.toLowerCase());
+                                    updatePreference('theme', themeOption.id as 'Light' | 'Dark' | 'System');
                                     setOpenPreferencesEditor(null);
                                   }}
                                   className={`flex-1 text-[12px] font-bold py-2 rounded-xl transition-all active:scale-95 ${
@@ -1319,7 +1375,7 @@ export default function SettingsClient({ initialUser, initialPortfolios }: Setti
                                       : 'text-secondary hover:text-primary'
                                   }`}
                                 >
-                                  {t}
+                                  {themeOption.label}
                                 </button>
                               );
                             })}
@@ -1337,9 +1393,11 @@ export default function SettingsClient({ initialUser, initialPortfolios }: Setti
                           <TrendingUp className={`w-4 h-4 transition-colors duration-300 ${openPreferencesEditor === 'colorScheme' ? 'text-primary' : 'text-secondary group-hover/item:text-primary'}`} />
                         </div>
                         <div>
-                          <div className="text-[14px] font-bold text-primary leading-tight">Market Colors</div>
+                          <div className="text-[14px] font-bold text-primary leading-tight">{tPreferences('marketColors')}</div>
                           <div className="text-[13px] text-secondary font-medium mt-0.5">
-                            {prefs.colorScheme === 'Emerald' ? 'Emerald Gains / Rose Losses' : 'Rose Gains / Emerald Losses'}
+                            {prefs.colorScheme === 'Emerald'
+                              ? tPreferences('marketColorsEmeraldSummary')
+                              : tPreferences('marketColorsRoseSummary')}
                           </div>
                         </div>
                       </div>
@@ -1353,7 +1411,7 @@ export default function SettingsClient({ initialUser, initialPortfolios }: Setti
                             : 'bg-card border-border text-primary hover:bg-element-hover'
                         }`}
                       >
-                        {openPreferencesEditor === 'colorScheme' ? 'Cancel' : 'Change'}
+                        {openPreferencesEditor === 'colorScheme' ? t('actions.cancel') : t('actions.change')}
                       </button>
                     </div>
                     {/* Expandable Color Scheme Drawer */}
@@ -1361,8 +1419,8 @@ export default function SettingsClient({ initialUser, initialPortfolios }: Setti
                       <div className="overflow-hidden">
                         <div className="p-4 md:p-5 bg-card border-t border-border/60 flex flex-col space-y-2">
                           {[
-                            { id: 'Emerald', label: 'Emerald Gains', desc: 'Green for growth, Red for decline' },
-                            { id: 'Rose', label: 'Rose Gains', desc: 'Red for growth, Green for decline' }
+                            { id: 'Emerald', label: tPreferences('marketColorsEmeraldLabel'), desc: tPreferences('marketColorsEmeraldDesc') },
+                            { id: 'Rose', label: tPreferences('marketColorsRoseLabel'), desc: tPreferences('marketColorsRoseDesc') }
                           ].map((scheme) => (
                             <button
                               key={scheme.id}
@@ -1401,8 +1459,8 @@ export default function SettingsClient({ initialUser, initialPortfolios }: Setti
                           <BarChart2 className={`w-4 h-4 transition-colors duration-300 ${openPreferencesEditor === 'chartType' ? 'text-primary' : 'text-secondary group-hover/item:text-primary'}`} />
                         </div>
                         <div>
-                          <div className="text-[14px] font-bold text-primary leading-tight">Default Chart Type</div>
-                          <div className="text-[13px] text-secondary font-medium mt-0.5">{prefs.chartType}</div>
+                          <div className="text-[14px] font-bold text-primary leading-tight">{tPreferences('defaultChartType')}</div>
+                          <div className="text-[13px] text-secondary font-medium mt-0.5">{getChartTypeLabel(prefs.chartType)}</div>
                         </div>
                       </div>
                       <button 
@@ -1415,7 +1473,7 @@ export default function SettingsClient({ initialUser, initialPortfolios }: Setti
                             : 'bg-card border-border text-primary hover:bg-element-hover'
                         }`}
                       >
-                        {openPreferencesEditor === 'chartType' ? 'Cancel' : 'Switch'}
+                        {openPreferencesEditor === 'chartType' ? t('actions.cancel') : t('actions.switch')}
                       </button>
                     </div>
                     {/* Expandable Chart Type Drawer */}
@@ -1423,13 +1481,17 @@ export default function SettingsClient({ initialUser, initialPortfolios }: Setti
                       <div className="overflow-hidden">
                         <div className="p-4 md:p-5 bg-card/50 border-t border-border/60 flex flex-wrap gap-2">
                           <div className="flex w-full bg-element/50 p-1 rounded-2xl gap-1">
-                            {['Area', 'Line', 'Bar'].map((c) => {
-                              const isSelected = prefs.chartType.startsWith(c);
+                            {[
+                              { id: 'Area', label: tPreferences('chartArea') },
+                              { id: 'Line', label: tPreferences('chartLine') },
+                              { id: 'Bar', label: tPreferences('chartBar') },
+                            ].map((chartOption) => {
+                              const isSelected = prefs.chartType.startsWith(chartOption.id);
                               return (
                                 <button
-                                  key={c}
+                                  key={chartOption.id}
                                   onClick={() => {
-                                    updatePreference('chartType', `${c} Chart` as 'Area Chart' | 'Line Chart' | 'Bar Chart');
+                                    updatePreference('chartType', `${chartOption.id} Chart` as 'Area Chart' | 'Line Chart' | 'Bar Chart');
                                     setOpenPreferencesEditor(null);
                                   }}
                                   className={`flex-1 text-[12px] font-bold py-2 rounded-xl transition-all active:scale-95 ${
@@ -1438,7 +1500,7 @@ export default function SettingsClient({ initialUser, initialPortfolios }: Setti
                                       : 'text-secondary hover:text-primary'
                                   }`}
                                 >
-                                  {c}
+                                  {chartOption.label}
                                 </button>
                               );
                             })}
@@ -1455,8 +1517,8 @@ export default function SettingsClient({ initialUser, initialPortfolios }: Setti
                         <EyeOff className="w-4 h-4 text-secondary transition-colors group-hover/item:text-primary" />
                       </div>
                       <div>
-                        <div className="text-[14px] font-bold text-primary leading-tight">Hide Small Balances</div>
-                        <div className="text-[12px] text-secondary font-medium mt-0.5">Hide holdings &lt; $10</div>
+                        <div className="text-[14px] font-bold text-primary leading-tight">{tPreferences('hideSmallBalances')}</div>
+                        <div className="text-[12px] text-secondary font-medium mt-0.5">{tPreferences('hideSmallBalancesDesc')}</div>
                       </div>
                     </div>
                     <button
@@ -1472,7 +1534,7 @@ export default function SettingsClient({ initialUser, initialPortfolios }: Setti
 
               {/* Performance Group */}
               <div className="space-y-4">
-                <h3 className="text-[11px] font-bold text-secondary uppercase tracking-[0.1em] pl-1">Performance</h3>
+                <h3 className="text-[11px] font-bold text-secondary uppercase tracking-[0.1em] pl-1">{tPreferences('performance')}</h3>
                 <div className="bg-element/50 rounded-2xl border border-border overflow-hidden">
                   <div className="px-4 md:px-5 py-4 flex items-center justify-between group/item">
                     <div className="flex items-center space-x-3 md:space-x-4">
@@ -1480,8 +1542,8 @@ export default function SettingsClient({ initialUser, initialPortfolios }: Setti
                         <Zap className="w-4 h-4 text-secondary transition-colors group-hover/item:text-primary" />
                       </div>
                       <div>
-                        <div className="text-[14px] font-bold text-primary leading-tight">Real-time Sync</div>
-                        <div className="text-[12px] text-secondary font-medium mt-0.5">Faster updates</div>
+                        <div className="text-[14px] font-bold text-primary leading-tight">{tPreferences('realTimeSync')}</div>
+                        <div className="text-[12px] text-secondary font-medium mt-0.5">{tPreferences('realTimeSyncDesc')}</div>
                       </div>
                     </div>
                     <button
@@ -1496,7 +1558,7 @@ export default function SettingsClient({ initialUser, initialPortfolios }: Setti
 
               {/* Tax & Accounting Group */}
               <div className="space-y-4">
-                <h3 className="text-[11px] font-bold text-secondary uppercase tracking-[0.1em] pl-1">Tax & Accounting</h3>
+                <h3 className="text-[11px] font-bold text-secondary uppercase tracking-[0.1em] pl-1">{tPreferences('taxAccounting')}</h3>
                 <div className="bg-element/50 rounded-2xl border border-border overflow-hidden">
                   <div className="px-4 md:px-5 py-4 flex items-center justify-between group/item">
                     <div className="flex items-center space-x-3 md:space-x-4">
@@ -1504,9 +1566,9 @@ export default function SettingsClient({ initialUser, initialPortfolios }: Setti
                         <FileText className={`w-4 h-4 transition-colors duration-300 ${openPreferencesEditor === 'costBasis' ? 'text-primary' : 'text-secondary group-hover/item:text-primary'}`} />
                       </div>
                       <div>
-                        <div className="text-[14px] font-bold text-primary leading-tight">Cost Basis Method</div>
+                        <div className="text-[14px] font-bold text-primary leading-tight">{tPreferences('costBasisMethod')}</div>
                         <div className="text-[13px] text-secondary font-medium mt-0.5">
-                          {prefs.costBasisMethod === 'FIFO' ? 'First In, First Out' : 'Average Cost'}
+                          {getCostBasisLabel(prefs.costBasisMethod)}
                         </div>
                       </div>
                     </div>
@@ -1518,7 +1580,7 @@ export default function SettingsClient({ initialUser, initialPortfolios }: Setti
                           : 'bg-card border-border text-primary hover:bg-element-hover'
                       }`}
                     >
-                      {openPreferencesEditor === 'costBasis' ? 'Cancel' : 'Change'}
+                      {openPreferencesEditor === 'costBasis' ? t('actions.cancel') : t('actions.change')}
                     </button>
                   </div>
                   {/* Expandable Cost Basis Drawer */}
@@ -1526,8 +1588,8 @@ export default function SettingsClient({ initialUser, initialPortfolios }: Setti
                     <div className="overflow-hidden">
                       <div className="p-4 md:p-5 bg-card border-t border-border/60 flex gap-2">
                         {([
-                          { id: 'FIFO', label: 'FIFO', desc: 'First In, First Out' },
-                          { id: 'AVCO', label: 'AVCO', desc: 'Average Cost' },
+                          { id: 'FIFO', label: 'FIFO', desc: tPreferences('costBasisFifoDesc') },
+                          { id: 'AVCO', label: 'AVCO', desc: tPreferences('costBasisAvcoDesc') },
                         ] as const).map((method) => (
                           <button
                             key={method.id}
@@ -1558,19 +1620,19 @@ export default function SettingsClient({ initialUser, initialPortfolios }: Setti
           {/* SECTION: NOTIFICATIONS */}
           <div id="notifications" ref={notificationsRef} className="scroll-mt-24 md:scroll-mt-32">
             <div className="mb-6 flex items-center gap-3">
-              <h2 className="text-[18px] md:text-[20px] font-bold text-primary tracking-tight">Notifications</h2>
+              <h2 className="text-[18px] md:text-[20px] font-bold text-primary tracking-tight">{tNotificationCenter('title')}</h2>
             </div>
             
             <div className="space-y-6 bg-card rounded-2xl md:rounded-[32px] p-5 md:p-8 shadow-sm border border-border mb-12 md:mb-16">
               <div className="space-y-4">
-                <h3 className="text-[11px] font-bold text-secondary uppercase tracking-[0.1em] pl-1">Market Alerts</h3>
+                <h3 className="text-[11px] font-bold text-secondary uppercase tracking-[0.1em] pl-1">{tNotificationCenter('marketAlerts')}</h3>
                 <div className="bg-element/50 rounded-2xl border border-border overflow-hidden">
                   <div className="px-4 md:px-5 py-4 flex items-center justify-between">
                     <div className="flex items-center space-x-3 md:space-x-4">
                       <div className="w-8 h-8 rounded-lg bg-card border border-border shadow-sm flex items-center justify-center"><TrendingUp className="w-4 h-4 text-secondary" /></div>
                       <div>
-                        <div className="text-[14px] font-bold text-primary leading-tight">Price Volatility</div>
-                        <div className="text-[12px] text-secondary font-medium mt-0.5">Alert on &gt;5% moves</div>
+                        <div className="text-[14px] font-bold text-primary leading-tight">{tNotificationCenter('priceVolatility')}</div>
+                        <div className="text-[12px] text-secondary font-medium mt-0.5">{tNotificationCenter('priceVolatilityDesc')}</div>
                       </div>
                     </div>
                     {renderToggle(true)}
@@ -1578,14 +1640,14 @@ export default function SettingsClient({ initialUser, initialPortfolios }: Setti
                 </div>
               </div>
               <div className="space-y-4">
-                <h3 className="text-[11px] font-bold text-secondary uppercase tracking-[0.1em] pl-1">Reporting</h3>
+                <h3 className="text-[11px] font-bold text-secondary uppercase tracking-[0.1em] pl-1">{tNotificationCenter('reporting')}</h3>
                 <div className="bg-element/50 rounded-2xl border border-border overflow-hidden">
                   <div className="px-4 md:px-5 py-4 flex items-center justify-between border-b border-border">
                     <div className="flex items-center space-x-3 md:space-x-4">
                       <div className="w-8 h-8 rounded-lg bg-card border border-border shadow-sm flex items-center justify-center"><FileText className="w-4 h-4 text-secondary" /></div>
                       <div>
-                        <div className="text-[14px] font-bold text-primary leading-tight">Daily Digest</div>
-                        <div className="text-[12px] text-secondary font-medium mt-0.5">Post-market summary</div>
+                        <div className="text-[14px] font-bold text-primary leading-tight">{tNotificationCenter('dailyDigest')}</div>
+                        <div className="text-[12px] text-secondary font-medium mt-0.5">{tNotificationCenter('dailyDigestDesc')}</div>
                       </div>
                     </div>
                     {renderToggle(false)}
@@ -1594,8 +1656,8 @@ export default function SettingsClient({ initialUser, initialPortfolios }: Setti
                     <div className="flex items-center space-x-3 md:space-x-4">
                       <div className="w-8 h-8 rounded-lg bg-card border border-border shadow-sm flex items-center justify-center"><Mail className="w-4 h-4 text-secondary" /></div>
                       <div>
-                        <div className="text-[14px] font-bold text-primary leading-tight">Weekly Newsletter</div>
-                        <div className="text-[12px] text-secondary font-medium mt-0.5">Insights and returns</div>
+                        <div className="text-[14px] font-bold text-primary leading-tight">{tNotificationCenter('weeklyNewsletter')}</div>
+                        <div className="text-[12px] text-secondary font-medium mt-0.5">{tNotificationCenter('weeklyNewsletterDesc')}</div>
                       </div>
                     </div>
                     {renderToggle(true)}
@@ -1608,11 +1670,11 @@ export default function SettingsClient({ initialUser, initialPortfolios }: Setti
           {/* SECTION: ACCOUNT & SECURITY */}
           <div id="account" ref={accountRef} className="scroll-mt-24 md:scroll-mt-32">
             <div className="mb-6">
-              <h2 className="text-[18px] md:text-[20px] font-bold text-primary tracking-tight">Account & Security</h2>
+              <h2 className="text-[18px] md:text-[20px] font-bold text-primary tracking-tight">{tAccount('title')}</h2>
               <p className="text-[13px] text-secondary font-medium mt-1">
                 {isLoggedIn 
-                  ? 'Manage your account profile, authentication, and security preferences.' 
-                  : 'Log in or create an account to sync your portfolio.'}
+                  ? tAccount('descriptionLoggedIn')
+                  : tAccount('descriptionLoggedOut')}
               </p>
             </div>
             
@@ -1621,7 +1683,7 @@ export default function SettingsClient({ initialUser, initialPortfolios }: Setti
                 <div className="space-y-8">
                   {/* Profile Block */}
                   <div className="space-y-4">
-                    <h3 className="text-[11px] font-bold text-secondary uppercase tracking-[0.1em] pl-1">Profile</h3>
+                    <h3 className="text-[11px] font-bold text-secondary uppercase tracking-[0.1em] pl-1">{tAccount('profile')}</h3>
                     
                     <div className="bg-element/50 rounded-2xl border border-border overflow-hidden">
                       {/* Name & Avatar */}
@@ -1645,8 +1707,8 @@ export default function SettingsClient({ initialUser, initialPortfolios }: Setti
                           <div className="flex items-center space-x-2.5">
                             <Monitor className="w-3.5 h-3.5 text-secondary shrink-0" />
                             <span className="text-[11px] font-medium text-secondary uppercase tracking-wider truncate sm:whitespace-normal">
-                              Last Session: {new Date(user.last_sign_in_at).toLocaleDateString()}
-                              <span className="hidden sm:inline"> at {new Date(user.last_sign_in_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
+                              {tAccount('lastSession')}: {sessionDateFormatter.format(new Date(user.last_sign_in_at))}
+                              <span className="hidden sm:inline"> {tAccount('at')} {sessionTimeFormatter.format(new Date(user.last_sign_in_at))}</span>
                             </span>
                           </div>
                           <div className="flex items-center space-x-1.5 opacity-60 ml-6 sm:ml-0 shrink-0">
@@ -1668,8 +1730,8 @@ export default function SettingsClient({ initialUser, initialPortfolios }: Setti
                       <div className="px-4 py-3.5 bg-transparent border-b border-border flex items-start space-x-2.5">
                         <ShieldCheck className="w-4 h-4 text-emerald-500 mt-[1px] shrink-0" />
                         <div>
-                          <div className="text-[13px] font-bold text-emerald-700">Account Verified</div>
-                          <div className="text-[12px] text-emerald-600/80 font-medium mt-0.5">Your data is securely synchronized with Supabase Cloud.</div>
+                          <div className="text-[13px] font-bold text-emerald-700">{tAccount('accountVerified')}</div>
+                          <div className="text-[12px] text-emerald-600/80 font-medium mt-0.5">{tAccount('accountVerifiedDesc')}</div>
                         </div>
                       </div>
 
@@ -1680,7 +1742,7 @@ export default function SettingsClient({ initialUser, initialPortfolios }: Setti
                       >
                         <div className="flex items-center space-x-2.5">
                           <LogOut className="w-3.5 h-3.5 text-rose-500 group-hover:-translate-x-0.5 transition-transform shrink-0" />
-                          <span className="text-[13px] font-bold text-rose-500">Sign Out</span>
+                          <span className="text-[13px] font-bold text-rose-500">{tAccount('signOut')}</span>
                         </div>
                       </button>
                     </div>
@@ -1688,7 +1750,7 @@ export default function SettingsClient({ initialUser, initialPortfolios }: Setti
 
                   {/* Login Credentials */}
                   <div className="space-y-4">
-                    <h3 className="text-[11px] font-bold text-secondary uppercase tracking-[0.1em] pl-1">Login Credentials</h3>
+                    <h3 className="text-[11px] font-bold text-secondary uppercase tracking-[0.1em] pl-1">{tAccount('loginCredentials')}</h3>
                     <div className="bg-element/50 rounded-2xl border border-border overflow-hidden transition-all duration-300">
 
                       {/* Display Name Row */}
@@ -1699,7 +1761,7 @@ export default function SettingsClient({ initialUser, initialPortfolios }: Setti
                               <UserCircle className={`w-4 h-4 transition-colors duration-300 ${isEditingDisplayName ? 'text-primary' : 'text-secondary'}`} />
                             </div>
                             <div className="min-w-0">
-                              <div className="text-[14px] font-bold text-primary leading-tight">Display Name</div>
+                              <div className="text-[14px] font-bold text-primary leading-tight">{tAccount('displayName')}</div>
                               <div className="text-[12px] md:text-[13px] text-secondary font-medium mt-0.5 truncate">
                                 {user?.user_metadata?.display_name || user?.email?.split('@')[0]}
                               </div>
@@ -1719,7 +1781,7 @@ export default function SettingsClient({ initialUser, initialPortfolios }: Setti
                                 : 'bg-card border-border text-primary hover:bg-element-hover'
                             }`}
                           >
-                            {isEditingDisplayName ? 'Cancel' : 'Change'}
+                            {isEditingDisplayName ? t('actions.cancel') : t('actions.change')}
                           </button>
                         </div>
                         <div className={`grid transition-all duration-300 ease-in-out ${isEditingDisplayName ? 'grid-rows-[1fr] opacity-100' : 'grid-rows-[0fr] opacity-0'}`}>
@@ -1727,13 +1789,13 @@ export default function SettingsClient({ initialUser, initialPortfolios }: Setti
                             <div className="p-4 md:p-5 bg-card border-t border-border/60 space-y-4">
                               <form onSubmit={handleUpdateDisplayName} className="space-y-4">
                                 <div>
-                                  <label className="block text-[11px] font-bold text-secondary uppercase tracking-wider mb-2">New Display Name</label>
+                                  <label className="block text-[11px] font-bold text-secondary uppercase tracking-wider mb-2">{tAccount('newDisplayName')}</label>
                                   <input
                                     type="text"
                                     required
                                     value={newDisplayName}
                                     onChange={(e) => setNewDisplayName(e.target.value)}
-                                    placeholder="Enter your display name"
+                                    placeholder={tAccount('displayNamePlaceholder')}
                                     className="w-full px-4 py-2.5 bg-element/50 rounded-xl text-[14px] text-primary font-medium border border-border focus:border-primary focus:ring-1 focus:ring-black outline-none transition-all placeholder:text-secondary"
                                   />
                                 </div>
@@ -1749,7 +1811,7 @@ export default function SettingsClient({ initialUser, initialPortfolios }: Setti
                                   className="w-full bg-primary text-on-primary text-[13px] font-bold py-2.5 rounded-xl hover:bg-primary-hover transition-colors active:scale-[0.98] disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2 shadow-sm"
                                 >
                                   {authActionLoading && isEditingDisplayName && <Loader2 className="w-4 h-4 animate-spin" />}
-                                  {authActionLoading && isEditingDisplayName ? 'Updating...' : 'Update Name'}
+                                  {authActionLoading && isEditingDisplayName ? tAccount('updating') : tAccount('updateName')}
                                 </button>
                               </form>
                             </div>
@@ -1765,7 +1827,7 @@ export default function SettingsClient({ initialUser, initialPortfolios }: Setti
                               <Mail className={`w-4 h-4 transition-colors duration-300 ${isEditingEmail ? 'text-primary' : 'text-secondary'}`} />
                             </div>
                             <div className="min-w-0">
-                              <div className="text-[14px] font-bold text-primary leading-tight">Email Address</div>
+                              <div className="text-[14px] font-bold text-primary leading-tight">{tAccount('emailAddress')}</div>
                               <div className="text-[12px] md:text-[13px] text-secondary font-medium mt-0.5 truncate">{user?.email}</div>
                             </div>
                           </div>
@@ -1783,7 +1845,7 @@ export default function SettingsClient({ initialUser, initialPortfolios }: Setti
                                 : 'bg-card border-border text-primary hover:bg-element-hover'
                             }`}
                           >
-                            {isEditingEmail ? 'Cancel' : 'Change'}
+                            {isEditingEmail ? t('actions.cancel') : t('actions.change')}
                           </button>
                         </div>
                         
@@ -1793,13 +1855,13 @@ export default function SettingsClient({ initialUser, initialPortfolios }: Setti
                             <div className="p-4 md:p-5 bg-card border-t border-border/60 space-y-4">
                               <form onSubmit={handleUpdateEmail} className="space-y-4">
                                 <div>
-                                  <label className="block text-[11px] font-bold text-secondary uppercase tracking-wider mb-2">New Email Address</label>
+                                  <label className="block text-[11px] font-bold text-secondary uppercase tracking-wider mb-2">{tAccount('newEmailAddress')}</label>
                                   <input 
                                     type="email" 
                                     required
                                     value={newEmail}
                                     onChange={(e) => setNewEmail(e.target.value)}
-                                    placeholder="Enter your new email"
+                                    placeholder={tAccount('newEmailPlaceholder')}
                                     className="w-full px-4 py-2.5 bg-element/50 rounded-xl text-[14px] text-primary font-medium border border-border focus:border-primary focus:ring-1 focus:ring-black outline-none transition-all placeholder:text-secondary"
                                   />
                                 </div>
@@ -1815,7 +1877,7 @@ export default function SettingsClient({ initialUser, initialPortfolios }: Setti
                                   className="w-full bg-primary text-on-primary text-[13px] font-bold py-2.5 rounded-xl hover:bg-primary-hover transition-colors active:scale-[0.98] disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2 shadow-sm"
                                 >
                                   {authActionLoading && isEditingEmail && <Loader2 className="w-4 h-4 animate-spin" />}
-                                  {authActionLoading && isEditingEmail ? 'Updating...' : 'Update Email'}
+                                  {authActionLoading && isEditingEmail ? tAccount('updating') : tAccount('updateEmail')}
                                 </button>
                               </form>
                             </div>
@@ -1831,7 +1893,7 @@ export default function SettingsClient({ initialUser, initialPortfolios }: Setti
                               <Lock className={`w-4 h-4 transition-colors duration-300 ${isEditingPassword ? 'text-primary' : 'text-secondary'}`} />
                             </div>
                             <div>
-                              <div className="text-[14px] font-bold text-primary leading-tight">Password</div>
+                              <div className="text-[14px] font-bold text-primary leading-tight">{tAccount('password')}</div>
                               <div className="text-[13px] text-secondary font-medium mt-0.5 tracking-widest mt-1">••••••••</div>
                             </div>
                           </div>
@@ -1850,7 +1912,7 @@ export default function SettingsClient({ initialUser, initialPortfolios }: Setti
                                 : 'bg-card border-border text-primary hover:bg-element-hover'
                             }`}
                           >
-                            {isEditingPassword ? 'Cancel' : 'Update'}
+                            {isEditingPassword ? t('actions.cancel') : t('actions.update')}
                           </button>
                         </div>
                         
@@ -1860,14 +1922,14 @@ export default function SettingsClient({ initialUser, initialPortfolios }: Setti
                             <div className="p-4 md:p-5 bg-card border-t border-border/60 space-y-4">
                               <form onSubmit={handleUpdatePassword} className="space-y-4">
                                 <div>
-                                  <label className="block text-[11px] font-bold text-secondary uppercase tracking-wider mb-2">New Password</label>
+                                  <label className="block text-[11px] font-bold text-secondary uppercase tracking-wider mb-2">{tAccount('newPassword')}</label>
                                   <div className="relative">
                                     <input 
                                       type={showPassword ? "text" : "password"} 
                                       required
                                       value={newPassword}
                                       onChange={(e) => setNewPassword(e.target.value)}
-                                      placeholder="Enter new password"
+                                      placeholder={tAccount('newPasswordPlaceholder')}
                                       className="w-full px-4 py-2.5 bg-element/50 rounded-xl text-[14px] text-primary font-medium border border-border focus:border-primary focus:ring-1 focus:ring-black outline-none transition-all placeholder:text-secondary"
                                     />
                                     <button 
@@ -1880,13 +1942,13 @@ export default function SettingsClient({ initialUser, initialPortfolios }: Setti
                                   </div>
                                 </div>
                                 <div>
-                                  <label className="block text-[11px] font-bold text-secondary uppercase tracking-wider mb-2">Confirm New Password</label>
+                                  <label className="block text-[11px] font-bold text-secondary uppercase tracking-wider mb-2">{tAccount('confirmNewPassword')}</label>
                                   <input 
                                     type={showPassword ? "text" : "password"} 
                                     required
                                     value={confirmPassword}
                                     onChange={(e) => setConfirmPassword(e.target.value)}
-                                    placeholder="Confirm new password"
+                                    placeholder={tAccount('confirmNewPasswordPlaceholder')}
                                     className="w-full px-4 py-2.5 bg-element/50 rounded-xl text-[14px] text-primary font-medium border border-border focus:border-primary focus:ring-1 focus:ring-black outline-none transition-all placeholder:text-secondary"
                                   />
                                 </div>
@@ -1902,7 +1964,7 @@ export default function SettingsClient({ initialUser, initialPortfolios }: Setti
                                   className="w-full bg-primary text-on-primary text-[13px] font-bold py-2.5 rounded-xl hover:bg-primary-hover transition-colors active:scale-[0.98] disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2 shadow-sm"
                                 >
                                   {authActionLoading && isEditingPassword && <Loader2 className="w-4 h-4 animate-spin" />}
-                                  {authActionLoading && isEditingPassword ? 'Updating...' : 'Update Password'}
+                                  {authActionLoading && isEditingPassword ? tAccount('updating') : tAccount('updatePassword')}
                                 </button>
                               </form>
                             </div>
@@ -1915,17 +1977,17 @@ export default function SettingsClient({ initialUser, initialPortfolios }: Setti
 
                   {/* Access Control */}
                   <div className="space-y-4 select-none">
-                    <h3 className="text-[11px] font-bold text-secondary uppercase tracking-[0.1em] pl-1">Access Control</h3>
+                    <h3 className="text-[11px] font-bold text-secondary uppercase tracking-[0.1em] pl-1">{tAccount('accessControl')}</h3>
                     <div className="bg-element/50 rounded-2xl border border-border overflow-hidden">
                       <div className="px-4 md:px-5 py-4 flex items-center justify-between border-b border-border">
                         <div className="flex items-center space-x-3 md:space-x-4">
                           <div className="w-8 h-8 rounded-lg bg-card border border-border shadow-sm flex items-center justify-center"><ShieldCheck className="w-4 h-4 text-secondary" /></div>
                           <div>
-                            <div className="text-[14px] font-bold text-primary leading-tight">Two-Factor Auth</div>
-                            <div className="text-[13px] text-secondary font-medium mt-0.5">Disabled</div>
+                            <div className="text-[14px] font-bold text-primary leading-tight">{tAccount('twoFactorAuth')}</div>
+                            <div className="text-[13px] text-secondary font-medium mt-0.5">{tAccount('disabled')}</div>
                           </div>
                         </div>
-                        <button className="text-[12px] md:text-[13px] font-bold text-primary border border-border bg-card hover:bg-element-hover px-3 py-1.5 rounded-lg transition-colors shadow-sm active:scale-95">Enable</button>
+                        <button className="text-[12px] md:text-[13px] font-bold text-primary border border-border bg-card hover:bg-element-hover px-3 py-1.5 rounded-lg transition-colors shadow-sm active:scale-95">{t('actions.enable')}</button>
                       </div>
                       <PasskeySection user={user} />
                     </div>
@@ -1933,23 +1995,23 @@ export default function SettingsClient({ initialUser, initialPortfolios }: Setti
 
                   {/* API Management */}
                   <div className="space-y-4 select-none">
-                    <h3 className="text-[11px] font-bold text-secondary uppercase tracking-[0.1em] pl-1">API Management</h3>
+                    <h3 className="text-[11px] font-bold text-secondary uppercase tracking-[0.1em] pl-1">{tAccount('apiManagement')}</h3>
                     <div className="bg-element/50 rounded-2xl border border-border overflow-hidden">
                       <div className="px-4 md:px-5 py-4 flex items-center justify-between">
                         <div className="flex items-center space-x-3 md:space-x-4 min-w-0 mr-3">
                           <div className="w-8 h-8 rounded-lg bg-card border border-border shadow-sm flex items-center justify-center shrink-0 transition-all duration-300 transition-all duration-300"><Key className="w-4 h-4 text-secondary transition-colors duration-300" /></div>
                           <div className="min-w-0">
-                            <div className="text-[14px] font-bold text-primary leading-tight">Finnhub API Key</div>
+                            <div className="text-[14px] font-bold text-primary leading-tight">{tAccount('finnhubApiKey')}</div>
                             <div className="text-[13px] text-secondary font-medium mt-0.5 tracking-widest mt-1 truncate">••••••••••••</div>
                           </div>
                         </div>
-                        <button className="text-[12px] md:text-[13px] font-bold text-primary border border-border bg-card hover:bg-element-hover px-3 py-1.5 rounded-lg transition-colors shadow-sm active:scale-95 shrink-0">Manage</button>
+                        <button className="text-[12px] md:text-[13px] font-bold text-primary border border-border bg-card hover:bg-element-hover px-3 py-1.5 rounded-lg transition-colors shadow-sm active:scale-95 shrink-0">{t('actions.manage')}</button>
                       </div>
                     </div>
                   </div>
                 </div>
               ) : (
-                <AuthPanel onLogin={() => router.push('/')} />
+                <AuthPanel onLogin={() => router.push('/app')} />
               )}
             </div>
           </div>
@@ -1970,9 +2032,9 @@ export default function SettingsClient({ initialUser, initialPortfolios }: Setti
         isOpen={deleteConfirm.isOpen}
         onClose={() => setDeleteConfirm({ isOpen: false, id: null })}
         onConfirm={confirmDelete}
-        title="Delete Portfolio"
-        description="Are you sure you want to delete this portfolio and all its transactions? This action cannot be undone."
-        confirmText="Delete Portfolio"
+        title={t('modal.deleteTitle')}
+        description={t('modal.deleteDescription')}
+        confirmText={t('modal.deleteConfirm')}
         isLoading={portfolioActionLoading}
       />
     </div>

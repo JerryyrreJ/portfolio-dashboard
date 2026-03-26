@@ -2,6 +2,7 @@
 
 import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { useRouter } from 'next/navigation';
+import { useLocale, useTranslations } from 'next-intl';
 import Image from 'next/image';
 import {
   AreaChart,
@@ -28,6 +29,7 @@ import AddTransactionModal from './components/AddTransactionModal';
 import GlobalSearch from './components/GlobalSearch';
 import PortfolioSwitcher from './components/PortfolioSwitcher';
 import DividendConfirmationModal from './components/DividendConfirmationModal';
+import LanguageSwitcher from './components/LanguageSwitcher';
 import Link from 'next/link';
 import { useCurrency } from '@/lib/useCurrency';
 import { usePreferences } from '@/lib/usePreferences';
@@ -108,6 +110,8 @@ interface XAxisTickProps {
   };
   visibleTicksCount?: number;
   index?: number;
+  locale?: string;
+  todayLabel?: string;
 }
 
 type LocalTransaction = {
@@ -164,15 +168,15 @@ function calcYTicks(data: ChartPoint[], key: keyof ChartPoint, tickCount = 5): n
 }
 
 const CustomXAxisTick = (props: XAxisTickProps) => {
-  const { x, y, payload, visibleTicksCount = 0, index } = props;
+  const { x, y, payload, visibleTicksCount = 0, index, locale = 'en', todayLabel = 'Today' } = props;
   
   let dateText = payload?.value;
   if (dateText === 'Today') {
-    dateText = 'Today';
+    dateText = todayLabel;
   } else if (dateText) {
     const d = new Date(dateText);
     if (!isNaN(d.getTime())) {
-      dateText = d.toLocaleDateString('en-US', { month: 'short', year: '2-digit' });
+      dateText = d.toLocaleDateString(locale, { month: 'short', year: '2-digit' });
     }
   }
 
@@ -191,6 +195,8 @@ const CustomXAxisTick = (props: XAxisTickProps) => {
 
 export default function DashboardClient({ portfolioId, portfolioName, portfolios, holdingsData, chartData, summary, userDisplayName = '' }: DashboardClientProps) {
   const router = useRouter();
+  const locale = useLocale();
+  const t = useTranslations('dashboard');
   const { symbol, convert, fmt } = useCurrency();
   const { prefs, colors } = usePreferences();
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -554,42 +560,56 @@ export default function DashboardClient({ portfolioId, portfolioName, portfolios
       if (chartTimeRange === 'All') {
         return {
           className: isPositive ? colors.gain.tailwind.text : colors.loss.tailwind.text,
-          text: `${isPositive ? '+' : ''}${returnVal.toFixed(2)}% total return`,
+          text: `${isPositive ? '+' : ''}${returnVal.toFixed(2)}% ${t('chart.totalReturnSuffix')}`,
         };
       }
 
       if (chartRangeMeta.firstDate && chartRangeMeta.isConstrained) {
         return {
           className: isPositive ? colors.gain.tailwind.text : colors.loss.tailwind.text,
-          text: `${isPositive ? '+' : ''}${returnVal.toFixed(2)}% return since ${chartRangeMeta.firstDate.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}`,
+          text: `${isPositive ? '+' : ''}${returnVal.toFixed(2)}% ${t('chart.returnSince', {
+            date: chartRangeMeta.firstDate.toLocaleDateString(locale, {
+              month: 'short',
+              day: 'numeric',
+              year: 'numeric',
+            }),
+          })}`,
         };
       }
 
       return {
         className: isPositive ? colors.gain.tailwind.text : colors.loss.tailwind.text,
-        text: `${isPositive ? '+' : ''}${returnVal.toFixed(2)}% return over ${chartTimeRange}`,
+        text: `${isPositive ? '+' : ''}${returnVal.toFixed(2)}% ${t('chart.returnOver', {
+          range: chartTimeRange,
+        })}`,
       };
     }
 
     if (!chartRangeMeta.firstDate || chartTimeRange === 'All') {
       return {
         className: 'text-secondary',
-        text: 'Total portfolio value',
+        text: t('chart.totalPortfolioValue'),
       };
     }
 
     if (chartRangeMeta.isConstrained) {
       return {
         className: 'text-secondary',
-        text: `Showing data since ${chartRangeMeta.firstDate.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}`,
+        text: t('chart.showingSince', {
+          date: chartRangeMeta.firstDate.toLocaleDateString(locale, {
+            month: 'short',
+            day: 'numeric',
+            year: 'numeric',
+          }),
+        }),
       };
     }
 
     return {
       className: 'text-secondary',
-      text: 'Total portfolio value',
+      text: t('chart.totalPortfolioValue'),
     };
-  }, [chartDisplayData, chartMode, chartRangeMeta, chartTimeRange, colors.gain.tailwind.text, colors.loss.tailwind.text]);
+  }, [chartDisplayData, chartMode, chartRangeMeta, chartTimeRange, colors.gain.tailwind.text, colors.loss.tailwind.text, locale, t]);
 
   const yTicks = useMemo(() => {
     const key = chartMode === 'return' ? 'Return' : portfolioId === 'local-portfolio' ? 'Local' : 'Total';
@@ -738,8 +758,8 @@ export default function DashboardClient({ portfolioId, portfolioName, portfolios
               <span>Folio</span>
             </div>
           <nav className="hidden md:flex space-x-7 text-[14px] font-semibold text-secondary">
-            <a href={`/${portfolioId !== 'local-portfolio' ? `?pid=${portfolioId}` : ''}`} className="text-primary border-b-2 border-primary py-[16px]">Investments</a>
-            <a href={`/transactions${portfolioId !== 'local-portfolio' ? `?pid=${portfolioId}` : ''}`} className="hover:text-primary transition-colors py-[16px]">Transactions</a>
+            <a href={`/app${portfolioId !== 'local-portfolio' ? `?pid=${portfolioId}` : ''}`} className="text-primary border-b-2 border-primary py-[16px]">{t('nav.investments')}</a>
+            <a href={`/transactions${portfolioId !== 'local-portfolio' ? `?pid=${portfolioId}` : ''}`} className="hover:text-primary transition-colors py-[16px]">{t('nav.transactions')}</a>
           </nav>
         </div>
         <div className="flex items-center space-x-5">
@@ -747,11 +767,14 @@ export default function DashboardClient({ portfolioId, portfolioName, portfolios
             <GlobalSearch />
           </div>
           <div className="flex items-center space-x-2.5">
+            <div className="hidden md:block">
+              <LanguageSwitcher />
+            </div>
             {/* Mobile Search Trigger */}
             <button 
               onClick={() => setShowMobileSearch(true)}
               className="sm:hidden w-7 h-7 rounded-full bg-element-hover border border-border flex items-center justify-center text-secondary active:bg-gray-200 transition-colors shadow-sm"
-              title="Search"
+              title={t('header.search')}
             >
               <Search className="w-3.5 h-3.5" />
             </button>
@@ -760,7 +783,7 @@ export default function DashboardClient({ portfolioId, portfolioName, portfolios
             <Link
               href={`/transactions${portfolioId !== 'local-portfolio' ? `?pid=${portfolioId}` : ''}`}
               className="md:hidden w-7 h-7 rounded-full bg-element-hover border border-border flex items-center justify-center text-secondary active:bg-gray-200 transition-colors shadow-sm"
-              title="Transactions"
+              title={t('nav.transactions')}
             >
               <HistoryIcon className="w-3.5 h-3.5" />
             </Link>
@@ -785,7 +808,7 @@ export default function DashboardClient({ portfolioId, portfolioName, portfolios
                     <User className="w-3.5 h-3.5" />
                   </div>
                   <span className="text-[13px] font-bold text-secondary group-hover:text-primary transition-colors hidden sm:block">
-                    Guest
+                    {t('account.guest')}
                   </span>
                 </>
               )}
@@ -813,11 +836,11 @@ export default function DashboardClient({ portfolioId, portfolioName, portfolios
               />
             ) : (
               <h1 className="text-[28px] font-bold text-primary tracking-tight leading-none">
-                {portfolioName || 'Portfolio'}
+                {portfolioName || t('header.portfolioFallback')}
               </h1>
             )}
             <span className={`hidden sm:inline-block text-[13px] font-medium px-2 py-0.5 rounded-md transition-colors ${isRateLimited ? 'text-rose-500 bg-rose-50/50' : 'text-secondary bg-element-hover'}`}>
-              {isRateLimited ? 'API Limit Reached' : 'Real-time'}
+              {isRateLimited ? t('header.apiLimitReached') : t('header.realTime')}
             </span>
             </div>          <div className="flex items-center space-x-2">
             <button
@@ -832,7 +855,7 @@ export default function DashboardClient({ portfolioId, portfolioName, portfolios
               className="px-4 py-1.5 bg-primary text-on-primary text-[13px] font-semibold rounded-lg hover:bg-primary-hover transition-all shadow-sm flex items-center space-x-1"
             >
               <Plus className="w-3.5 h-3.5" />
-              <span>Add Trade</span>
+              <span>{t('header.addTrade')}</span>
             </button>
           </div>
         </div>
@@ -849,13 +872,13 @@ export default function DashboardClient({ portfolioId, portfolioName, portfolios
                   <TrendingUp className="w-5 h-5" />
                 </div>
                 <div>
-                  <h3 className="text-[14px] font-bold text-primary tracking-tight">Pending Dividends</h3>
-                  <p className="text-[12px] text-secondary font-medium">You have {pendingDividendCount} dividend payment{pendingDividendCount > 1 ? 's' : ''} to review and confirm.</p>
+                  <h3 className="text-[14px] font-bold text-primary tracking-tight">{t('pendingDividends.title')}</h3>
+                  <p className="text-[12px] text-secondary font-medium">{t('pendingDividends.description', { count: pendingDividendCount })}</p>
                 </div>
               </div>
               <div className="flex items-center space-x-3">
                 <span className="hidden sm:flex px-2.5 py-1 bg-primary text-on-primary text-[11px] font-bold rounded-full uppercase tracking-wider">
-                  Review Now
+                  {t('pendingDividends.reviewNow')}
                 </span>
                 <ChevronRight className="w-5 h-5 text-secondary group-hover:translate-x-1 transition-transform" />
               </div>
@@ -869,18 +892,18 @@ export default function DashboardClient({ portfolioId, portfolioName, portfolios
             <div className="w-16 h-16 bg-element rounded-full flex items-center justify-center mb-6">
               <Wallet className="w-8 h-8 text-secondary" />
             </div>
-            <h2 className="text-2xl font-bold text-primary tracking-tight mb-2">Build your portfolio</h2>
+            <h2 className="text-2xl font-bold text-primary tracking-tight mb-2">{t('empty.title')}</h2>
             <p className="text-sm text-secondary mb-8 max-w-[280px] text-center">
-              Add your first trade to start tracking your market performance in real-time.
+              {t('empty.description')}
             </p>
             <button
               onClick={() => setIsModalOpen(true)}
               className="px-8 py-3 bg-primary text-on-primary text-sm font-semibold rounded-full hover:bg-primary-hover transition-all shadow-sm flex items-center space-x-2"
             >
               <Plus className="w-4 h-4" />
-              <span>Add your first trade</span>
+              <span>{t('empty.cta')}</span>
             </button>
-            <p className="text-xs text-secondary mt-6 font-medium">{portfolioId === 'local-portfolio' ? 'No account required to start.' : 'Trades are synced to your account.'}</p>
+            <p className="text-xs text-secondary mt-6 font-medium">{portfolioId === 'local-portfolio' ? t('empty.localHint') : t('empty.accountHint')}</p>
           </div>
         ) : (
           <>
@@ -890,14 +913,14 @@ export default function DashboardClient({ portfolioId, portfolioName, portfolios
           {/* 左侧：核心指标垂直排列 */}
           <div className="col-span-12 lg:col-span-3 space-y-4">
             <div className="bg-card rounded-2xl p-5 border border-border shadow-sm relative overflow-hidden group">
-              <p className="text-[11px] text-secondary font-bold uppercase tracking-wider mb-1">Portfolio Value</p>
+              <p className="text-[11px] text-secondary font-bold uppercase tracking-wider mb-1">{t('summary.portfolioValue')}</p>
               <div className="flex items-baseline space-x-1">
                 <span className="text-[28px] font-bold text-primary tracking-tight tabular-nums">
                   {fmt(localSummary.totalValue)}
                 </span>
               </div>
               <div className="mt-2 flex items-center space-x-2">
-                <span className={`text-[12px] font-bold px-1.5 py-0.5 rounded ${upColor.tailwind.bgLight} ${upColor.tailwind.text}`} title="Total Return (Including Dividends)">
+                <span className={`text-[12px] font-bold px-1.5 py-0.5 rounded ${upColor.tailwind.bgLight} ${upColor.tailwind.text}`} title={t('summary.totalReturnWithDividends')}>
                   {isUp ? '+' : ''}{totalReturnPct.toFixed(2)}%
                 </span>
                 <span className="text-[12px] font-medium text-secondary tabular-nums">
@@ -908,39 +931,39 @@ export default function DashboardClient({ portfolioId, portfolioName, portfolios
 
             <div className="bg-card rounded-2xl p-5 border border-border shadow-sm space-y-4">
               <div>
-                <p className="text-[11px] text-secondary font-bold uppercase tracking-wider mb-1">Unrealized P&L</p>
+                <p className="text-[11px] text-secondary font-bold uppercase tracking-wider mb-1">{t('summary.unrealizedPnL')}</p>
                 <div className="flex items-baseline">
                   <span className={`text-[20px] font-bold tracking-tight tabular-nums ${unrealizedColor.tailwind.text}`}>
                     {isUnrealizedUp ? '+' : '-'}{fmt(Math.abs(localSummary.totalCapGain))}
                   </span>
                 </div>
-                <p className="text-secondary text-[11px] font-medium mt-0.5">Open positions</p>
+                <p className="text-secondary text-[11px] font-medium mt-0.5">{t('summary.openPositions')}</p>
               </div>
               <div className="border-t border-border" />
               <div>
-                <p className="text-[11px] text-secondary font-bold uppercase tracking-wider mb-1">Realized P&L</p>
+                <p className="text-[11px] text-secondary font-bold uppercase tracking-wider mb-1">{t('summary.realizedPnL')}</p>
                 <div className="flex items-baseline">
                   <span className={`text-[20px] font-bold tracking-tight tabular-nums ${safeRealizedGain === 0 ? 'text-secondary' : realizedColor.tailwind.text}`}>
                     {safeRealizedGain === 0 ? '' : (isRealizedUp ? '+' : '-')}{fmt(Math.abs(safeRealizedGain))}
                   </span>
                 </div>
-                <p className="text-secondary text-[11px] font-medium mt-0.5">Closed positions</p>
+                <p className="text-secondary text-[11px] font-medium mt-0.5">{t('summary.closedPositions')}</p>
               </div>
               <div className="border-t border-border" />
               <div>
-                <p className="text-[11px] text-secondary font-bold uppercase tracking-wider mb-1">Dividends Collected</p>
+                <p className="text-[11px] text-secondary font-bold uppercase tracking-wider mb-1">{t('summary.dividendsCollected')}</p>
                 <div className="flex items-baseline justify-between">
                   <span className={`text-[20px] font-bold tracking-tight tabular-nums ${localSummary.totalDividendIncome > 0 ? colors.gain.tailwind.text : 'text-secondary'}`}>
                     {localSummary.totalDividendIncome > 0 ? '+' : ''}{fmt(localSummary.totalDividendIncome || 0)}
                   </span>
                 </div>
-                <p className="text-secondary text-[11px] font-medium mt-0.5">Cash reinvested or withdrawn</p>
+                <p className="text-secondary text-[11px] font-medium mt-0.5">{t('summary.cashFlow')}</p>
               </div>
             </div>
 
             <div className="bg-card rounded-2xl p-5 border border-border shadow-sm flex items-center justify-between">
               <div>
-                <p className="text-[11px] text-secondary font-bold uppercase tracking-wider mb-1">Assets</p>
+                <p className="text-[11px] text-secondary font-bold uppercase tracking-wider mb-1">{t('summary.assets')}</p>
                 <p className="text-[22px] font-bold text-primary tracking-tight">{totalHoldingsCount}</p>
               </div>
               <div className="flex -space-x-1.5">
@@ -971,7 +994,7 @@ export default function DashboardClient({ portfolioId, portfolioName, portfolios
                 {/* 桌面端：一行；手机端：两行 */}
                 <div className="flex flex-col sm:flex-row sm:justify-between sm:items-start gap-3 sm:gap-0">
                   <div>
-                    <h2 className="text-[15px] font-bold text-primary tracking-tight leading-none">Performance History</h2>
+                    <h2 className="text-[15px] font-bold text-primary tracking-tight leading-none">{t('chart.performanceHistory')}</h2>
                     <p className={`text-[12px] font-medium mt-1 ${chartSubtitle.className}`}>
                       {chartSubtitle.text}
                     </p>
@@ -983,11 +1006,11 @@ export default function DashboardClient({ portfolioId, portfolioName, portfolios
                           <button
                             key={mode}
                             onClick={() => setChartMode(mode)}
-                            className={`px-3 py-1.5 text-[11px] font-bold rounded-md transition-all whitespace-nowrap ${
+                          className={`px-3 py-1.5 text-[11px] font-bold rounded-md transition-all whitespace-nowrap ${
                               chartMode === mode ? 'bg-card text-primary shadow-sm' : 'text-secondary hover:text-primary'
                             }`}
                           >
-                            {mode === 'value' ? 'Value' : 'Return %'}
+                            {mode === 'value' ? t('chart.value') : t('chart.returnPercent')}
                           </button>
                         ))}
                       </div>
@@ -1003,7 +1026,7 @@ export default function DashboardClient({ portfolioId, portfolioName, portfolios
                               : 'text-secondary hover:text-primary'
                           }`}
                         >
-                          {range}
+                          {range === 'All' ? t('chart.all') : range}
                         </button>
                       ))}
                     </div>
@@ -1048,7 +1071,7 @@ export default function DashboardClient({ portfolioId, portfolioName, portfolios
                           dataKey="date"
                           axisLine={false}
                           tickLine={false}
-                          tick={<CustomXAxisTick />}
+                          tick={<CustomXAxisTick locale={locale} todayLabel={t('chart.today')} />}
                           interval="equidistantPreserveStart"
                           minTickGap={20}
                         />
@@ -1058,15 +1081,15 @@ export default function DashboardClient({ portfolioId, portfolioName, portfolios
                           itemStyle={{ fontSize: '11px', fontWeight: 'bold', padding: '2px 0', color: 'var(--text-primary)' }}
                           labelStyle={{ marginBottom: '4px', color: 'var(--text-secondary)', fontSize: '10px', fontWeight: '600' }}
                           labelFormatter={(dateStr) => {
-                            if (dateStr === 'Today') return 'Today';
+                            if (dateStr === 'Today') return t('chart.today');
                             const d = new Date(dateStr);
                             if (isNaN(d.getTime())) return dateStr;
-                            return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+                            return d.toLocaleDateString(locale, { month: 'short', day: 'numeric', year: 'numeric' });
                           }}
                           formatter={(value: number | string | undefined) =>
                             chartMode === 'return'
-                              ? [`${Number(value ?? 0) >= 0 ? '+' : ''}${Number(value ?? 0).toFixed(2)}%`, 'Return']
-                              : [`${fmt(Number(value ?? 0))}`, 'Value']
+                              ? [`${Number(value ?? 0) >= 0 ? '+' : ''}${Number(value ?? 0).toFixed(2)}%`, t('chart.returnPercent')]
+                              : [`${fmt(Number(value ?? 0))}`, t('chart.value')]
                           }
                         />
                         {portfolioId === 'local-portfolio' ? (
@@ -1087,7 +1110,7 @@ export default function DashboardClient({ portfolioId, portfolioName, portfolios
         {/* 持仓明细表 - 高密度列表设计 */}
         <div className="bg-card rounded-2xl border border-border shadow-sm overflow-hidden">
           <div className="px-6 py-4 border-b border-border flex justify-between items-center">
-            <h2 className="text-[15px] font-bold text-primary tracking-tight">Investment Holdings</h2>
+            <h2 className="text-[15px] font-bold text-primary tracking-tight">{t('holdings.title')}</h2>
             <div className="flex items-center space-x-4">
               <div className="flex items-center bg-element-hover rounded-lg p-0.5">
                 <button
@@ -1103,18 +1126,18 @@ export default function DashboardClient({ portfolioId, portfolioName, portfolios
                   $
                 </button>
               </div>
-              <div className="text-[11px] text-secondary font-medium hidden sm:block">Sorted by Market</div>
+              <div className="text-[11px] text-secondary font-medium hidden sm:block">{t('holdings.sortedByMarket')}</div>
             </div>
           </div>
           <div className="overflow-x-auto no-scrollbar">
             <table className="w-full text-left border-collapse">
               <thead>
                 <tr className="bg-element/50 text-[10px] font-bold text-secondary uppercase tracking-widest border-b border-border">
-                  <th className="px-4 sm:px-6 py-3">Asset</th>
-                  <th className="px-4 sm:px-6 py-3 text-right hidden md:table-cell">Market Price</th>
-                  <th className="px-4 sm:px-6 py-3 text-right hidden sm:table-cell">Position</th>
-                  <th className="px-4 sm:px-6 py-3 text-right">Value</th>
-                  <th className="px-4 sm:px-6 py-3 text-right">Return</th>
+                  <th className="px-4 sm:px-6 py-3">{t('holdings.asset')}</th>
+                  <th className="px-4 sm:px-6 py-3 text-right hidden md:table-cell">{t('holdings.marketPrice')}</th>
+                  <th className="px-4 sm:px-6 py-3 text-right hidden sm:table-cell">{t('holdings.position')}</th>
+                  <th className="px-4 sm:px-6 py-3 text-right">{t('holdings.value')}</th>
+                  <th className="px-4 sm:px-6 py-3 text-right">{t('holdings.return')}</th>
                   <th className="px-4 sm:px-6 py-3 text-right w-10 hidden sm:table-cell"></th>
                 </tr>
               </thead>
@@ -1157,13 +1180,13 @@ export default function DashboardClient({ portfolioId, portfolioName, portfolios
                         </td>
                         <td className="px-4 sm:px-6 py-3 text-right text-[13px] font-semibold tabular-nums text-primary hidden md:table-cell">{asset.price > 0 ? fmt(asset.price) : '--'}</td>
                         <td className="px-4 sm:px-6 py-3 text-right hidden sm:table-cell">
-                          <div className="text-[13px] font-semibold text-primary tabular-nums">{asset.qty.toLocaleString()}</div>
-                          <div className="text-[10px] text-secondary font-medium">Shares</div>
+                          <div className="text-[13px] font-semibold text-primary tabular-nums">{asset.qty.toLocaleString(locale)}</div>
+                          <div className="text-[10px] text-secondary font-medium">{t('holdings.shares')}</div>
                         </td>
                         <td className="px-4 sm:px-6 py-3 text-right">
                           <div className="text-[13px] font-bold text-primary tabular-nums">{asset.price > 0 ? fmt(asset.value) : '--'}</div>
-                          <div className="text-[10px] text-secondary font-medium sm:hidden">Value</div>
-                          <div className="text-[10px] text-secondary font-medium hidden sm:block">Market Value</div>
+                          <div className="text-[10px] text-secondary font-medium sm:hidden">{t('holdings.value')}</div>
+                          <div className="text-[10px] text-secondary font-medium hidden sm:block">{t('holdings.marketValue')}</div>
                         </td>
                         <td className="px-4 sm:px-6 py-3 text-right">
                           {asset.price > 0 ? <FormatValue
@@ -1175,7 +1198,7 @@ export default function DashboardClient({ portfolioId, portfolioName, portfolios
                             gainColor={colors.gain.tailwind.text}
                             lossColor={colors.loss.tailwind.text}
                           /> : <span className="text-secondary text-[13px]">--</span>}
-                          <div className="text-[10px] text-secondary font-medium hidden sm:block">Since purchase</div>
+                          <div className="text-[10px] text-secondary font-medium hidden sm:block">{t('holdings.sincePurchase')}</div>
                         </td>
                         <td className="px-4 sm:px-6 py-3 text-right hidden sm:table-cell">
                           <ChevronRight className="w-4 h-4 text-secondary group-hover:text-primary transition-colors" />
@@ -1187,7 +1210,7 @@ export default function DashboardClient({ portfolioId, portfolioName, portfolios
               </tbody>
               <tfoot>
                 <tr className="bg-primary/[0.02] font-bold border-t border-border">
-                  <td className="px-4 sm:px-6 py-4 text-[13px] text-primary">Total</td>
+                  <td className="px-4 sm:px-6 py-4 text-[13px] text-primary">{t('holdings.total')}</td>
                   <td className="px-4 sm:px-6 py-4 hidden md:table-cell"></td>
                   <td className="px-4 sm:px-6 py-4 hidden sm:table-cell"></td>
                   <td className="px-4 sm:px-6 py-4 text-right text-[14px] sm:text-[15px] text-primary tabular-nums">{fmt(localSummary.totalValue)}</td>

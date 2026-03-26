@@ -7,9 +7,8 @@ import {
   AreaChart, Area, ReferenceLine,
 } from 'recharts';
 import {
-  ArrowLeft, RefreshCw, TrendingUp, TrendingDown, Plus,
-  ExternalLink, Newspaper, BarChart2, History, ChevronRight,
-  Home, DollarSign, Wallet, ArrowUpRight, ArrowDownRight, Globe, Search, User, Share2
+  RefreshCw, TrendingUp, Plus, Newspaper, BarChart2, History, ChevronRight,
+  Wallet, ArrowUpRight, ArrowDownRight, Globe, Search, User, Share2
 } from 'lucide-react';
 import GlobalSearch from '../../components/GlobalSearch';
 import AddTransactionModal from '@/app/components/AddTransactionModal';
@@ -17,7 +16,6 @@ import ShareCardModal from '@/app/components/ShareCardModal';
 import Link from 'next/link';
 import Image from 'next/image';
 import { useCurrency } from '@/lib/useCurrency';
-import { useStock } from '@/hooks/useStock';
 import { usePreferences } from '@/lib/usePreferences';
 
 // ─── Types ───────────────────────────────────────────────────────────────────
@@ -35,6 +33,16 @@ interface Transaction {
 interface ChartPoint {
   date: string;
   price: number;
+}
+
+interface CustomXAxisTickProps {
+  x?: number;
+  y?: number;
+  payload?: {
+    value: string;
+  };
+  visibleTicksCount?: number;
+  index?: number;
 }
 
 interface CompanyProfile {
@@ -171,10 +179,16 @@ const ChartTooltip = ({ active, payload, label, fmt }: {
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
-const TIME_RANGES = ['1D', '1W', '1M', '3M', '1Y', 'All'];
-
-const CustomXAxisTick = (props: any) => {
-  const { x, y, payload, visibleTicksCount, index } = props;
+const CustomXAxisTick = ({ x, y, payload, visibleTicksCount, index }: CustomXAxisTickProps) => {
+  if (
+    typeof x !== 'number'
+    || typeof y !== 'number'
+    || !payload
+    || typeof visibleTicksCount !== 'number'
+    || typeof index !== 'number'
+  ) {
+    return null;
+  }
   
   // Custom format the date
   let dateText = payload.value;
@@ -187,7 +201,6 @@ const CustomXAxisTick = (props: any) => {
 
   // Determine text alignment based on position
   let textAnchor: 'start' | 'middle' | 'end' = 'middle';
-  let dx = 0;
   
   // If it's the very first tick rendered, align it to the start (left)
   if (index === 0) {
@@ -204,7 +217,7 @@ const CustomXAxisTick = (props: any) => {
         x={0}
         y={0}
         dy={15}
-        dx={dx}
+        dx={0}
         textAnchor={textAnchor}
         fill="#94a3b8"
         fontSize={10}
@@ -223,18 +236,16 @@ export default function StockDetailClient({ stockData }: { stockData: StockData 
   const { fmt, symbol, convert } = useCurrency();
   const { colors } = usePreferences();
   const [activeTab, setActiveTab] = useState('summary');
-  const [timeRange, setTimeRange] = useState('1Y');
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [isRateLimited, setIsRateLimited] = useState(false);
   const [isAddTradeOpen, setIsAddTradeOpen] = useState(false);
   const [isShareModalOpen, setIsShareModalOpen] = useState(false);
   const [chartData, setChartData] = useState<ChartPoint[]>(stockData.chartData);
-  const [isChartLoading, setIsChartLoading] = useState(false);
+  const isChartLoading = false;
   const [news, setNews] = useState<NewsArticle[]>([]);
   const [isNewsLoading, setIsNewsLoading] = useState(false);
   const [newsLoaded, setNewsLoaded] = useState(false);
   const [showMobileSearch, setShowMobileSearch] = useState(false);
-  const { searchStock } = useStock();
   const hasSynced = useRef(false);
 
 
@@ -254,26 +265,6 @@ export default function StockDetailClient({ stockData }: { stockData: StockData 
   const isUp = priceChange >= 0;
   const isProfit = totalReturn >= 0;
   const upColor = isUp ? colors.gain : colors.loss;
-  const profitColor = isProfit ? colors.gain : colors.loss;
-
-  const fetchChart = useCallback(async (range: string) => {
-    setIsChartLoading(true);
-    try {
-      const res = await fetch(`/api/stock/candles?ticker=${ticker}&range=${range}`);
-      const json = await res.json();
-      if (json.candles?.s === 'ok' && json.candles.c?.length > 0) {
-        const pts: ChartPoint[] = json.candles.c.map((price: number, i: number) => ({
-          date: new Date(json.candles.t[i] * 1000).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }),
-          price,
-        }));
-        setChartData(pts);
-      }
-    } catch (e) {
-      console.warn('Chart fetch error:', e);
-    } finally {
-      setIsChartLoading(false);
-    }
-  }, [ticker]);
 
   const fetchNews = useCallback(async () => {
     if (newsLoaded) return;
@@ -295,9 +286,8 @@ export default function StockDetailClient({ stockData }: { stockData: StockData 
   }, [ticker, newsLoaded]);
 
   useEffect(() => {
-    if (timeRange !== '1Y') fetchChart(timeRange);
-    else setChartData(stockData.chartData);
-  }, [timeRange, fetchChart, stockData.chartData]);
+    setChartData(stockData.chartData);
+  }, [stockData.chartData]);
 
   useEffect(() => { if (activeTab === 'news') fetchNews(); }, [activeTab, fetchNews]);
 
@@ -356,14 +346,14 @@ export default function StockDetailClient({ stockData }: { stockData: StockData 
       {/* 顶部导航栏 - 同步首页 */}
       <header className="bg-card/70 backdrop-blur-xl border-b border-border px-4 sm:px-6 h-[56px] flex items-center justify-between sticky top-0 z-50">
         <div className="flex items-center space-x-8">
-          <Link href={portfolioId ? `/?pid=${portfolioId}` : '/'} className="flex items-center space-x-2 text-primary font-bold text-[17px] tracking-tight">
+          <Link href="/" className="flex items-center space-x-2 text-primary font-bold text-[17px] tracking-tight">
             <div className="bg-primary text-on-primary p-1 rounded-md">
               <TrendingUp className="w-4 h-4" />
             </div>
             <span>Folio</span>
           </Link>
           <nav className="hidden md:flex space-x-7 text-[14px] font-semibold text-secondary">
-            <Link href={portfolioId ? `/?pid=${portfolioId}` : '/'} className="hover:text-primary transition-colors py-[16px]">Investments</Link>
+            <Link href={portfolioId ? `/app?pid=${portfolioId}` : '/app'} className="hover:text-primary transition-colors py-[16px]">Investments</Link>
             <Link href={portfolioId ? `/transactions?pid=${portfolioId}` : '/transactions'} className="hover:text-primary transition-colors py-[16px]">Transactions</Link>
           </nav>
         </div>
@@ -432,7 +422,7 @@ export default function StockDetailClient({ stockData }: { stockData: StockData 
             </div>
             <div className="min-w-0">
               <div className="flex items-center gap-1 sm:gap-2 text-secondary text-[11px] sm:text-[13px] font-bold uppercase tracking-widest mb-1 truncate">
-                <Link href="/" className="hover:text-primary shrink-0">Dashboard</Link>
+                <Link href="/app" className="hover:text-primary shrink-0">Dashboard</Link>
                 <ChevronRight className="w-3 h-3 shrink-0" />
                 <span className="truncate">{market}</span>
               </div>

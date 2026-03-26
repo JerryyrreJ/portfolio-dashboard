@@ -5,12 +5,14 @@ import { Mail, Lock, ArrowRight, AlertCircle, Shield, Fingerprint, Loader2 } fro
 import { createClient } from '@/lib/supabase';
 import Notification from '../Notification';
 import { get } from '@github/webauthn-json';
+import { useTranslations } from 'next-intl';
 
 interface AuthPanelProps {
   onLogin: () => void;
 }
 
 export default function AuthPanel({ onLogin }: AuthPanelProps) {
+  const t = useTranslations('settings.authPanel');
   const [mode, setMode] = useState<'login' | 'signup'>('login');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -50,7 +52,7 @@ export default function AuthPanel({ onLogin }: AuthPanelProps) {
     e.preventDefault();
     
     if (mode === 'signup' && password !== confirmPassword) {
-      setError("Passwords do not match");
+      setError(t('passwordMismatch'));
       return;
     }
 
@@ -84,12 +86,12 @@ export default function AuthPanel({ onLogin }: AuthPanelProps) {
         setNotification({
           show: true,
           type: 'success',
-          title: 'Check your email',
-          message: 'We sent you a confirmation link. Please verify your account to continue.'
+          title: t('checkEmailTitle'),
+          message: t('checkEmailMessage')
         });
       }
-    } catch (err: any) {
-      setError(err.message || 'An error occurred during authentication');
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : t('authError'));
     } finally {
       setLoading(false);
     }
@@ -103,21 +105,21 @@ export default function AuthPanel({ onLogin }: AuthPanelProps) {
       if (!initRes.ok) throw new Error('Failed to initialize passkey login');
       const options = await initRes.json();
 
-      const credential = await get(options as any);
+      const credential = await get(options as Parameters<typeof get>[0]);
 
       const finalRes = await fetch('/api/passkeys/login/finalize', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(credential),
       });
-      if (!finalRes.ok) throw new Error('Passkey authentication failed');
+      if (!finalRes.ok) throw new Error(t('passkeyAuthFailed'));
 
       onLogin();
-    } catch (err: any) {
-      if (err?.name === 'NotAllowedError') {
-        setError('Passkey sign-in was cancelled. Try again when you\'re ready.');
+    } catch (err: unknown) {
+      if (err instanceof Error && err.name === 'NotAllowedError') {
+        setError(t('passkeyCancelled'));
       } else {
-        setError(err.message || 'Passkey login failed');
+        setError(err instanceof Error ? err.message : t('passkeyLoginFailed'));
       }
     } finally {
       setPasskeyLoading(false);
@@ -127,7 +129,7 @@ export default function AuthPanel({ onLogin }: AuthPanelProps) {
   const handleForgotPassword = async (e: React.MouseEvent) => {
     e.preventDefault();
     if (!email) {
-      setError("Please enter your email address first.");
+      setError(t('enterEmailFirst'));
       return;
     }
     
@@ -144,11 +146,11 @@ export default function AuthPanel({ onLogin }: AuthPanelProps) {
       setNotification({
         show: true,
         type: 'success',
-        title: 'Reset Link Sent',
-        message: 'Check your email for the password reset link.'
+        title: t('resetLinkTitle'),
+        message: t('resetLinkMessage')
       });
-    } catch (err: any) {
-      setError(err.message || 'Failed to send reset email');
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : t('resetEmailFailed'));
     } finally {
       setLoading(false);
     }
@@ -166,12 +168,12 @@ export default function AuthPanel({ onLogin }: AuthPanelProps) {
       />
       <div className="text-center md:text-left">
         <h3 className="text-[20px] font-bold text-primary tracking-tight leading-tight">
-          {mode === 'login' ? 'Welcome Back' : 'Create an Account'}
+          {mode === 'login' ? t('welcomeBack') : t('createAccount')}
         </h3>
         <p className="text-[13px] text-secondary font-medium mt-1">
           {mode === 'login' 
-            ? 'Sign in to sync your folio across devices.' 
-            : 'Start managing your investments with cloud backup.'}
+            ? t('loginDescription')
+            : t('signupDescription')}
         </p>
       </div>
 
@@ -193,7 +195,7 @@ export default function AuthPanel({ onLogin }: AuthPanelProps) {
               name="folio-email"
               type="email"
               autoComplete="username"
-              placeholder="Email Address"
+              placeholder={t('emailPlaceholder')}
               value={email}
               onChange={(e) => setEmail(e.target.value)}
               required
@@ -210,7 +212,7 @@ export default function AuthPanel({ onLogin }: AuthPanelProps) {
               name="folio-password"
               type="password"
               autoComplete={mode === 'login' ? "current-password" : "new-password"}
-              placeholder="Password"
+              placeholder={t('passwordPlaceholder')}
               value={password}
               onChange={(e) => setPassword(e.target.value)}
               required
@@ -231,10 +233,10 @@ export default function AuthPanel({ onLogin }: AuthPanelProps) {
                 ))}
               </div>
               <p className="text-[10px] font-bold text-secondary mt-1.5 uppercase tracking-wider">
-                {strength === 1 && 'Weak'}
-                {strength === 2 && 'Fair'}
-                {strength === 3 && 'Good'}
-                {strength >= 4 && 'Strong'}
+                {strength === 1 && t('weak')}
+                {strength === 2 && t('fair')}
+                {strength === 3 && t('good')}
+                {strength >= 4 && t('strong')}
               </p>
             </div>
           )}
@@ -249,7 +251,7 @@ export default function AuthPanel({ onLogin }: AuthPanelProps) {
                 name="folio-confirm-password"
                 type="password"
                 autoComplete="new-password"
-                placeholder="Confirm Password"
+                placeholder={t('confirmPasswordPlaceholder')}
                 value={confirmPassword}
                 onChange={(e) => setConfirmPassword(e.target.value)}
                 required
@@ -274,7 +276,7 @@ export default function AuthPanel({ onLogin }: AuthPanelProps) {
                   <path d="M5 13l4 4L19 7" />
                 </svg>
               </div>
-              <span className="text-[12px] font-medium text-secondary group-hover:text-primary transition-colors">Remember me</span>
+              <span className="text-[12px] font-medium text-secondary group-hover:text-primary transition-colors">{t('rememberMe')}</span>
             </label>
             
             <button 
@@ -282,7 +284,7 @@ export default function AuthPanel({ onLogin }: AuthPanelProps) {
               onClick={handleForgotPassword}
               className="text-[12px] font-medium text-secondary hover:text-primary transition-colors"
             >
-              Forgot password?
+              {t('forgotPassword')}
             </button>
           </div>
         )}
@@ -296,7 +298,7 @@ export default function AuthPanel({ onLogin }: AuthPanelProps) {
             <div className="w-4 h-4 border-2 border-white/20 border-t-white rounded-full animate-spin" />
           ) : (
             <>
-              <span>{mode === 'login' ? 'Sign In' : 'Sign Up'}</span>
+              <span>{mode === 'login' ? t('signIn') : t('signUp')}</span>
               <ArrowRight className="w-4 h-4" />
             </>
           )}
@@ -307,7 +309,7 @@ export default function AuthPanel({ onLogin }: AuthPanelProps) {
         <>
           <div className="flex items-center gap-3">
             <div className="flex-1 h-px bg-element-hover" />
-            <span className="text-[11px] font-bold text-secondary uppercase tracking-wider">or</span>
+            <span className="text-[11px] font-bold text-secondary uppercase tracking-wider">{t('or')}</span>
             <div className="flex-1 h-px bg-element-hover" />
           </div>
           <button
@@ -321,7 +323,7 @@ export default function AuthPanel({ onLogin }: AuthPanelProps) {
             ) : (
               <Fingerprint className="w-4 h-4" />
             )}
-            <span>{passkeyLoading ? 'Authenticating...' : 'Sign in with Passkey'}</span>
+            <span>{passkeyLoading ? t('authenticating') : t('signInWithPasskey')}</span>
           </button>
         </>
       )}
@@ -334,9 +336,9 @@ export default function AuthPanel({ onLogin }: AuthPanelProps) {
           }}
           className="text-[13px] font-medium text-secondary hover:text-primary transition-colors"
         >
-          {mode === 'login' ? "Don't have an account? " : "Already have an account? "}
+          {mode === 'login' ? t('noAccount') : t('haveAccount')}
           <span className="font-bold underline decoration-gray-200 underline-offset-4 hover:decoration-black transition-all">
-            {mode === 'login' ? 'Sign Up' : 'Sign In'}
+            {mode === 'login' ? t('signUp') : t('signIn')}
           </span>
         </button>
       </div>
