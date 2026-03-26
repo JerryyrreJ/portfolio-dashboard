@@ -1,81 +1,49 @@
+import type { Metadata } from "next";
+import type { Asset } from "@prisma/client";
 import DashboardClient from './DashboardClient'
 import { getCompanyProfile } from '@/lib/finnhub'
 import { get12MonthHistory, getLogo as getTwelveDataLogo } from '@/lib/twelvedata'
 import { getUser } from '@/lib/supabase-server'
 import prisma, { withRetry } from '@/lib/prisma'
+import { absoluteUrl, getHomePageJsonLd, siteConfig } from '@/lib/site'
 
+export const metadata: Metadata = {
+  title: "Portfolio Tracker & Stock Dashboard",
+  description: siteConfig.description,
+  alternates: {
+    canonical: "/",
+  },
+  openGraph: {
+    title: `${siteConfig.name} Portfolio Tracker`,
+    description: siteConfig.description,
+    url: siteConfig.url,
+    images: [
+      {
+        url: absoluteUrl("/icon"),
+        width: 512,
+        height: 512,
+        alt: `${siteConfig.name} app icon`,
+      },
+    ],
+  },
+};
 
-// 服务端获取实时股价（内部调用 Finnhub）
-async function fetchStockQuote(symbol: string): Promise<number | null> {
-  try {
-    const apiKey = process.env.FINNHUB_API_KEY;
-    if (!apiKey) {
-      console.warn('FINNHUB_API_KEY not configured, using fallback price');
-      return null;
-    }
+type HoldingLot = {
+  qty: number;
+  unitCost: number;
+};
 
-    const url = `https://finnhub.io/api/v1/quote?symbol=${symbol.toUpperCase()}&token=${apiKey}`;
-    
-    // 增加 abort controller 以防止长时间 hang 死
-    const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 3000); // 3 秒超时
-    
-    try {
-      const response = await fetch(url, { 
-        next: { revalidate: 60 },
-        signal: controller.signal
-      });
-      clearTimeout(timeoutId);
-
-      if (!response.ok) {
-        console.warn(`Failed to fetch quote for ${symbol}: ${response.status}`);
-        return null;
-      }
-
-      const data = await response.json();
-
-      // Finnhub 返回格式: { c: 当前价格, d: 变动, dp: 变动百分比, ... }
-      if (data && data.c && data.c > 0) {
-        return data.c;
-      }
-      return null;
-    } catch (fetchError: any) {
-      clearTimeout(timeoutId);
-      console.warn(`Network error fetching quote for ${symbol}:`, fetchError.message);
-      return null; // Return null so it falls back gracefully
-    }
-  } catch (error) {
-    console.error(`Unexpected error for ${symbol}:`, error);
-    return null;
-  }
-}
-
-// 批量获取股票实时价格（并发，支持数据库降级）
-async function fetchBatchQuotes(assets: any[]): Promise<Record<string, number>> {
-  const prices: Record<string, number> = {};
-  
-  // 并发请求所有价格
-  const fetchPromises = assets.map(asset => 
-    fetchStockQuote(asset.ticker).then(async (price) => {
-      if (price) {
-        prices[asset.ticker] = price;
-        // 核心修复：后台异步更新，不 await，不影响主流程
-        prisma.asset.update({
-          where: { id: asset.id },
-          data: { lastPrice: price, lastPriceUpdated: new Date() }
-        }).catch(e => console.error(`Silent background update failed for ${asset.ticker}:`, e.message));
-      } else {
-        // 降级：优先使用数据库中的 lastPrice
-        prices[asset.ticker] = asset.lastPrice || 0;
-      }
-    })
-  );
-
-  await Promise.allSettled(fetchPromises);
-  return prices;
+type HoldingAccumulator = {
+  asset: Asset;
+  totalQty: number;
+  totalCost: number;
+  realizedGain: number;
+  dividendIncome: number;
+  lots: HoldingLot[];
 }
 
 export default async function Page({ searchParams }: { searchParams: Promise<{ pid?: string }> }) {
+  const homeJsonLd = getHomePageJsonLd()
   const user = await getUser()
   const userDisplayName = user
     ? (user.user_metadata?.display_name || user.email?.split('@')[0] || '')
@@ -84,14 +52,20 @@ export default async function Page({ searchParams }: { searchParams: Promise<{ p
   // 未登录：返回空状态，完全不查 DB
   if (!user) {
     return (
-      <DashboardClient
-        portfolioId="local-portfolio"
-        portfolioName="My Portfolio"
-        portfolios={[]}
-        holdingsData={[]}
-        chartData={[]}
-        summary={{ totalValue: 0, totalCapGain: 0, totalCapGainPercentage: 0, totalRealizedGain: 0, totalDividendIncome: 0 }}
-      />
+      <>
+        <script
+          type="application/ld+json"
+          dangerouslySetInnerHTML={{ __html: JSON.stringify(homeJsonLd) }}
+        />
+        <DashboardClient
+          portfolioId="local-portfolio"
+          portfolioName="My Portfolio"
+          portfolios={[]}
+          holdingsData={[]}
+          chartData={[]}
+          summary={{ totalValue: 0, totalCapGain: 0, totalCapGainPercentage: 0, totalRealizedGain: 0, totalDividendIncome: 0 }}
+        />
+      </>
     );
   }
 
@@ -130,15 +104,21 @@ export default async function Page({ searchParams }: { searchParams: Promise<{ p
 
   if (portfolio.transactions.length === 0) {
     return (
-      <DashboardClient
-        portfolioId={portfolio.id}
-        portfolioName={portfolio.name}
-        portfolios={portfolioMeta}
-        holdingsData={[]}
-        chartData={[]}
-        summary={{ totalValue: 0, totalCapGain: 0, totalCapGainPercentage: 0, totalRealizedGain: 0, totalDividendIncome: 0 }}
-        userDisplayName={userDisplayName}
-      />
+      <>
+        <script
+          type="application/ld+json"
+          dangerouslySetInnerHTML={{ __html: JSON.stringify(homeJsonLd) }}
+        />
+        <DashboardClient
+          portfolioId={portfolio.id}
+          portfolioName={portfolio.name}
+          portfolios={portfolioMeta}
+          holdingsData={[]}
+          chartData={[]}
+          summary={{ totalValue: 0, totalCapGain: 0, totalCapGainPercentage: 0, totalRealizedGain: 0, totalDividendIncome: 0 }}
+          userDisplayName={userDisplayName}
+        />
+      </>
     )
   }
 
@@ -152,7 +132,7 @@ export default async function Page({ searchParams }: { searchParams: Promise<{ p
   }
 
   // 3. 核心财务逻辑：通过历史交易流水计算实时持仓 (Holdings)
-  const holdingsMap = new Map<string, any>();
+  const holdingsMap = new Map<string, HoldingAccumulator>();
 
   for (const t of portfolio.transactions) {
     const ticker = t.asset.ticker;
@@ -164,10 +144,11 @@ export default async function Page({ searchParams }: { searchParams: Promise<{ p
         realizedGain: 0,
         dividendIncome: 0,
         // FIFO 专用：买入批次队列 [{ qty, unitCost }]
-        lots: [] as { qty: number; unitCost: number }[],
+        lots: [],
       })
     }
     const current = holdingsMap.get(ticker);
+    if (!current) continue;
 
     if (t.type === 'BUY') {
       const qty = Number(t.quantity);
@@ -221,11 +202,6 @@ export default async function Page({ searchParams }: { searchParams: Promise<{ p
   // 3. 计算当前市值和盈亏 (并发获取实时数据)
   let totalValue = 0;
   let totalCostBase = 0;
-
-  // 获取唯一的 Asset 对象用于后续可能的需求
-  const uniqueAssets = Array.from(
-    new Map(Array.from(holdingsMap.values()).map(h => [h.asset.ticker, h.asset])).values()
-  );
 
   // --- 核心改动：不再在此处 await fetchBatchQuotes ---
   // 我们直接使用数据库中缓存的价格进行首屏渲染
@@ -461,14 +437,20 @@ export default async function Page({ searchParams }: { searchParams: Promise<{ p
 
   // 6. 将所有算好的数据作为 Props 传递给客户端组件渲染
   return (
-    <DashboardClient
-      portfolioId={portfolio.id}
-      portfolioName={portfolio.name}
-      portfolios={portfolioMeta}
-      holdingsData={holdingsData}
-      chartData={chartData}
-      summary={summary}
-      userDisplayName={userDisplayName}
-    />
+    <>
+      <script
+        type="application/ld+json"
+        dangerouslySetInnerHTML={{ __html: JSON.stringify(homeJsonLd) }}
+      />
+      <DashboardClient
+        portfolioId={portfolio.id}
+        portfolioName={portfolio.name}
+        portfolios={portfolioMeta}
+        holdingsData={holdingsData}
+        chartData={chartData}
+        summary={summary}
+        userDisplayName={userDisplayName}
+      />
+    </>
   );
 }

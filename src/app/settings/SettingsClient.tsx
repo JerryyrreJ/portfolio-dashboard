@@ -9,9 +9,7 @@ import {
   ChevronLeft, 
   Wallet, 
   Settings, 
-  Shield, 
   Bell,
-  Globe,
   Download,
   Monitor,
   BarChart2,
@@ -25,7 +23,6 @@ import {
   FileText,
   UserCircle,
   AlertCircle,
-  CheckCircle2,
   Loader2,
   Eye,
   LogOut,
@@ -44,7 +41,64 @@ import { getCurrencySymbol } from '@/lib/currency';
 
 interface SettingsClientProps {
   initialUser: User | null;
-  initialPortfolios: any[];
+  initialPortfolios: PortfolioSummary[];
+}
+
+type PortfolioSummary = {
+  id: string;
+  name: string;
+  currency: string;
+  settingsUpdatedAt?: string | null;
+};
+
+type PortfolioListResponse = {
+  portfolios?: PortfolioSummary[];
+  error?: string;
+};
+
+type PortfolioMutationResponse = {
+  portfolio?: PortfolioSummary;
+  error?: string;
+};
+
+type ExportTransaction = {
+  date: string;
+  ticker: string;
+  name: string;
+  market: string;
+  type: string;
+  quantity: number;
+  price: number;
+  currency: string;
+  fee: number;
+  totalValue: string;
+  notes: string;
+};
+
+type ExportPayload = {
+  portfolio: {
+    name: string;
+    currency: string;
+  };
+  exportDate: string;
+  range: string;
+  transactions: ExportTransaction[];
+};
+
+type ExportBodyRow = {
+  date: string;
+  asset: string;
+  type: string;
+  quantity: string | number;
+  price: string;
+  fee: string;
+  total: string;
+  currency: string;
+  _isGroupHeader?: boolean;
+};
+
+function getErrorMessage(error: unknown, fallback: string) {
+  return error instanceof Error ? error.message : fallback;
 }
 
 const LEGACY_PORTFOLIO_CACHE_KEY = 'cached_portfolios';
@@ -53,19 +107,19 @@ function getPortfolioCacheKey(userId: string) {
   return `cached_portfolios:${userId}`;
 }
 
-function loadCachedPortfolios(userId: string) {
+function loadCachedPortfolios(userId: string): PortfolioSummary[] {
   const raw = localStorage.getItem(getPortfolioCacheKey(userId)) ?? localStorage.getItem(LEGACY_PORTFOLIO_CACHE_KEY);
   if (!raw) return [];
 
   try {
     const parsed = JSON.parse(raw);
-    return Array.isArray(parsed) ? parsed : [];
+    return Array.isArray(parsed) ? parsed as PortfolioSummary[] : [];
   } catch {
     return [];
   }
 }
 
-function saveCachedPortfolios(userId: string, portfolios: any[]) {
+function saveCachedPortfolios(userId: string, portfolios: PortfolioSummary[]) {
   const serialized = JSON.stringify(portfolios);
   localStorage.setItem(getPortfolioCacheKey(userId), serialized);
   localStorage.setItem(LEGACY_PORTFOLIO_CACHE_KEY, serialized);
@@ -79,7 +133,7 @@ function clearCachedPortfolios(userId?: string) {
 }
 
 interface PortfolioItemProps {
-  portfolio: any;
+  portfolio: PortfolioSummary;
   isOnlyOne?: boolean;
   isEditing: boolean;
   onUpdate: (id: string, name: string, currency: string, field: 'name' | 'currency' | 'both') => Promise<void>;
@@ -253,14 +307,12 @@ export default function SettingsClient({ initialUser, initialPortfolios }: Setti
   const [showPassword, setShowPassword] = useState(false);
   const [authActionLoading, setAuthActionLoading] = useState(false);
   const [authError, setAuthError] = useState<string | null>(null);
-  const [emailSuccess, setEmailSuccess] = useState(false);
-  const [passwordSuccess, setPasswordSuccess] = useState(false);
 
   const [portfolioName, setPortfolioName] = useState('');
   const [baseCurrency, setBaseCurrency] = useState('USD');
   const [portfolioActionLoading, setPortfolioActionLoading] = useState(false);
   const [portfolioError, setPortfolioError] = useState<string | null>(null);
-  const [allPortfolios, setAllPortfolios] = useState<any[]>(initialPortfolios);
+  const [allPortfolios, setAllPortfolios] = useState<PortfolioSummary[]>(initialPortfolios);
   const [portfoliosLoading, setPortfoliosLoading] = useState(() => !!initialUser && initialPortfolios.length === 0);
   const [openPortfolioEditorId, setOpenPortfolioEditorId] = useState<string | null>(null);
   const [isCreatingPortfolio, setIsCreatingPortfolio] = useState(false);
@@ -282,7 +334,7 @@ export default function SettingsClient({ initialUser, initialPortfolios }: Setti
       if (exportFormat === 'pdf') {
         const response = await fetch(`/api/transactions/export?format=json&range=${exportRange}${pidParam}`);
         if (!response.ok) throw new Error('Failed to fetch data for PDF');
-        const data = await response.json();
+        const data = await response.json() as ExportPayload;
 
         const doc = new jsPDF();
         const pageWidth = doc.internal.pageSize.getWidth();
@@ -317,8 +369,8 @@ export default function SettingsClient({ initialUser, initialPortfolios }: Setti
 
         // Summary stat boxes
         const totalCount = data.transactions.length;
-        const totalBuy = data.transactions.filter((t: any) => t.type === 'BUY').reduce((s: number, t: any) => s + parseFloat(t.totalValue), 0);
-        const totalSell = data.transactions.filter((t: any) => t.type === 'SELL').reduce((s: number, t: any) => s + parseFloat(t.totalValue), 0);
+        const totalBuy = data.transactions.filter((t) => t.type === 'BUY').reduce((s, t) => s + parseFloat(t.totalValue), 0);
+        const totalSell = data.transactions.filter((t) => t.type === 'SELL').reduce((s, t) => s + parseFloat(t.totalValue), 0);
         const portfolioSym = getCurrencySymbol(data.portfolio.currency);
 
         const statBoxes = [
@@ -341,7 +393,7 @@ export default function SettingsClient({ initialUser, initialPortfolios }: Setti
         currentY += 22;
 
         // Group transactions by market
-        const grouped = data.transactions.reduce((acc: Record<string, any[]>, t: any) => {
+        const grouped = data.transactions.reduce<Record<string, ExportTransaction[]>>((acc, t) => {
           const key = t.market || 'OTHER';
           if (!acc[key]) acc[key] = [];
           acc[key].push(t);
@@ -361,7 +413,7 @@ export default function SettingsClient({ initialUser, initialPortfolios }: Setti
           { header: 'Ccy',      dataKey: 'currency' },
         ];
 
-        const bodyRows: any[] = [];
+        const bodyRows: ExportBodyRow[] = [];
         for (const market of marketOrder) {
           bodyRows.push({ date: market, asset: '', type: '', quantity: '', price: '', fee: '', total: '', currency: '', _isGroupHeader: true });
           for (const t of grouped[market]) {
@@ -371,8 +423,8 @@ export default function SettingsClient({ initialUser, initialPortfolios }: Setti
               asset:    `${t.ticker}\n${t.name}`,
               type:     t.type,
               quantity: t.quantity,
-              price:    `${tsym}${parseFloat(t.price).toFixed(2)}`,
-              fee:      `${tsym}${parseFloat(t.fee).toFixed(2)}`,
+              price:    `${tsym}${Number(t.price).toFixed(2)}`,
+              fee:      `${tsym}${Number(t.fee).toFixed(2)}`,
               total:    `${tsym}${parseFloat(t.totalValue).toFixed(2)}`,
               currency: t.currency || 'USD',
             });
@@ -400,9 +452,10 @@ export default function SettingsClient({ initialUser, initialPortfolios }: Setti
           },
           margin: { top: 20, bottom: 16 },
           didParseCell(data) {
-            if (data.row.raw && (data.row.raw as any)._isGroupHeader) {
+            const raw = data.row.raw as ExportBodyRow | undefined;
+            if (raw?._isGroupHeader) {
               data.cell.styles.fillColor = [235, 240, 248];
-              data.cell.styles.textColor = [40, 80, 140] as any;
+              data.cell.styles.textColor = [40, 80, 140];
               data.cell.styles.fontStyle = 'bold';
               data.cell.styles.fontSize = 8;
               if (data.column.dataKey !== 'date') data.cell.text = [''];
@@ -411,7 +464,7 @@ export default function SettingsClient({ initialUser, initialPortfolios }: Setti
         });
 
         // Post-pass footer with correct "Page X of Y"
-        const totalPages = (doc as any).internal.getNumberOfPages();
+        const totalPages = doc.getNumberOfPages();
         const genTime = new Date().toLocaleString();
         for (let i = 1; i <= totalPages; i++) {
           doc.setPage(i);
@@ -446,8 +499,8 @@ export default function SettingsClient({ initialUser, initialPortfolios }: Setti
         showNotification('success', 'Export Complete', `Your data has been downloaded as ${exportFormat.toUpperCase()}.`);
         setIsExporting(false);
       }
-    } catch (error: any) {
-      showNotification('error', 'Export Failed', error.message || 'We could not export your data.');
+    } catch (error: unknown) {
+      showNotification('error', 'Export Failed', getErrorMessage(error, 'We could not export your data.'));
     } finally {
       setExportLoading(false);
     }
@@ -473,7 +526,7 @@ export default function SettingsClient({ initialUser, initialPortfolios }: Setti
   useEffect(() => {
     if (user) {
       const selectedPortfolio = currentPortfolioId
-        ? allPortfolios.find((portfolio: any) => portfolio.id === currentPortfolioId)
+        ? allPortfolios.find((portfolio) => portfolio.id === currentPortfolioId)
         : allPortfolios[0];
 
       if (allPortfolios.length > 0 || !portfoliosLoading) {
@@ -521,10 +574,10 @@ export default function SettingsClient({ initialUser, initialPortfolios }: Setti
       }
 
       try {
-        let response = await fetch('/api/portfolio', { cache: 'no-store' });
+        const response = await fetch('/api/portfolio', { cache: 'no-store' });
         if (!response.ok) throw new Error('Failed to load portfolios');
 
-        let payload = await response.json();
+        const payload = await response.json() as PortfolioListResponse;
         let cloudPortfolios = Array.isArray(payload.portfolios) ? payload.portfolios : [];
 
         if (cloudPortfolios.length === 0) {
@@ -535,15 +588,15 @@ export default function SettingsClient({ initialUser, initialPortfolios }: Setti
           });
 
           if (createResponse.ok) {
-            const createPayload = await createResponse.json();
+            const createPayload = await createResponse.json() as PortfolioMutationResponse;
             cloudPortfolios = createPayload.portfolio ? [createPayload.portfolio] : [];
           }
         }
 
-        const localById = new Map(cached.map((portfolio: any) => [portfolio.id, portfolio]));
+        const localById = new Map(cached.map((portfolio) => [portfolio.id, portfolio]));
         const mergedPortfolios = [...cloudPortfolios];
 
-        await Promise.all(cloudPortfolios.map(async (cloudPortfolio: any) => {
+        await Promise.all(cloudPortfolios.map(async (cloudPortfolio) => {
           const localPortfolio = localById.get(cloudPortfolio.id);
           if (!localPortfolio) return;
 
@@ -564,9 +617,9 @@ export default function SettingsClient({ initialUser, initialPortfolios }: Setti
             });
 
             if (patchResponse.ok) {
-              const patchPayload = await patchResponse.json();
+              const patchPayload = await patchResponse.json() as PortfolioMutationResponse;
               if (patchPayload.portfolio) {
-                const index = mergedPortfolios.findIndex((portfolio: any) => portfolio.id === cloudPortfolio.id);
+                const index = mergedPortfolios.findIndex((portfolio) => portfolio.id === cloudPortfolio.id);
                 if (index >= 0) {
                   mergedPortfolios[index] = patchPayload.portfolio;
                 }
@@ -696,13 +749,14 @@ export default function SettingsClient({ initialUser, initialPortfolios }: Setti
         setBaseCurrency(newCurrency);
       }
       localStorage.setItem('settings_updated_at', now);
-    } catch (err: any) {
+    } catch (err: unknown) {
       setAllPortfolios(previousPortfolios);
       if (user?.id) {
         saveCachedPortfolios(user.id, previousPortfolios);
       }
-      setPortfolioError(err.message || 'Failed to update portfolio');
-      showNotification('error', 'Update Failed', err.message || 'We could not save your changes.');
+      const message = getErrorMessage(err, 'Failed to update portfolio');
+      setPortfolioError(message);
+      showNotification('error', 'Update Failed', message || 'We could not save your changes.');
     } finally {
       setPortfolioActionLoading(false);
     }
@@ -743,12 +797,12 @@ export default function SettingsClient({ initialUser, initialPortfolios }: Setti
       if (id === currentPortfolioId) {
         router.push('/settings');
       }
-    } catch (err: any) {
+    } catch (err: unknown) {
       setAllPortfolios(previousPortfolios);
       if (user?.id) {
         saveCachedPortfolios(user.id, previousPortfolios);
       }
-      showNotification('error', 'Delete Failed', err.message);
+      showNotification('error', 'Delete Failed', getErrorMessage(err, 'Failed to delete portfolio.'));
     } finally {
       setPortfolioActionLoading(false);
       setDeleteConfirm({ isOpen: false, id: null });
@@ -806,9 +860,10 @@ export default function SettingsClient({ initialUser, initialPortfolios }: Setti
       setIsCreatingPortfolio(false);
       showNotification('success', 'Portfolio Created', 'Your new portfolio is ready.');
       router.push(`/settings?pid=${portfolio.id}#portfolio`);
-    } catch (err: any) {
-      setPortfolioError(err.message || 'Failed to create portfolio');
-      showNotification('error', 'Create Failed', err.message || 'We could not create the portfolio.');
+    } catch (err: unknown) {
+      const message = getErrorMessage(err, 'Failed to create portfolio');
+      setPortfolioError(message);
+      showNotification('error', 'Create Failed', message || 'We could not create the portfolio.');
     } finally {
       setCreatePortfolioLoading(false);
     }
@@ -826,9 +881,10 @@ export default function SettingsClient({ initialUser, initialPortfolios }: Setti
       setUser(data.user);
       setIsEditingDisplayName(false);
       showNotification('success', 'Name Updated', 'Your display name has been updated.');
-    } catch (err: any) {
-      setAuthError(err.message || 'Failed to update display name');
-      showNotification('error', 'Update Failed', err.message || 'Failed to update your display name.');
+    } catch (err: unknown) {
+      const message = getErrorMessage(err, 'Failed to update display name');
+      setAuthError(message);
+      showNotification('error', 'Update Failed', message || 'Failed to update your display name.');
     } finally {
       setAuthActionLoading(false);
     }
@@ -844,9 +900,10 @@ export default function SettingsClient({ initialUser, initialPortfolios }: Setti
       if (error) throw error;
       showNotification('success', 'Verification Sent', 'We have sent a link to your new email. Please verify it to complete the change.');
       setIsEditingEmail(false);
-    } catch (err: any) {
-      setAuthError(err.message || 'Failed to update email');
-      showNotification('error', 'Update Failed', err.message || 'Failed to update your email address.');
+    } catch (err: unknown) {
+      const message = getErrorMessage(err, 'Failed to update email');
+      setAuthError(message);
+      showNotification('error', 'Update Failed', message || 'Failed to update your email address.');
     } finally {
       setAuthActionLoading(false);
     }
@@ -871,9 +928,10 @@ export default function SettingsClient({ initialUser, initialPortfolios }: Setti
       setIsEditingPassword(false);
       setNewPassword('');
       setConfirmPassword('');
-    } catch (err: any) {
-      setAuthError(err.message || 'Failed to update password');
-      showNotification('error', 'Update Failed', err.message || 'Failed to change your password.');
+    } catch (err: unknown) {
+      const message = getErrorMessage(err, 'Failed to update password');
+      setAuthError(message);
+      showNotification('error', 'Update Failed', message || 'Failed to change your password.');
     } finally {
       setAuthActionLoading(false);
     }
@@ -1717,7 +1775,6 @@ export default function SettingsClient({ initialUser, initialPortfolios }: Setti
                               setIsEditingPassword(false);
                               setIsEditingDisplayName(false);
                               setAuthError(null);
-                              setEmailSuccess(false);
                               setNewEmail('');
                             }}
                             className={`shrink-0 text-[12px] md:text-[13px] font-bold px-3 py-1.5 rounded-lg transition-colors shadow-sm active:scale-95 border ${
@@ -1784,7 +1841,6 @@ export default function SettingsClient({ initialUser, initialPortfolios }: Setti
                               setIsEditingEmail(false);
                               setIsEditingDisplayName(false);
                               setAuthError(null);
-                              setPasswordSuccess(false);
                               setNewPassword('');
                               setConfirmPassword('');
                             }}

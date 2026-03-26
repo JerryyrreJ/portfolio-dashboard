@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
+import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { useRouter } from 'next/navigation';
 import Image from 'next/image';
 import {
@@ -14,7 +14,6 @@ import {
 } from 'recharts';
 import {
   Search,
-  ChevronDown,
   Plus,
   TrendingUp,
   RefreshCw,
@@ -31,7 +30,6 @@ import PortfolioSwitcher from './components/PortfolioSwitcher';
 import DividendConfirmationModal from './components/DividendConfirmationModal';
 import Link from 'next/link';
 import { useCurrency } from '@/lib/useCurrency';
-import { useStock } from '@/hooks/useStock';
 import { usePreferences } from '@/lib/usePreferences';
 
 // --- 辅助格式化组件 ---
@@ -90,7 +88,7 @@ interface DashboardClientProps {
   portfolioName: string;
   portfolios: { id: string; name: string }[];
   holdingsData: HoldingsGroup[];
-  chartData: any[];
+  chartData: ChartPoint[];
   summary: Summary;
   userDisplayName?: string;
 }
@@ -102,11 +100,50 @@ interface ChartPoint {
   Return?: number;
 }
 
+interface XAxisTickProps {
+  x?: number;
+  y?: number;
+  payload?: {
+    value?: string;
+  };
+  visibleTicksCount?: number;
+  index?: number;
+}
+
+type LocalTransaction = {
+  type: string;
+  quantity: number;
+  price: number;
+  fee: number;
+  asset: {
+    ticker: string;
+    name: string;
+    market?: string | null;
+  };
+}
+
+type LocalHoldingLot = {
+  qty: number;
+  unitCost: number;
+}
+
+type LocalHoldingAccumulator = {
+  asset: LocalTransaction["asset"];
+  qty: number;
+  cost: number;
+  price: number;
+  realizedGain: number;
+  dividendIncome: number;
+  lots: LocalHoldingLot[];
+}
+
 
 
 // 根据数据 min/max 算出整齐的刻度值（如 0, 200, 400, 600）
-function calcYTicks(data: any[], key: string, tickCount = 5): number[] {
-  const values = data.map(d => d[key]).filter(v => typeof v === 'number' && isFinite(v));
+function calcYTicks(data: ChartPoint[], key: keyof ChartPoint, tickCount = 5): number[] {
+  const values = data
+    .map(d => d[key])
+    .filter((v): v is number => typeof v === 'number' && isFinite(v));
   if (values.length === 0) return [];
   const min = Math.min(...values);
   const max = Math.max(...values);
@@ -126,10 +163,10 @@ function calcYTicks(data: any[], key: string, tickCount = 5): number[] {
   return ticks;
 }
 
-const CustomXAxisTick = (props: any) => {
-  const { x, y, payload, visibleTicksCount, index } = props;
+const CustomXAxisTick = (props: XAxisTickProps) => {
+  const { x, y, payload, visibleTicksCount = 0, index } = props;
   
-  let dateText = payload.value;
+  let dateText = payload?.value;
   if (dateText === 'Today') {
     dateText = 'Today';
   } else if (dateText) {
@@ -144,7 +181,7 @@ const CustomXAxisTick = (props: any) => {
   else if (index === visibleTicksCount - 1) textAnchor = 'end';
 
   return (
-    <g transform={`translate(${x},${y})`}>
+    <g transform={`translate(${x ?? 0},${y ?? 0})`}>
       <text x={0} y={0} dy={15} textAnchor={textAnchor} fill="var(--text-secondary)" fontSize={10} fontWeight={500}>
         {dateText}
       </text>
@@ -164,7 +201,6 @@ export default function DashboardClient({ portfolioId, portfolioName, portfolios
 
   // 搜索栏状态
   const [showMobileSearch, setShowMobileSearch] = useState(false);
-  const { searchStock } = useStock();
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [isRateLimited, setIsRateLimited] = useState(false);
   const [returnDisplayMode, setReturnDisplayMode] = useState<'percentage' | 'currency'>('percentage');
@@ -176,28 +212,32 @@ export default function DashboardClient({ portfolioId, portfolioName, portfolios
   // Local state for unauthenticated users
   const [localHoldings, setLocalHoldings] = useState<HoldingsGroup[]>(holdingsData);
   const [localSummary, setLocalSummary] = useState<Summary>(summary);
-  const [localChartData, setLocalChartData] = useState<any[]>(chartData);
-
-  const [filteredChartData, setFilteredChartData] = useState(chartData);
+  const [localChartData, setLocalChartData] = useState<ChartPoint[]>(chartData);
 
   // 切换 portfolio 时显示骨架屏，同步 props → state
   const [isSwitching, setIsSwitching] = useState(false);
   const isFirstRender = useRef(true);
+  const fetchedPricesForPortfolioRef = useRef<string | null>(null);
 
   useEffect(() => {
     if (isFirstRender.current) {
       isFirstRender.current = false;
       return;
     }
-    setIsSwitching(true);
-    setLocalHoldings(holdingsData);
-    setLocalSummary(summary);
-    setLocalChartData(chartData);
-    setFilteredChartData(chartData);
-    // 给 React 一帧渲染骨架屏，再关闭
-    const t = requestAnimationFrame(() => setIsSwitching(false));
-    return () => cancelAnimationFrame(t);
-  }, [portfolioId]);
+    let closeFrame = 0;
+    const openFrame = requestAnimationFrame(() => {
+      setIsSwitching(true);
+      setLocalHoldings(holdingsData);
+      setLocalSummary(summary);
+      setLocalChartData(chartData);
+      // 给 React 一帧渲染骨架屏，再关闭
+      closeFrame = requestAnimationFrame(() => setIsSwitching(false));
+    });
+    return () => {
+      cancelAnimationFrame(openFrame);
+      cancelAnimationFrame(closeFrame);
+    };
+  }, [chartData, holdingsData, portfolioId, summary]);
 
   const formatYTick = (value: number) => {
     if (chartMode === 'return') return `${value > 0 ? '+' : ''}${value.toFixed(1)}%`;
@@ -208,6 +248,9 @@ export default function DashboardClient({ portfolioId, portfolioName, portfolios
 
   // --- 客户端异步获取实时价格 ---
   useEffect(() => {
+    if (fetchedPricesForPortfolioRef.current === portfolioId) return;
+    fetchedPricesForPortfolioRef.current = portfolioId;
+
     // 收集所有需要获取价格的 ticker
     const tickers = new Set<string>();
     localHoldings.forEach(group => {
@@ -275,7 +318,7 @@ export default function DashboardClient({ portfolioId, portfolioName, portfolios
     };
 
     fetchLivePrices();
-  }, []); // 仅在组件挂载后执行一次
+  }, [localHoldings, portfolioId]);
 
   // 获取待确认分红数量
   useEffect(() => {
@@ -307,19 +350,20 @@ export default function DashboardClient({ portfolioId, portfolioName, portfolios
       const storedTransactions = localStorage.getItem('local_transactions');
       if (!storedTransactions) return;
 
-      const txs = JSON.parse(storedTransactions);
+      const txs = JSON.parse(storedTransactions) as LocalTransaction[];
       const method = prefs.costBasisMethod ?? 'FIFO';
 
-      const holdingsMap = new Map<string, any>();
+      const holdingsMap = new Map<string, LocalHoldingAccumulator>();
       let totalValue = 0;
       let totalCost = 0;
 
       for (const t of txs) {
         const ticker = t.asset.ticker;
         if (!holdingsMap.has(ticker)) {
-          holdingsMap.set(ticker, { asset: t.asset, qty: 0, cost: 0, price: t.price, realizedGain: 0, dividendIncome: 0, lots: [] as { qty: number; unitCost: number }[] });
+          holdingsMap.set(ticker, { asset: t.asset, qty: 0, cost: 0, price: t.price, realizedGain: 0, dividendIncome: 0, lots: [] });
         }
         const current = holdingsMap.get(ticker);
+        if (!current) continue;
 
         if (t.type === 'BUY') {
           const qty = Number(t.quantity);
@@ -408,7 +452,6 @@ export default function DashboardClient({ portfolioId, portfolioName, portfolios
 
       // 本地简单模拟一下当天的图表点
       setLocalChartData([{ date: 'Today', Local: totalValue }]);
-      setFilteredChartData([{ date: 'Today', Local: totalValue }]);
     };
 
     loadLocalData();
@@ -419,24 +462,32 @@ export default function DashboardClient({ portfolioId, portfolioName, portfolios
     return () => window.removeEventListener('localTransactionsUpdated', handleLocalUpdate);
   }, [portfolioId, prefs.costBasisMethod]);
 
-  useEffect(() => {
+  const filteredChartData = useMemo<ChartPoint[]>(() => {
     if (chartTimeRange === 'All') {
-      setFilteredChartData(localChartData);
-      return;
+      return localChartData;
     }
+
     const now = new Date();
     const startDate = new Date();
     switch (chartTimeRange) {
-      case '1M': startDate.setMonth(now.getMonth() - 1); break;
-      case '3M': startDate.setMonth(now.getMonth() - 3); break;
-      case '6M': startDate.setMonth(now.getMonth() - 6); break;
-      case '1Y': startDate.setFullYear(now.getFullYear() - 1); break;
+      case '1M':
+        startDate.setMonth(now.getMonth() - 1);
+        break;
+      case '3M':
+        startDate.setMonth(now.getMonth() - 3);
+        break;
+      case '6M':
+        startDate.setMonth(now.getMonth() - 6);
+        break;
+      case '1Y':
+        startDate.setFullYear(now.getFullYear() - 1);
+        break;
     }
-    const filtered = localChartData.filter(item => {
-      if (item.date === 'Today') return true; // always include today
+
+    return localChartData.filter((item) => {
+      if (item.date === 'Today') return true;
       return new Date(item.date) >= startDate;
     });
-    setFilteredChartData(filtered);
   }, [chartTimeRange, localChartData]);
 
   const chartDisplayData = useMemo<ChartPoint[]>(() => {
@@ -1012,10 +1063,10 @@ export default function DashboardClient({ portfolioId, portfolioName, portfolios
                             if (isNaN(d.getTime())) return dateStr;
                             return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
                           }}
-                          formatter={(value: any) =>
+                          formatter={(value: number | string | undefined) =>
                             chartMode === 'return'
-                              ? [`${Number(value) >= 0 ? '+' : ''}${Number(value).toFixed(2)}%`, undefined as any]
-                              : [`${fmt(Number(value))}`, undefined as any]
+                              ? [`${Number(value ?? 0) >= 0 ? '+' : ''}${Number(value ?? 0).toFixed(2)}%`, 'Return']
+                              : [`${fmt(Number(value ?? 0))}`, 'Value']
                           }
                         />
                         {portfolioId === 'local-portfolio' ? (

@@ -78,12 +78,11 @@ export default function TransactionsClient({
   portfolioId, portfolioName, logoMap, searchTicker, searchType,
   buyCount, sellCount, totalVolume, userDisplayName = '',
 }: TransactionsClientProps) {
-  const { fmt, symbol } = useCurrency();
+  const { fmt } = useCurrency();
   const { colors } = usePreferences();
   const [transactions, setTransactions] = useState(initialTransactions);
   const pidParam = portfolioId ? `&pid=${portfolioId}` : '';
   const [confirmingId, setConfirmingId] = useState<string | null>(null);
-  const [deletingId, setDeletingId] = useState<string | null>(null);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editState, setEditState] = useState<EditState | null>(null);
   const [isSaving, setIsSaving] = useState(false);
@@ -138,7 +137,6 @@ export default function TransactionsClient({
   };
 
   const handleDelete = async (id: string) => {
-    setDeletingId(id);
     const prev = transactions;
     setTransactions(t => t.filter(tx => tx.id !== id));
     setConfirmingId(null);
@@ -147,8 +145,6 @@ export default function TransactionsClient({
       if (!res.ok) throw new Error();
     } catch {
       setTransactions(prev);
-    } finally {
-      setDeletingId(null);
     }
   };
 
