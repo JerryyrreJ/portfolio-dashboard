@@ -84,17 +84,26 @@ export async function POST(request: NextRequest) {
       })
     );
 
+    // 在进入 DB transaction 前预先验证所有 ticker 对应的 asset 存在，避免事务中途失败
+    const uniqueTickers = [...new Set(normalizedDividends.map(d => d.dividend.ticker))];
+    const assets = await prisma.asset.findMany({
+      where: { ticker: { in: uniqueTickers } },
+      select: { id: true, ticker: true },
+    });
+    const assetByTicker = new Map(assets.map(a => [a.ticker, a]));
+    const missingTicker = uniqueTickers.find(t => !assetByTicker.has(t));
+    if (missingTicker) {
+      return NextResponse.json(
+        { error: `Asset not found for ticker: ${missingTicker}` },
+        { status: 404 }
+      );
+    }
+
     const results = await prisma.$transaction(async (tx) => {
       const confirmedResults = [];
 
       for (const { dividend, amount, priceUSD, exchangeRate } of normalizedDividends) {
-        const asset = await tx.asset.findUnique({
-          where: { ticker: dividend.ticker },
-        });
-
-        if (!asset) {
-          throw new Error(`Asset not found for ticker: ${dividend.ticker}`);
-        }
+        const asset = assetByTicker.get(dividend.ticker)!;
 
         const statusUpdate = await tx.pendingDividend.updateMany({
           where: {
@@ -159,7 +168,6 @@ export async function POST(request: NextRequest) {
       }
 
       if (
-        error.message.startsWith('Asset not found for ticker:') ||
         error.message.startsWith('Pending dividend not found for id:')
       ) {
         return NextResponse.json(

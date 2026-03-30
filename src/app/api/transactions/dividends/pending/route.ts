@@ -42,6 +42,13 @@ export async function GET(request: NextRequest) {
       },
     });
 
+    if (pendingDividends.length === 0) {
+      return NextResponse.json({
+        success: true,
+        dividends: [],
+      });
+    }
+
     // 获取对应的 Asset 信息（名称、Logo 等）
     const tickers = [...new Set(pendingDividends.map(d => d.ticker))];
     const assets = await prisma.asset.findMany({

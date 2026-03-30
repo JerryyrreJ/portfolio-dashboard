@@ -48,15 +48,27 @@ export async function GET(request: NextRequest) {
       select: {
         calculatedAmount: true,
         currency: true,
+        payDate: true,
       },
     });
 
-    const totalAmount = pendingDividends.reduce((sum, d) => sum + d.calculatedAmount, 0);
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+
+    // 按货币分组，避免跨货币直接求和产生无意义数字
+    const amountByCurrency: Record<string, number> = {};
+    // pay date 还未到账的数量（已过 ex-date 但现金未到账）
+    let payDatePendingCount = 0;
+    for (const d of pendingDividends) {
+      amountByCurrency[d.currency] = (amountByCurrency[d.currency] ?? 0) + d.calculatedAmount;
+      if (d.payDate && new Date(d.payDate) > today) payDatePendingCount++;
+    }
 
     return NextResponse.json({
       success: true,
       pendingCount,
-      totalAmount,
+      amountByCurrency,
+      payDatePendingCount,
       hasPending: pendingCount > 0,
     });
 

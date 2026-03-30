@@ -20,7 +20,8 @@
     "pendingDividends": {
       "title": "Pending Dividends",
       "description": "You have {count, plural, one {# dividend payment} other {# dividend payments}} to review and confirm.",
-      "reviewNow": "Review Now"
+      "reviewNow": "Review Now",
+      "manage": "Dividends"
     },
     "empty": {
       "title": "Build your portfolio",

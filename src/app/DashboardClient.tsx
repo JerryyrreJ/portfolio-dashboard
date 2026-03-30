@@ -17,13 +17,15 @@ import {
   Search,
   Plus,
   TrendingUp,
+  DollarSign,
   RefreshCw,
   ChevronRight,
   Wallet,
   ArrowUpRight,
   ArrowDownRight,
   History as HistoryIcon,
-  User
+  User,
+  Bell
 } from 'lucide-react';
 import AddTransactionModal from './components/AddTransactionModal';
 import GlobalSearch from './components/GlobalSearch';
@@ -332,14 +334,23 @@ export default function DashboardClient({ portfolioId, portfolioName, portfolios
     const syncAndFetchDividendStats = async () => {
       if (portfolioId === 'local-portfolio') return;
 
-      try {
-        await fetch('/api/transactions/dividends/sync', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ portfolioId }),
-        });
-      } catch (err) {
-        console.error('Failed to sync dividends automatically:', err);
+      // 客户端节流：与服务端 6 小时节流保持一致，避免每次加载都发请求
+      const THROTTLE_MS = 6 * 60 * 60 * 1000;
+      const storageKey = `dividend_sync_at_${portfolioId}`;
+      const lastSyncAt = Number(localStorage.getItem(storageKey) || 0);
+      const shouldSync = Date.now() - lastSyncAt >= THROTTLE_MS;
+
+      if (shouldSync) {
+        try {
+          await fetch('/api/transactions/dividends/sync', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ portfolioId }),
+          });
+          localStorage.setItem(storageKey, String(Date.now()));
+        } catch (err) {
+          console.error('Failed to sync dividends automatically:', err);
+        }
       }
 
       try {
@@ -875,31 +886,37 @@ export default function DashboardClient({ portfolioId, portfolioName, portfolios
           </div>
         </div>
 
-        {/* Pending Dividends Banner */}
+        {/* Pending Dividends Notification Banner */}
         {pendingDividendCount > 0 && portfolioId !== 'local-portfolio' && (
-          <div className="mb-6 animate-in fade-in slide-in-from-top-4 duration-500">
+          <div className="mb-8 animate-in fade-in slide-in-from-top-4 duration-700 ease-out">
             <div 
               onClick={() => setIsDividendModalOpen(true)}
-              className="group cursor-pointer bg-element hover:bg-element-hover border border-border rounded-2xl p-4 flex items-center justify-between transition-all active:scale-[0.99] shadow-sm"
+              className="group cursor-pointer relative overflow-hidden bg-card/70 backdrop-blur-xl border border-border/50 rounded-3xl p-4 sm:p-5 flex items-center justify-between transition-all hover:scale-[1.01] active:scale-[0.98] shadow-[0_8px_32px_rgba(0,0,0,0.06)] dark:shadow-[0_8px_32px_rgba(0,0,0,0.2)]"
             >
-              <div className="flex items-center space-x-4">
-                <div className="w-10 h-10 rounded-full bg-primary/5 flex items-center justify-center text-primary group-hover:scale-110 transition-transform duration-300 ring-4 ring-black/5">
-                  <TrendingUp className="w-5 h-5" />
+              {/* Subtle background glow */}
+              <div className="absolute -left-10 -top-10 w-32 h-32 bg-primary/5 rounded-full blur-3xl opacity-0 group-hover:opacity-100 transition-opacity duration-500" />
+              
+              <div className="flex items-center space-x-4 relative z-10">
+                <div className="w-12 h-12 rounded-2xl bg-primary flex items-center justify-center text-on-primary shadow-lg shadow-primary/20 group-hover:rotate-6 transition-transform duration-500">
+                  <Bell className="w-6 h-6" />
                 </div>
                 <div>
-                  <h3 className="text-[14px] font-bold text-primary tracking-tight">{t('pendingDividends.title')}</h3>
-                  <p className="text-[12px] text-secondary font-medium">{t('pendingDividends.description', { count: pendingDividendCount })}</p>
+                  <h3 className="text-[15px] font-bold text-primary tracking-tight leading-tight mb-0.5">{t('pendingDividends.title')}</h3>
+                  <p className="text-[13px] text-secondary font-medium opacity-80">{t('pendingDividends.description', { count: pendingDividendCount })}</p>
                 </div>
               </div>
-              <div className="flex items-center space-x-3">
-                <span className="hidden sm:flex px-2.5 py-1 bg-primary text-on-primary text-[11px] font-bold rounded-full uppercase tracking-wider">
+              
+              <div className="flex items-center space-x-3 relative z-10">
+                <div className="hidden sm:flex px-4 py-1.5 bg-element text-primary text-[12px] font-bold rounded-full transition-colors group-hover:bg-element-hover">
                   {t('pendingDividends.reviewNow')}
-                </span>
-                <ChevronRight className="w-5 h-5 text-secondary group-hover:translate-x-1 transition-transform" />
+                </div>
+                <div className="w-8 h-8 rounded-full flex items-center justify-center text-secondary group-hover:translate-x-1 transition-transform">
+                  <ChevronRight className="w-5 h-5" />
+                </div>
               </div>
             </div>
           </div>
-        )}
+        ) }
 
         {totalHoldingsCount === 0 ? (
           /* 空状态面板 */
@@ -965,8 +982,14 @@ export default function DashboardClient({ portfolioId, portfolioName, portfolios
                 <p className="text-secondary text-[11px] font-medium mt-0.5">{t('summary.closedPositions')}</p>
               </div>
               <div className="border-t border-border" />
-              <div>
-                <p className="text-[11px] text-secondary font-bold uppercase tracking-wider mb-1">{t('summary.dividendsCollected')}</p>
+              <div 
+                onClick={() => setIsDividendModalOpen(true)}
+                className="group/div cursor-pointer p-2 -m-2 rounded-xl hover:bg-element/50 transition-all active:scale-[0.98]"
+              >
+                <div className="flex items-center justify-between mb-1">
+                  <p className="text-[11px] text-secondary font-bold uppercase tracking-wider">{t('summary.dividendsCollected')}</p>
+                  <DollarSign className="w-3.5 h-3.5 text-secondary opacity-0 group-hover/div:opacity-100 transition-opacity" />
+                </div>
                 <div className="flex items-baseline justify-between">
                   <span className={`text-[20px] font-bold tracking-tight tabular-nums ${localSummary.totalDividendIncome > 0 ? colors.gain.tailwind.text : 'text-secondary'}`}>
                     {localSummary.totalDividendIncome > 0 ? '+' : ''}{fmt(localSummary.totalDividendIncome || 0)}

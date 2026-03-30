@@ -346,7 +346,9 @@ export default async function StockDetailPage(props: PageProps) {
   const currentPrice = asset.lastPrice || 0
   const currentValue = currentPrice * totalQty
   const costBasis = totalCost
-  const totalReturn = currentValue - costBasis
+  // totalReturn 包含资本利得 + 股息，与 dashboard 层保持一致
+  const capitalGain = currentValue - costBasis
+  const totalReturn = capitalGain + totalDividend
   const totalReturnPercent = costBasis > 0 ? (totalReturn / costBasis) * 100 : 0
   const avgBuyPrice = totalQty > 0 ? costBasis / totalQty : 0
 

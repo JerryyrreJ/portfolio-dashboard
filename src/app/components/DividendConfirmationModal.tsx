@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState, useEffect } from 'react';
-import { X, CheckCircle, AlertCircle, Loader2, DollarSign, Calendar, TrendingUp } from 'lucide-react';
+import { X, CheckCircle, AlertCircle, Loader2, DollarSign, Calendar, RefreshCw, ChevronRight, Info, MinusCircle, Pencil } from 'lucide-react';
 import { format } from 'date-fns';
 import { getCurrencySymbol } from '@/lib/currency';
 
@@ -40,30 +40,24 @@ export default function DividendConfirmationModal({
   const [editedAmounts, setEditedAmounts] = useState<Record<string, number>>({});
   const [processingIds, setProcessingIds] = useState<Set<string>>(new Set());
 
-  // Fetch pending dividends
   const fetchPendingDividends = async () => {
     if (!portfolioId || portfolioId === 'local-portfolio') return;
-
     setIsLoading(true);
     setError(null);
     try {
       const response = await fetch(`/api/transactions/dividends/pending?portfolioId=${portfolioId}`);
-      if (!response.ok) throw new Error('Failed to fetch pending dividends');
-
+      if (!response.ok) throw new Error('Failed to fetch dividends');
       const data = await response.json();
       setPendingDividends(data.dividends || []);
     } catch (err) {
-      console.error('Error fetching pending dividends:', err);
-      setError('Failed to load pending dividends');
+      setError('Unable to load pending dividends');
     } finally {
       setIsLoading(false);
     }
   };
 
-  // Sync dividends from API
   const handleSync = async () => {
     if (!portfolioId || portfolioId === 'local-portfolio') return;
-
     setIsSyncing(true);
     setError(null);
     try {
@@ -72,45 +66,31 @@ export default function DividendConfirmationModal({
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ portfolioId, force: true }),
       });
-
-      if (!response.ok) throw new Error('Failed to sync dividends');
-
+      if (!response.ok) throw new Error('Sync failed');
+      setEditedAmounts({});
+      setEditingId(null);
       await fetchPendingDividends();
     } catch (err) {
-      console.error('Error syncing dividends:', err);
-      setError('Failed to sync dividends');
+      setError('Sync failed. Please try again later.');
     } finally {
       setIsSyncing(false);
     }
   };
 
-  // Confirm a dividend
   const handleConfirm = async (dividendId: string) => {
     setProcessingIds(prev => new Set(prev).add(dividendId));
-    setError(null);
     try {
       const finalAmount = editedAmounts[dividendId];
       const response = await fetch('/api/transactions/dividends/confirm', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          id: dividendId,
-          ...(finalAmount !== undefined && { finalAmount })
-        }),
+        body: JSON.stringify({ id: dividendId, ...(finalAmount !== undefined && { finalAmount }) }),
       });
-
-      if (!response.ok) throw new Error('Failed to confirm dividend');
-
+      if (!response.ok) throw new Error();
       setPendingDividends(prev => prev.filter(d => d.id !== dividendId));
-      setEditingId(null);
-      const newAmounts = { ...editedAmounts };
-      delete newAmounts[dividendId];
-      setEditedAmounts(newAmounts);
-
       if (onConfirmed) onConfirmed();
     } catch (err) {
-      console.error('Error confirming dividend:', err);
-      setError('Failed to confirm dividend');
+      setError('Confirmation failed');
     } finally {
       setProcessingIds(prev => {
         const next = new Set(prev);
@@ -120,22 +100,15 @@ export default function DividendConfirmationModal({
     }
   };
 
-  // Ignore a dividend
   const handleIgnore = async (dividendId: string) => {
     setProcessingIds(prev => new Set(prev).add(dividendId));
     try {
-      const response = await fetch('/api/transactions/dividends/ignore', {
+      await fetch('/api/transactions/dividends/ignore', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ id: dividendId }),
       });
-
-      if (!response.ok) throw new Error('Failed to ignore dividend');
-
       setPendingDividends(prev => prev.filter(d => d.id !== dividendId));
-    } catch (err) {
-      console.error('Error ignoring dividend:', err);
-      setError('Failed to ignore dividend');
     } finally {
       setProcessingIds(prev => {
         const next = new Set(prev);
@@ -146,207 +119,178 @@ export default function DividendConfirmationModal({
   };
 
   useEffect(() => {
-    if (isOpen) {
-      fetchPendingDividends();
-    }
+    if (isOpen) fetchPendingDividends();
   }, [isOpen, portfolioId]);
 
   if (!isOpen) return null;
 
   return (
-    <div className="fixed inset-0 z-[100] flex items-center justify-center bg-primary/40 backdrop-blur-md transition-all p-4">
-      <div className="relative w-full max-w-[700px] bg-card rounded-[28px] sm:rounded-[32px] shadow-[0_20px_70px_-10px_rgba(0,0,0,0.15)] border border-border overflow-hidden flex flex-col max-h-[90vh] animate-in fade-in zoom-in duration-200">
+    <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 sm:p-6 overflow-hidden">
+      <div className="absolute inset-0 bg-black/60 backdrop-blur-xl animate-in fade-in duration-500" onClick={onClose} />
 
+      <div className="relative w-full max-w-[840px] bg-card rounded-[32px] sm:rounded-[48px] shadow-[0_40px_120px_-20px_rgba(0,0,0,0.5)] border border-border/50 overflow-hidden flex flex-col max-h-[92vh] sm:max-h-[90vh] animate-in fade-in zoom-in-95 duration-500 ease-out-expo">
+        
         {/* Header */}
-        <div className="px-6 pt-6 sm:px-8 sm:pt-8 pb-4 flex items-center justify-between sticky top-0 bg-card/90 backdrop-blur-sm z-20 border-b border-border">
-          <div>
-            <h2 className="text-[20px] sm:text-[24px] font-bold text-primary tracking-tight leading-none">Dividend Confirmation</h2>
-            <p className="text-[12px] sm:text-[13px] text-secondary font-medium mt-1.5 sm:mt-2">Review and confirm your dividend payments</p>
+        <div className="px-6 sm:px-10 pt-8 sm:pt-10 pb-6 sm:pb-8 flex items-center justify-between">
+          <div className="min-w-0 pr-4">
+            <h2 className="text-[24px] sm:text-[32px] font-bold text-primary tracking-tight leading-tight truncate">Review Dividends</h2>
+            <p className="text-[13px] sm:text-[15px] text-secondary font-medium opacity-60">Record your expected payouts</p>
           </div>
-          <button
-            onClick={onClose}
-            className="p-2 text-secondary hover:text-primary transition-colors rounded-full hover:bg-element bg-element/50 sm:bg-transparent"
-          >
-            <X className="w-5 h-5" />
-          </button>
-        </div>
-
-        {/* Content */}
-        <div className="flex-1 overflow-y-auto p-6 sm:p-8 pt-4 space-y-4">
-
-          {/* Sync Button */}
-          <div className="flex justify-end">
+          <div className="flex items-center gap-2 sm:gap-3 shrink-0">
             <button
               onClick={handleSync}
               disabled={isSyncing}
-              className="px-4 py-2 bg-element hover:bg-element-hover rounded-[16px] text-[13px] font-bold text-primary transition-all flex items-center gap-2 disabled:opacity-50"
+              className="px-3 sm:px-4 py-2 bg-element hover:bg-element-hover rounded-xl sm:rounded-2xl text-primary text-[12px] sm:text-[13px] font-bold transition-all active:scale-95 border border-border/40 flex items-center gap-2"
             >
-              {isSyncing ? (
-                <>
-                  <Loader2 className="w-4 h-4 animate-spin" />
-                  Syncing...
-                </>
-              ) : (
-                <>
-                  <TrendingUp className="w-4 h-4" />
-                  Sync Dividends
-                </>
-              )}
+              <RefreshCw className={`w-3.5 h-3.5 sm:w-4 h-4 ${isSyncing ? 'animate-spin' : ''}`} />
+              <span className="hidden xs:inline">Sync</span>
+            </button>
+            <button
+              onClick={onClose}
+              className="p-2.5 sm:p-3 text-secondary hover:text-primary transition-all rounded-full bg-element/50 hover:bg-element active:scale-90"
+            >
+              <X className="w-5 h-5" />
             </button>
           </div>
+        </div>
 
-          {/* Error Message */}
+        {/* Content */}
+        <div className="flex-1 overflow-y-auto px-6 sm:px-10 pb-10 space-y-4">
           {error && (
-            <div className="p-4 bg-rose-50 rounded-2xl border border-rose-100 flex items-start gap-3 animate-in slide-in-from-top-2">
-              <AlertCircle className="w-5 h-5 text-rose-600 shrink-0 mt-0.5" />
-              <p className="text-[13px] font-bold text-rose-900 leading-tight">{error}</p>
+            <div className="p-4 bg-rose-500/10 rounded-2xl border border-rose-500/20 flex items-center gap-3 animate-in slide-in-from-top-2">
+              <AlertCircle className="w-5 h-5 text-rose-500 shrink-0" />
+              <p className="text-[13px] font-bold text-rose-500">{error}</p>
             </div>
           )}
 
-          {/* Loading State */}
-          {isLoading && (
-            <div className="flex items-center justify-center py-12">
-              <Loader2 className="w-8 h-8 animate-spin text-secondary" />
+          {isLoading ? (
+            <div className="flex flex-col items-center justify-center py-24">
+              <Loader2 className="w-12 h-12 animate-spin text-primary/10" />
             </div>
-          )}
-
-          {/* Empty State */}
-          {!isLoading && pendingDividends.length === 0 && (
-            <div className="flex flex-col items-center justify-center py-12 text-center">
-              <div className="w-16 h-16 rounded-full bg-element flex items-center justify-center mb-4">
-                <CheckCircle className="w-8 h-8 text-secondary" />
+          ) : pendingDividends.length === 0 ? (
+            <div className="flex flex-col items-center justify-center py-16 sm:py-24 text-center">
+              <div className="w-20 h-20 sm:w-24 sm:h-24 rounded-[32px] sm:rounded-[40px] bg-element flex items-center justify-center mb-6 sm:mb-8 border border-border/50 shadow-inner">
+                <CheckCircle className="w-8 h-8 sm:w-10 sm:h-10 text-primary opacity-20" />
               </div>
-              <h3 className="text-[16px] font-bold text-primary mb-2">All caught up!</h3>
-              <p className="text-[13px] text-secondary font-medium max-w-[300px]">
-                No pending dividends to confirm. Click &quot;Sync Dividends&quot; to check for new payments.
-              </p>
+              <h3 className="text-[18px] sm:text-[20px] font-bold text-primary tracking-tight">You&apos;re all set</h3>
+              <p className="text-[14px] sm:text-[15px] text-secondary font-medium mt-2 opacity-50">No pending dividends to review at this time.</p>
             </div>
-          )}
+          ) : (
+            <div className="space-y-4">
+              {pendingDividends.map((dividend, index) => {
+                const isEditing = editingId === dividend.id;
+                const isProcessing = processingIds.has(dividend.id);
+                const displayAmount = editedAmounts[dividend.id] ?? dividend.calculatedAmount;
+                const currencySymbol = getCurrencySymbol(dividend.currency);
+                const isFuture = dividend.payDate && new Date(dividend.payDate) > new Date();
 
-          {/* Dividend List */}
-          {!isLoading && pendingDividends.map((dividend) => {
-            const isEditing = editingId === dividend.id;
-            const isProcessing = processingIds.has(dividend.id);
-            const displayAmount = editedAmounts[dividend.id] ?? dividend.calculatedAmount;
-            const currencySymbol = getCurrencySymbol(dividend.currency);
-
-            return (
-              <div
-                key={dividend.id}
-                className="bg-element/50 rounded-[20px] p-5 border border-border hover:border-border-hover transition-all"
-              >
-                {/* Stock Info */}
-                <div className="flex items-center gap-3 mb-4">
-                  <div className="w-12 h-12 rounded-full bg-card shadow-sm flex items-center justify-center font-bold text-primary border border-border overflow-hidden shrink-0">
-                    {dividend.logo ? (
-                      <img src={dividend.logo} alt={dividend.ticker} className="w-full h-full object-cover" />
-                    ) : (
-                      dividend.ticker.charAt(0)
-                    )}
-                  </div>
-                  <div className="flex-1 min-w-0">
-                    <p className="font-bold text-primary leading-tight">{dividend.ticker}</p>
-                    <p className="text-[11px] text-secondary font-medium truncate">{dividend.name}</p>
-                  </div>
-                </div>
-
-                {/* Dividend Details */}
-                <div className="grid grid-cols-2 gap-3 mb-4">
-                  <div className="bg-card/50 rounded-xl p-3">
-                    <p className="text-[10px] font-bold text-secondary uppercase tracking-widest mb-1">Ex-Date</p>
-                    <p className="text-[13px] font-bold text-primary flex items-center gap-1.5">
-                      <Calendar className="w-3.5 h-3.5 text-secondary" />
-                      {format(new Date(dividend.exDate), 'MMM d, yyyy')}
-                    </p>
-                  </div>
-                  <div className="bg-card/50 rounded-xl p-3">
-                    <p className="text-[10px] font-bold text-secondary uppercase tracking-widest mb-1">Shares Held</p>
-                    <p className="text-[13px] font-bold text-primary tabular-nums">
-                      {dividend.sharesHeld.toLocaleString(undefined, { maximumFractionDigits: 4 })}
-                    </p>
-                  </div>
-                </div>
-
-                {/* Amount Section */}
-                <div className="bg-element border border-border rounded-xl p-4 mb-4">
-                  <div className="flex items-center justify-between mb-2">
-                    <p className="text-[11px] font-bold text-secondary uppercase tracking-widest">Calculated Amount</p>
-                    {!isEditing && (
-                      <button
-                        onClick={() => {
-                          setEditingId(dividend.id);
-                          setEditedAmounts(prev => ({ ...prev, [dividend.id]: dividend.calculatedAmount }));
-                        }}
-                        className="text-[11px] font-bold text-secondary hover:text-primary transition-colors"
-                      >
-                        Edit
-                      </button>
-                    )}
-                  </div>
-
-                  {isEditing ? (
-                    <div className="flex items-center gap-2">
-                      <div className="relative flex-1">
-                        <DollarSign className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-secondary" />
-                        <input
-                          type="number"
-                          step="0.01"
-                          value={displayAmount}
-                          onChange={(e) => setEditedAmounts(prev => ({ ...prev, [dividend.id]: parseFloat(e.target.value) || 0 }))}
-                          className="w-full pl-10 pr-4 py-2.5 bg-card border border-border rounded-xl text-[14px] font-bold tabular-nums outline-none focus:ring-2 focus:ring-primary/20"
-                          autoFocus
-                        />
+                return (
+                  <div
+                    key={dividend.id}
+                    className="group bg-element/20 dark:bg-element/10 hover:bg-element/40 dark:hover:bg-element/20 rounded-[28px] sm:rounded-[36px] border border-border/30 hover:border-border transition-all duration-500 p-6 sm:p-8 animate-in fade-in slide-in-from-bottom-4 ease-out-expo"
+                    style={{ animationDelay: `${index * 60}ms` }}
+                  >
+                    <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-6 lg:gap-8">
+                      
+                      {/* Asset & Stats */}
+                      <div className="flex items-center gap-4 sm:gap-6 flex-1 min-w-0">
+                        <div className="w-12 h-12 sm:w-16 sm:h-16 rounded-full bg-card shadow-xl shadow-black/5 flex items-center justify-center border border-border overflow-hidden shrink-0 transition-transform duration-500 group-hover:scale-110">
+                          {dividend.logo ? (
+                            <img src={dividend.logo} alt={dividend.ticker} className="w-full h-full object-cover" />
+                          ) : (
+                            <span className="text-lg sm:text-xl font-bold">{dividend.ticker.charAt(0)}</span>
+                          )}
+                        </div>
+                        <div className="min-w-0 flex-1">
+                          <div className="flex items-center gap-2 mb-1 sm:mb-1.5">
+                            <span className="text-[18px] sm:text-[20px] font-bold text-primary tracking-tight leading-none truncate">{dividend.ticker}</span>
+                            <span className="px-1.5 py-0.5 bg-element rounded-md text-[9px] sm:text-[10px] font-bold text-secondary uppercase tracking-widest shrink-0">{dividend.status}</span>
+                          </div>
+                          <div className="flex flex-wrap items-center gap-x-4 sm:gap-x-5 gap-y-1">
+                            <div className="flex items-center gap-1.5">
+                              <Calendar className="w-3.5 h-3.5 sm:w-4 h-4 text-secondary opacity-40" />
+                              <span className="text-[12px] sm:text-[14px] font-medium text-secondary">{format(new Date(dividend.exDate), 'MMM d, yyyy')}</span>
+                            </div>
+                            <div className="flex items-center gap-1.5">
+                              <span className="text-[12px] sm:text-[14px] font-medium text-secondary opacity-40">Holdings:</span>
+                              <span className="text-[12px] sm:text-[14px] font-bold text-primary tabular-nums">{dividend.sharesHeld.toLocaleString()}</span>
+                            </div>
+                          </div>
+                        </div>
                       </div>
-                      <button
-                        onClick={() => {
-                          setEditingId(null);
-                          const newAmounts = { ...editedAmounts };
-                          delete newAmounts[dividend.id];
-                          setEditedAmounts(newAmounts);
-                        }}
-                        className="px-3 py-2.5 text-[12px] font-bold text-secondary hover:text-primary transition-colors"
-                      >
-                        Cancel
-                      </button>
+
+                      {/* Right/Bottom: Amount & Action */}
+                      <div className="flex flex-row lg:flex-row items-center justify-between lg:justify-end gap-4 sm:gap-8 mt-2 lg:mt-0 pt-4 lg:pt-0 border-t lg:border-none border-border/20">
+                        
+                        {/* Amount Section */}
+                        <div 
+                          onClick={() => !isEditing && setEditingId(dividend.id)}
+                          className="flex flex-col items-start lg:items-end cursor-pointer group/amt"
+                        >
+                          <p className="text-[10px] font-bold text-secondary uppercase tracking-[0.15em] mb-0.5 opacity-50">Estimated</p>
+                          {isEditing ? (
+                            <div className="flex items-center bg-card border border-primary rounded-xl px-2 py-0.5 ring-4 ring-primary/5 shadow-inner">
+                              <span className="text-[18px] font-bold text-primary mr-1">{currencySymbol}</span>
+                              <input
+                                type="text"
+                                inputMode="decimal"
+                                value={displayAmount}
+                                onChange={(e) => {
+                                  const val = e.target.value;
+                                  if (/^\d*\.?\d*$/.test(val)) {
+                                    setEditedAmounts(prev => ({ ...prev, [dividend.id]: parseFloat(val) || 0 }));
+                                  }
+                                }}
+                                onWheel={(e) => e.currentTarget.blur()}
+                                onBlur={() => !isProcessing && setEditingId(null)}
+                                className="w-20 sm:w-24 bg-transparent border-none p-0 text-[18px] sm:text-[22px] font-bold text-primary tabular-nums focus:ring-0 text-right"
+                                autoFocus
+                              />
+                            </div>
+                          ) : (
+                            <div className="flex items-center gap-1.5 sm:gap-2 lg:group-hover/amt:translate-x-[-4px] transition-transform duration-300">
+                              <div className="hidden lg:flex w-7 h-7 rounded-lg bg-element/50 items-center justify-center opacity-0 group-hover/amt:opacity-100 transition-opacity">
+                                <Pencil className="w-3.5 h-3.5 text-secondary" />
+                              </div>
+                              <span className="text-[22px] sm:text-[26px] font-bold text-primary tracking-tight tabular-nums leading-none">
+                                {currencySymbol}{displayAmount.toFixed(2)}
+                              </span>
+                              <Pencil className="lg:hidden w-3.5 h-3.5 text-secondary opacity-40" />
+                            </div>
+                          )}
+                        </div>
+
+                        {/* Actions */}
+                        <div className="flex items-center gap-2 sm:gap-3">
+                          <button
+                            onClick={() => handleIgnore(dividend.id)}
+                            className="p-3 sm:p-3.5 text-secondary hover:text-rose-500 hover:bg-rose-500/10 rounded-xl sm:rounded-2xl transition-all active:scale-90"
+                            title="Ignore"
+                          >
+                            <MinusCircle className="w-5 h-5" />
+                          </button>
+                          <button
+                            onClick={() => handleConfirm(dividend.id)}
+                            disabled={isProcessing}
+                            className="h-10 sm:h-12 px-5 sm:px-8 bg-primary text-on-primary text-[13px] sm:text-[14px] font-bold rounded-xl sm:rounded-2xl hover:scale-105 active:scale-95 transition-all shadow-lg shadow-primary/20 flex items-center justify-center gap-2 disabled:opacity-50"
+                          >
+                            {isProcessing ? <Loader2 className="w-4 h-4 sm:w-5 sm:h-5 animate-spin" /> : 'Confirm'}
+                          </button>
+                        </div>
+                      </div>
                     </div>
-                  ) : (
-                    <p className="text-[20px] font-bold text-primary tabular-nums">
-                      {currencySymbol}{displayAmount.toFixed(2)}
-                    </p>
-                  )}
 
-                  <p className="text-[11px] text-secondary font-medium mt-2">
-                    {dividend.sharesHeld.toFixed(4)} shares × {currencySymbol}{dividend.dividendPerShare.toFixed(4)} per share
-                  </p>
-                </div>
-
-                {/* Actions */}
-                <div className="flex gap-2">
-                  <button
-                    onClick={() => handleConfirm(dividend.id)}
-                    disabled={isProcessing}
-                    className="flex-1 py-3 bg-primary hover:bg-primary-hover text-on-primary text-[14px] font-bold rounded-[16px] transition-all flex items-center justify-center gap-2 disabled:opacity-50 shadow-sm"
-                  >
-                    {isProcessing ? (
-                      <Loader2 className="w-4 h-4 animate-spin" />
-                    ) : (
-                      <>
-                        <CheckCircle className="w-4 h-4" />
-                        Confirm
-                      </>
+                    {isFuture && (
+                      <div className="mt-4 sm:mt-5 pt-4 sm:pt-5 border-t border-border/20 flex items-center gap-2 text-[10px] sm:text-[12px] font-bold text-amber-500/80">
+                        <Info className="w-3.5 h-3.5 sm:w-4 h-4" />
+                        <span>Expected payment on {format(new Date(dividend.payDate!), 'MMM d, yyyy')}</span>
+                      </div>
                     )}
-                  </button>
-                  <button
-                    onClick={() => handleIgnore(dividend.id)}
-                    disabled={isProcessing}
-                    className="px-6 py-3 bg-element hover:bg-element-hover text-secondary hover:text-primary text-[14px] font-bold rounded-[16px] transition-all disabled:opacity-50 border border-border"
-                  >
-                    Ignore
-                  </button>
-                </div>
-              </div>
-            );
-          })}
+                  </div>
+                );
+              })}
+            </div>
+          )}
         </div>
       </div>
     </div>

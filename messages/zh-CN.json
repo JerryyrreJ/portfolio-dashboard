@@ -20,7 +20,8 @@
     "pendingDividends": {
       "title": "待确认股息",
       "description": "你有 {count} 笔股息付款待审核和确认。",
-      "reviewNow": "立即查看"
+      "reviewNow": "立即查看",
+      "manage": "股息"
     },
     "empty": {
       "title": "建立你的投资组合",

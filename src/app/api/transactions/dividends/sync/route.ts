@@ -22,6 +22,15 @@ function toDateString(date: Date) {
   return date.toISOString().split('T')[0];
 }
 
+/** 将任意日期值统一转为 YYYY-MM-DD 字符串，避免 Date 对象时区偏移 */
+function toDateOnlyString(value: Date | string): string {
+  if (typeof value === 'string') {
+    // 已经是日期字符串，取前 10 位
+    return value.slice(0, 10);
+  }
+  return value.toISOString().slice(0, 10);
+}
+
 function getTickerSyncStartDate(
   earliestTradeDate: Date,
   latestKnownExDate?: Date
@@ -146,110 +155,116 @@ export async function POST(request: NextRequest) {
 
     // 2. 查询从首次持仓或上次已知股息附近开始，到未来 1 个月的分红数据
     const today = new Date();
+    const todayStr = toDateString(today);
     const oneMonthLater = new Date(today);
     oneMonthLater.setMonth(today.getMonth() + 1);
     const endDate = toDateString(oneMonthLater);
 
     let syncedCount = 0;
 
-    for (const ticker of candidateTickers) {
-      try {
-        const tickerTransactions = transactionsByTicker.get(ticker) || [];
-        const earliestTradeDate = new Date(tickerTransactions[0].date);
-        const latestKnownExDate = latestKnownExDateByTicker.get(ticker);
-        const startDate = toDateString(
-          getTickerSyncStartDate(earliestTradeDate, latestKnownExDate)
-        );
+    /** 处理单个 ticker 的分红同步，返回新增数量 */
+    async function syncTicker(ticker: string): Promise<number> {
+      const tickerTransactions = transactionsByTicker.get(ticker) || [];
+      const earliestTradeDate = new Date(tickerTransactions[0].date);
+      const latestKnownExDate = latestKnownExDateByTicker.get(ticker);
+      const startDate = toDateString(
+        getTickerSyncStartDate(earliestTradeDate, latestKnownExDate)
+      );
 
-        // 优先使用 Alpha Vantage
-        let dividends = await getAlphaVantageDividends(ticker, startDate, endDate);
+      // 优先使用 Alpha Vantage
+      let dividends = await getAlphaVantageDividends(ticker, startDate, endDate);
 
-        // Fallback to TwelveData
-        if (!dividends || dividends.length === 0) {
-          dividends = await getTwelveDataDividends(ticker, startDate, endDate);
+      // Fallback to TwelveData
+      if (!dividends || dividends.length === 0) {
+        dividends = await getTwelveDataDividends(ticker, startDate, endDate);
+      }
+
+      // Fallback to Finnhub
+      if (!dividends || dividends.length === 0) {
+        const finnhubDividends = await getFinnhubDividends(ticker, startDate, endDate);
+        dividends = finnhubDividends.map(d => ({
+          symbol: d.symbol,
+          ex_date: d.date,
+          payment_date: d.payDate,
+          amount: d.amount,
+          currency: d.currency || 'USD',
+        }));
+      }
+
+      if (!dividends || dividends.length === 0) return 0;
+
+      let newCount = 0;
+
+      for (const dividend of dividends) {
+        const exDateStr = toDateOnlyString(dividend.ex_date);
+
+        if (exDateStr > todayStr) continue;
+
+        let sharesOnExDate = 0;
+        for (const tx of tickerTransactions) {
+          if (toDateOnlyString(tx.date) > exDateStr) break;
+          if (tx.type === 'BUY') sharesOnExDate += tx.quantity;
+          else if (tx.type === 'SELL') sharesOnExDate -= tx.quantity;
         }
 
-        // Fallback to Finnhub
-        if (!dividends || dividends.length === 0) {
-          const finnhubDividends = await getFinnhubDividends(ticker, startDate, endDate);
-          dividends = finnhubDividends.map(d => ({
-            symbol: d.symbol,
-            ex_date: d.date,
-            payment_date: d.payDate,
-            amount: d.amount,
-            currency: d.currency || 'USD',
-          }));
+        if (sharesOnExDate <= 0) continue;
+
+        const calculatedAmount = sharesOnExDate * dividend.amount;
+        const sourceKey = buildDividendSourceKey(dividend);
+        const exDate = new Date(exDateStr + 'T00:00:00.000Z');
+        const payDate = dividend.payment_date
+          ? new Date(toDateOnlyString(dividend.payment_date) + 'T00:00:00.000Z')
+          : null;
+
+        const existing = await prisma.pendingDividend.findUnique({
+          where: {
+            portfolioId_ticker_exDate_sourceKey: { portfolioId, ticker, exDate, sourceKey },
+          },
+          select: { id: true },
+        });
+
+        await prisma.pendingDividend.upsert({
+          where: {
+            portfolioId_ticker_exDate_sourceKey: { portfolioId, ticker, exDate, sourceKey },
+          },
+          update: {
+            sharesHeld: sharesOnExDate,
+            dividendPerShare: dividend.amount,
+            calculatedAmount,
+            payDate,
+            currency: dividend.currency || 'USD',
+          },
+          create: {
+            portfolioId,
+            ticker,
+            exDate,
+            payDate,
+            sharesHeld: sharesOnExDate,
+            dividendPerShare: dividend.amount,
+            calculatedAmount,
+            currency: dividend.currency || 'USD',
+            sourceKey,
+            status: 'pending',
+          },
+        });
+
+        if (!existing) newCount++;
+      }
+
+      return newCount;
+    }
+
+    // 有限并发：每批最多 3 个 ticker 同时请求，避免触发 API rate limit
+    const CONCURRENCY = 3;
+    for (let i = 0; i < candidateTickers.length; i += CONCURRENCY) {
+      const batch = candidateTickers.slice(i, i + CONCURRENCY);
+      const results = await Promise.allSettled(batch.map(ticker => syncTicker(ticker)));
+      for (const result of results) {
+        if (result.status === 'fulfilled') {
+          syncedCount += result.value;
+        } else {
+          console.error('Failed to sync dividends for ticker in batch:', result.reason);
         }
-
-        if (!dividends || dividends.length === 0) {
-          continue;
-        }
-
-        // 3. 对于已过除权日的分红，计算持仓并创建 PendingDividend
-        for (const dividend of dividends) {
-          const exDate = new Date(dividend.ex_date);
-
-          // 只处理已过除权日的分红
-          if (exDate > today) {
-            continue;
-          }
-
-          // 计算除权日当天的持仓数量
-          let sharesOnExDate = 0;
-          for (const tx of tickerTransactions) {
-            if (new Date(tx.date) > exDate) break;
-
-            if (tx.type === 'BUY') {
-              sharesOnExDate += tx.quantity;
-            } else if (tx.type === 'SELL') {
-              sharesOnExDate -= tx.quantity;
-            }
-          }
-
-          if (sharesOnExDate <= 0) {
-            continue;
-          }
-
-          // 计算分红金额
-          const calculatedAmount = sharesOnExDate * dividend.amount;
-          const sourceKey = buildDividendSourceKey(dividend);
-
-          // 创建或更新 PendingDividend（使用 upsert 避免重复）
-          await prisma.pendingDividend.upsert({
-            where: {
-              portfolioId_ticker_exDate_sourceKey: {
-                portfolioId,
-                ticker,
-                exDate,
-                sourceKey,
-              },
-            },
-            update: {
-              sharesHeld: sharesOnExDate,
-              dividendPerShare: dividend.amount,
-              calculatedAmount,
-              payDate: dividend.payment_date ? new Date(dividend.payment_date) : null,
-              currency: dividend.currency || 'USD',
-            },
-            create: {
-              portfolioId,
-              ticker,
-              exDate,
-              payDate: dividend.payment_date ? new Date(dividend.payment_date) : null,
-              sharesHeld: sharesOnExDate,
-              dividendPerShare: dividend.amount,
-              calculatedAmount,
-              currency: dividend.currency || 'USD',
-              sourceKey,
-              status: 'pending',
-            },
-          });
-
-          syncedCount++;
-        }
-      } catch (error) {
-        console.error(`Failed to sync dividends for ${ticker}:`, error);
-        // 继续处理其他股票
       }
     }
 
