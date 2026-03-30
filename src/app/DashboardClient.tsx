@@ -29,7 +29,6 @@ import AddTransactionModal from './components/AddTransactionModal';
 import GlobalSearch from './components/GlobalSearch';
 import PortfolioSwitcher from './components/PortfolioSwitcher';
 import DividendConfirmationModal from './components/DividendConfirmationModal';
-import LanguageSwitcher from './components/LanguageSwitcher';
 import Link from 'next/link';
 import { useCurrency } from '@/lib/useCurrency';
 import { usePreferences } from '@/lib/usePreferences';
@@ -328,12 +327,24 @@ export default function DashboardClient({ portfolioId, portfolioName, portfolios
 
   // 获取待确认分红数量
   useEffect(() => {
-    const fetchDividendStats = async () => {
+    let cancelled = false;
+
+    const syncAndFetchDividendStats = async () => {
       if (portfolioId === 'local-portfolio') return;
 
       try {
+        await fetch('/api/transactions/dividends/sync', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ portfolioId }),
+        });
+      } catch (err) {
+        console.error('Failed to sync dividends automatically:', err);
+      }
+
+      try {
         const response = await fetch(`/api/transactions/dividends/stats?portfolioId=${portfolioId}`);
-        if (response.ok) {
+        if (!cancelled && response.ok) {
           const data = await response.json();
           setPendingDividendCount(data.pendingCount || 0);
         }
@@ -342,7 +353,11 @@ export default function DashboardClient({ portfolioId, portfolioName, portfolios
       }
     };
 
-    fetchDividendStats();
+    syncAndFetchDividendStats();
+
+    return () => {
+      cancelled = true;
+    };
   }, [portfolioId]);
 
   // 初始化和监听本地数据
@@ -768,7 +783,7 @@ export default function DashboardClient({ portfolioId, portfolioName, portfolios
           </div>
           <div className="flex items-center space-x-2.5">
             <div className="hidden md:block">
-              <LanguageSwitcher />
+              {/* Removed LanguageSwitcher */}
             </div>
             {/* Mobile Search Trigger */}
             <button 
@@ -992,15 +1007,15 @@ export default function DashboardClient({ portfolioId, portfolioName, portfolios
             <div className="bg-card rounded-2xl p-6 border border-border shadow-sm h-full flex flex-col">
               <div className="flex flex-col gap-3 mb-6">
                 {/* 桌面端：一行；手机端：两行 */}
-                <div className="flex flex-col sm:flex-row sm:justify-between sm:items-start gap-3 sm:gap-0">
+                <div className="flex flex-row justify-between items-start gap-2">
                   <div>
                     <h2 className="text-[15px] font-bold text-primary tracking-tight leading-none">{t('chart.performanceHistory')}</h2>
                     <p className={`text-[12px] font-medium mt-1 ${chartSubtitle.className}`}>
                       {chartSubtitle.text}
                     </p>
                   </div>
-                  <div className="flex items-center gap-2 sm:shrink-0">
-                    {portfolioId !== 'local-portfolio' && (
+                  {portfolioId !== 'local-portfolio' && (
+                    <div className="flex items-center shrink-0">
                       <div className="flex bg-element rounded-lg p-0.5 border border-border">
                         {(['value', 'return'] as const).map((mode) => (
                           <button
@@ -1014,23 +1029,8 @@ export default function DashboardClient({ portfolioId, portfolioName, portfolios
                           </button>
                         ))}
                       </div>
-                    )}
-                    <div className="flex bg-element rounded-lg p-0.5 border border-border overflow-x-auto no-scrollbar">
-                      {(['1M', '3M', '6M', '1Y', 'All'] as const).map((range) => (
-                        <button
-                          key={range}
-                          onClick={() => setChartTimeRange(range)}
-                          className={`px-3 py-1.5 sm:py-1 text-[11px] font-bold rounded-md transition-all whitespace-nowrap text-center ${
-                            chartTimeRange === range
-                              ? 'bg-card text-primary shadow-sm'
-                              : 'text-secondary hover:text-primary'
-                          }`}
-                        >
-                          {range === 'All' ? t('chart.all') : range}
-                        </button>
-                      ))}
                     </div>
-                  </div>
+                  )}
                 </div>
               </div>
 
@@ -1102,7 +1102,25 @@ export default function DashboardClient({ portfolioId, portfolioName, portfolios
                   })()}
                 </ResponsiveContainer>
               </div>
-              
+
+              {/* Bottom Time Range Switcher */}
+              <div className="mt-6 flex justify-center">
+                <div className="flex bg-element/50 p-1 rounded-2xl gap-1 border border-border/50">
+                  {(['1M', '3M', '6M', '1Y', 'All'] as const).map((range) => (
+                    <button
+                      key={range}
+                      onClick={() => setChartTimeRange(range)}
+                      className={`px-4 py-1.5 text-[12px] font-medium rounded-xl transition-all whitespace-nowrap ${
+                        chartTimeRange === range
+                          ? 'bg-white dark:bg-zinc-100 text-black shadow-[0_1px_3px_rgba(0,0,0,0.1)]'
+                          : 'text-secondary hover:text-primary'
+                      }`}
+                    >
+                      {range === 'All' ? t('chart.all') : range}
+                    </button>
+                  ))}
+                </div>
+              </div>
             </div>
           </div>
         </div>

@@ -43,7 +43,7 @@
     "chart": {
       "performanceHistory": "表现历史",
       "value": "市值",
-      "returnPercent": "回报 %",
+      "returnPercent": "回报",
       "today": "今天",
       "all": "全部",
       "totalReturnSuffix": "总回报",
@@ -217,6 +217,9 @@
     },
     "preferences": {
       "title": "偏好设置",
+      "general": "通用",
+      "language": "语言",
+      "languageDesc": "选择您偏好的语言",
       "appearance": "外观",
       "theme": "主题",
       "themeLight": "浅色",

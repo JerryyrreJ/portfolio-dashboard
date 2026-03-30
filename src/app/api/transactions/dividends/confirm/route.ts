@@ -1,9 +1,20 @@
 import { NextRequest, NextResponse } from 'next/server';
 import prisma from '@/lib/prisma';
+import { getPriceUSD } from '@/lib/exchange-rate';
 import {
   findOwnedPendingDividends,
   requireAuthenticatedUser,
 } from '@/lib/ownership';
+
+function parseDividendAmount(rawAmount: unknown) {
+  const amount = typeof rawAmount === 'number' ? rawAmount : Number(rawAmount);
+
+  if (!Number.isFinite(amount) || amount < 0) {
+    return null;
+  }
+
+  return amount;
+}
 
 /**
  * POST /api/transactions/dividends/confirm
@@ -50,56 +61,85 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const results = [];
+    const normalizedDividends = await Promise.all(
+      pendingDividends.map(async (dividend) => {
+        const requestedAmount =
+          ids.length === 1 && finalAmount !== undefined
+            ? finalAmount
+            : adjustments[dividend.id] !== undefined
+              ? adjustments[dividend.id]
+              : dividend.calculatedAmount;
+        const amount = parseDividendAmount(requestedAmount);
 
-    for (const dividend of pendingDividends) {
-      // 确定最终金额：优先使用用户调整的金额，否则使用计算金额
-      let amount = dividend.calculatedAmount;
-      if (ids.length === 1 && finalAmount !== undefined) {
-        amount = finalAmount;
-      } else if (adjustments[dividend.id] !== undefined) {
-        amount = adjustments[dividend.id];
+        if (amount === null) {
+          throw new Error('Invalid dividend amount');
+        }
+
+        const fx = await getPriceUSD(amount, dividend.currency);
+        return {
+          dividend,
+          amount,
+          ...fx,
+        };
+      })
+    );
+
+    const results = await prisma.$transaction(async (tx) => {
+      const confirmedResults = [];
+
+      for (const { dividend, amount, priceUSD, exchangeRate } of normalizedDividends) {
+        const asset = await tx.asset.findUnique({
+          where: { ticker: dividend.ticker },
+        });
+
+        if (!asset) {
+          throw new Error(`Asset not found for ticker: ${dividend.ticker}`);
+        }
+
+        const statusUpdate = await tx.pendingDividend.updateMany({
+          where: {
+            id: dividend.id,
+            status: 'pending',
+          },
+          data: { status: 'confirmed' },
+        });
+
+        if (statusUpdate.count !== 1) {
+          throw new Error(`Pending dividend not found for id: ${dividend.id}`);
+        }
+
+        const transaction = await tx.transaction.create({
+          data: {
+            portfolioId: dividend.portfolioId,
+            assetId: asset.id,
+            type: 'DIVIDEND',
+            quantity: 1,
+            price: amount,
+            priceUSD,
+            exchangeRate,
+            fee: 0,
+            currency: dividend.currency,
+            date: dividend.payDate || dividend.exDate,
+            notes: `Dividend: ${dividend.sharesHeld} shares × ${dividend.dividendPerShare} per share`,
+          },
+        });
+
+        confirmedResults.push({
+          dividendId: dividend.id,
+          transactionId: transaction.id,
+          ticker: dividend.ticker,
+          amount,
+        });
       }
 
-      // 获取 Asset ID
-      const asset = await prisma.asset.findUnique({
-        where: { ticker: dividend.ticker },
-      });
+      return confirmedResults;
+    });
 
-      if (!asset) {
-        console.warn(`Asset not found for ticker: ${dividend.ticker}`);
-        continue;
-      }
-
-      // 创建 DIVIDEND 类型的 Transaction
-      const transaction = await prisma.transaction.create({
-        data: {
-          portfolioId: dividend.portfolioId,
-          assetId: asset.id,
-          type: 'DIVIDEND',
-          quantity: 1, // 分红记录 quantity 为 1
-          price: amount, // price 字段存储分红金额
-          priceUSD: amount, // 简化处理，假设已经是 USD 或后续转换
-          exchangeRate: 1,
-          fee: 0,
-          currency: dividend.currency,
-          date: dividend.payDate || dividend.exDate, // 优先使用支付日期
-          notes: `Dividend: ${dividend.sharesHeld} shares × ${dividend.dividendPerShare} per share`,
-        },
-      });
-
-      // 标记为已确认
-      await prisma.pendingDividend.update({
-        where: { id: dividend.id },
-        data: { status: 'confirmed' },
-      });
-
-      results.push({
-        dividendId: dividend.id,
-        transactionId: transaction.id,
-        ticker: dividend.ticker,
-        amount,
-      });
+    if (results.length !== ids.length) {
+      return NextResponse.json(
+        { error: 'Failed to confirm all pending dividends' },
+        { status: 500 }
+      );
     }
 
     return NextResponse.json({
@@ -109,6 +149,26 @@ export async function POST(request: NextRequest) {
 
   } catch (error) {
     console.error('Failed to confirm dividend:', error);
+
+    if (error instanceof Error) {
+      if (error.message === 'Invalid dividend amount') {
+        return NextResponse.json(
+          { error: error.message },
+          { status: 400 }
+        );
+      }
+
+      if (
+        error.message.startsWith('Asset not found for ticker:') ||
+        error.message.startsWith('Pending dividend not found for id:')
+      ) {
+        return NextResponse.json(
+          { error: error.message },
+          { status: 404 }
+        );
+      }
+    }
+
     return NextResponse.json(
       { error: 'Failed to confirm dividend' },
       { status: 500 }

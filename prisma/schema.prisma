@@ -14,6 +14,7 @@ model Portfolio {
   currency          String        @default("USD")
   createdAt         DateTime      @default(now())
   updatedAt         DateTime      @updatedAt
+  lastDividendSyncAt DateTime?
   userId            String?
   preferences       String?
   settingsUpdatedAt DateTime?
@@ -80,6 +81,7 @@ model PendingDividend {
   ticker           String
   exDate           DateTime  @db.Date
   payDate          DateTime? @db.Date
+  sourceKey        String
   sharesHeld       Float
   dividendPerShare Float
   calculatedAmount Float
@@ -89,6 +91,6 @@ model PendingDividend {
   updatedAt        DateTime  @updatedAt
   portfolio        Portfolio @relation(fields: [portfolioId], references: [id], onDelete: Cascade)
 
-  @@unique([portfolioId, ticker, exDate])
+  @@unique([portfolioId, ticker, exDate, sourceKey])
   @@index([portfolioId, status])
 }

@@ -70,7 +70,7 @@ export default function DividendConfirmationModal({
       const response = await fetch('/api/transactions/dividends/sync', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ portfolioId }),
+        body: JSON.stringify({ portfolioId, force: true }),
       });
 
       if (!response.ok) throw new Error('Failed to sync dividends');
@@ -218,7 +218,7 @@ export default function DividendConfirmationModal({
               </div>
               <h3 className="text-[16px] font-bold text-primary mb-2">All caught up!</h3>
               <p className="text-[13px] text-secondary font-medium max-w-[300px]">
-                No pending dividends to confirm. Click "Sync Dividends" to check for new payments.
+                No pending dividends to confirm. Click &quot;Sync Dividends&quot; to check for new payments.
               </p>
             </div>
           )}

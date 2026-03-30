@@ -43,7 +43,7 @@
     "chart": {
       "performanceHistory": "Performance History",
       "value": "Value",
-      "returnPercent": "Return %",
+      "returnPercent": "Return",
       "today": "Today",
       "all": "All",
       "totalReturnSuffix": "total return",
@@ -217,6 +217,9 @@
     },
     "preferences": {
       "title": "Preferences",
+      "general": "General",
+      "language": "Language",
+      "languageDesc": "Select your preferred language",
       "appearance": "Appearance",
       "theme": "Theme",
       "themeLight": "Light",

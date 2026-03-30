@@ -1,3 +1,4 @@
+import type { Portfolio } from '@prisma/client';
 import prisma from '@/lib/prisma';
 import { getUser } from '@/lib/supabase-server';
 
@@ -5,7 +6,10 @@ export async function requireAuthenticatedUser() {
   return getUser();
 }
 
-export async function findOwnedPortfolio(userId: string, portfolioId: string) {
+export async function findOwnedPortfolio(
+  userId: string,
+  portfolioId: string
+): Promise<Portfolio | null> {
   return prisma.portfolio.findFirst({
     where: {
       id: portfolioId,

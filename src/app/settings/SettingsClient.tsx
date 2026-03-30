@@ -1,7 +1,8 @@
 'use client';
 
 import React, { useState, useEffect, useRef } from 'react';
-import { useRouter, useSearchParams } from 'next/navigation';
+import { useTransition } from 'react';
+import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import { usePreferences } from '@/lib/usePreferences';
 import { useTheme } from 'next-themes';
 import Link from 'next/link';
@@ -286,7 +287,9 @@ export default function SettingsClient({ initialUser, initialPortfolios }: Setti
   const [activeSection, setActiveSection] = useState('portfolio');
   const [user, setUser] = useState<User | null>(initialUser);
   const router = useRouter();
+  const pathname = usePathname();
   const searchParams = useSearchParams();
+  const [isPendingLang, startTransition] = useTransition();
   const currentPortfolioId = searchParams.get('pid') ?? '';
 
   const [deleteConfirm, setDeleteConfirm] = useState<{ isOpen: boolean; id: string | null }>({
@@ -330,7 +333,7 @@ export default function SettingsClient({ initialUser, initialPortfolios }: Setti
   const [createPortfolioLoading, setCreatePortfolioLoading] = useState(false);
 
   // Inline edit states for Preferences
-  const [openPreferencesEditor, setOpenPreferencesEditor] = useState<'theme' | 'chartType' | 'colorScheme' | 'costBasis' | null>(null);
+  const [openPreferencesEditor, setOpenPreferencesEditor] = useState<'theme' | 'chartType' | 'colorScheme' | 'costBasis' | 'language' | null>(null);
   const [isExporting, setIsExporting] = useState(false);
   const [exportRange, setExportRange] = useState('all');
   const [exportFormat, setExportFormat] = useState('csv');
@@ -1528,6 +1531,82 @@ export default function SettingsClient({ initialUser, initialPortfolios }: Setti
                       <div className={`absolute ${prefs.hideSmallBalances ? 'left-[22px]' : 'left-0.5'} top-0.5 w-4 h-4 bg-white dark:bg-zinc-100 rounded-full shadow-[0_1px_3px_rgba(0,0,0,0.4)] transition-all`}></div>
                     </button>
 
+                  </div>
+                </div>
+              </div>
+
+              {/* General Group */}
+              <div className="space-y-4">
+                <h3 className="text-[11px] font-bold text-secondary uppercase tracking-[0.1em] pl-1">{tPreferences('general', { defaultMessage: 'General' })}</h3>
+                <div className="bg-element/50 rounded-2xl border border-border overflow-hidden">
+                  {/* Language Row */}
+                  <div className="border-b border-border bg-card sm:bg-transparent">
+                    <div className="px-4 md:px-5 py-4 flex items-center justify-between group/item">
+                      <div className="flex items-center space-x-3 md:space-x-4">
+                        <div className={`w-8 h-8 rounded-lg bg-card border border-border shadow-sm flex items-center justify-center transition-all duration-300 ${openPreferencesEditor === 'language' ? 'scale-110 border-border ring-4 ring-black/5' : 'group-hover/item:border-border'}`}>
+                          <Monitor className={`w-4 h-4 transition-colors duration-300 ${openPreferencesEditor === 'language' ? 'text-primary' : 'text-secondary group-hover/item:text-primary'}`} />
+                        </div>
+                        <div>
+                          <div className="text-[14px] font-bold text-primary leading-tight">{tPreferences('language', { defaultMessage: 'Language' })}</div>
+                          <div className="text-[13px] text-secondary font-medium mt-0.5">{locale === 'zh-CN' ? '中文' : 'English'}</div>
+                        </div>
+                      </div>
+                      <button 
+                        onClick={() => {
+                          setOpenPreferencesEditor((current) => current === 'language' ? null : 'language');
+                        }}
+                        className={`text-[12px] md:text-[13px] font-bold px-3 py-1.5 rounded-lg transition-colors shadow-sm active:scale-95 border ${
+                          openPreferencesEditor === 'language'
+                            ? 'bg-element-hover border-border text-secondary' 
+                            : 'bg-card border-border text-primary hover:bg-element-hover'
+                        }`}
+                      >
+                        {openPreferencesEditor === 'language' ? t('actions.cancel') : t('actions.switch')}
+                      </button>
+                    </div>
+
+                    {/* Expandable Language Drawer */}
+                    <div className={`grid transition-all duration-300 ease-in-out ${openPreferencesEditor === 'language' ? 'grid-rows-[1fr] opacity-100' : 'grid-rows-[0fr] opacity-0'}`}>
+                      <div className="overflow-hidden">
+                        <div className="p-4 md:p-5 bg-card/50 border-t border-border/60 flex flex-wrap gap-2">
+                          <div className="flex w-full bg-element/50 p-1 rounded-2xl gap-1 border border-border/50">
+                            {[
+                              { id: 'en', label: 'English' },
+                              { id: 'zh-CN', label: '中文' },
+                            ].map((langOption) => {
+                              const isSelected = locale === langOption.id;
+                              return (
+                                <button
+                                  key={langOption.id}
+                                  disabled={isPendingLang || isSelected}
+                                  onClick={() => {
+                                    if (isSelected || !pathname) return;
+
+                                    startTransition(() => {
+                                      document.cookie = `NEXT_LOCALE=${encodeURIComponent(langOption.id)}; Path=/; Max-Age=31536000; SameSite=Lax`;
+
+                                      const queryString = searchParams.toString();
+                                      const href = queryString ? `${pathname}?${queryString}` : pathname;
+
+                                      router.replace(href);
+                                      router.refresh();
+                                      setOpenPreferencesEditor(null);
+                                    });
+                                  }}
+                                  className={`flex-1 text-[12px] font-bold py-2 rounded-xl transition-all active:scale-95 ${
+                                    isSelected
+                                      ? 'bg-white dark:bg-zinc-100 text-black shadow-sm'
+                                      : 'text-secondary hover:text-primary'
+                                  } disabled:cursor-default disabled:opacity-100`}
+                                >
+                                  {langOption.label}
+                                </button>
+                              );
+                            })}
+                          </div>
+                        </div>
+                      </div>
+                    </div>
                   </div>
                 </div>
               </div>
