@@ -13,8 +13,8 @@ import {
 import GlobalSearch from '../../components/GlobalSearch';
 import AddTransactionModal from '@/app/components/AddTransactionModal';
 import ShareCardModal from '@/app/components/ShareCardModal';
+import CachedAssetLogo from '@/app/components/CachedAssetLogo';
 import Link from 'next/link';
-import Image from 'next/image';
 import { useCurrency } from '@/lib/useCurrency';
 import { usePreferences } from '@/lib/usePreferences';
 
@@ -407,18 +407,13 @@ export default function StockDetailClient({ stockData }: { stockData: StockData 
         <div className="flex flex-col sm:flex-row sm:items-end justify-between mb-6 sm:mb-8 gap-6 sm:gap-6">
           <div className="flex items-start sm:items-center gap-4 sm:gap-5">
             <div className="w-12 h-12 sm:w-16 sm:h-16 rounded-full bg-card border border-border shadow-sm flex items-center justify-center overflow-hidden flex-shrink-0 mt-1 sm:mt-0">
-              {profile?.logo ? (
-                <Image 
-                  src={profile.logo} 
-                  alt={ticker} 
-                  width={64} 
-                  height={64} 
-                  className="w-full h-full object-cover"
-                  unoptimized={true}
-                />
-              ) : (
-                <span className="text-xl sm:text-2xl font-bold text-gray-800">{ticker.charAt(0)}</span>
-              )}
+              <CachedAssetLogo
+                ticker={ticker}
+                logoUrl={profile?.logo}
+                size={64}
+                loading="eager"
+                fallbackClassName="font-bold text-xl sm:text-2xl text-gray-800"
+              />
             </div>
             <div className="min-w-0">
               <div className="flex items-center gap-1 sm:gap-2 text-secondary text-[11px] sm:text-[13px] font-bold uppercase tracking-widest mb-1 truncate">

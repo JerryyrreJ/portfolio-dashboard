@@ -3,7 +3,6 @@
 import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { useRouter } from 'next/navigation';
 import { useLocale, useTranslations } from 'next-intl';
-import Image from 'next/image';
 import {
   AreaChart,
   Area,
@@ -31,6 +30,7 @@ import AddTransactionModal from './components/AddTransactionModal';
 import GlobalSearch from './components/GlobalSearch';
 import PortfolioSwitcher from './components/PortfolioSwitcher';
 import DividendConfirmationModal from './components/DividendConfirmationModal';
+import CachedAssetLogo from './components/CachedAssetLogo';
 import Link from 'next/link';
 import { useCurrency } from '@/lib/useCurrency';
 import { usePreferences } from '@/lib/usePreferences';
@@ -868,19 +868,20 @@ export default function DashboardClient({ portfolioId, portfolioName, portfolios
             <span className={`hidden sm:inline-block text-[13px] font-medium px-2 py-0.5 rounded-md transition-colors ${isRateLimited ? 'text-rose-500 bg-rose-50/50' : 'text-secondary bg-element-hover'}`}>
               {isRateLimited ? t('header.apiLimitReached') : t('header.realTime')}
             </span>
-            </div>          <div className="flex items-center space-x-2">
+            </div>          <div className="flex items-center space-x-2.5">
             <button
               onClick={handleRefresh}
               disabled={isRefreshing}
-              className="p-1.5 bg-card text-secondary rounded-lg border border-border hover:text-primary hover:border-border transition-all disabled:opacity-50"
+              className="h-9 w-9 flex items-center justify-center bg-card text-secondary rounded-xl border border-border hover:text-primary hover:bg-element-hover transition-all active:scale-90 disabled:opacity-50 shadow-sm"
+              title={t('header.realTime')}
             >
-              <RefreshCw className={`w-3.5 h-3.5 ${isRefreshing ? 'animate-spin' : ''}`} />
+              <RefreshCw className={`w-4 h-4 ${isRefreshing ? 'animate-spin' : ''}`} />
             </button>
             <button
               onClick={() => setIsModalOpen(true)}
-              className="px-4 py-1.5 bg-primary text-on-primary text-[13px] font-semibold rounded-lg hover:bg-primary-hover transition-all shadow-sm flex items-center space-x-1"
+              className="h-9 px-4 bg-primary text-on-primary text-[13px] font-bold rounded-xl hover:bg-primary-hover transition-all active:scale-95 shadow-sm flex items-center space-x-2"
             >
-              <Plus className="w-3.5 h-3.5" />
+              <Plus className="w-4 h-4" />
               <span>{t('header.addTrade')}</span>
             </button>
           </div>
@@ -1007,18 +1008,13 @@ export default function DashboardClient({ portfolioId, portfolioName, portfolios
               <div className="flex -space-x-1.5">
                 {localHoldings.flatMap(g => g.holdings).slice(0, 3).map((h) => (
                   <div key={h.ticker} className="w-7 h-7 rounded-full bg-card border border-border flex items-center justify-center text-[9px] font-bold text-secondary shadow-sm overflow-hidden z-10">
-                    {h.logo ? (
-                      <Image 
-                        src={h.logo} 
-                        alt={h.ticker} 
-                        width={28} 
-                        height={28} 
-                        className="w-full h-full object-cover"
-                        unoptimized={true}
-                      />
-                    ) : (
-                      h.ticker.charAt(0)
-                    )}
+                    <CachedAssetLogo
+                      ticker={h.ticker}
+                      logoUrl={h.logo}
+                      size={28}
+                      loading="eager"
+                      fallbackClassName="font-bold text-[9px] text-secondary"
+                    />
                   </div>
                 ))}
               </div>
@@ -1200,18 +1196,13 @@ export default function DashboardClient({ portfolioId, portfolioName, portfolios
                         <td className="px-4 sm:px-6 py-3">
                           <div className="flex items-center space-x-3">
                             <div className="w-8 h-8 rounded-full bg-card flex items-center justify-center font-bold text-[11px] text-primary border border-border shadow-sm overflow-hidden shrink-0">
-                              {asset.logo ? (
-                                <Image 
-                                  src={asset.logo} 
-                                  alt={asset.ticker} 
-                                  width={32} 
-                                  height={32} 
-                                  className="w-full h-full object-cover"
-                                  unoptimized={true} // Bypasses Next.js image optimization which fails on some local proxy setups
-                                />
-                              ) : (
-                                asset.ticker.charAt(0)
-                              )}
+                              <CachedAssetLogo
+                                ticker={asset.ticker}
+                                logoUrl={asset.logo}
+                                size={32}
+                                loading="lazy"
+                                fallbackClassName="font-bold text-[11px] text-primary"
+                              />
                             </div>
                             <div className="min-w-0">
                               <div className="font-bold text-primary text-[14px] leading-tight group-hover:underline underline-offset-2">{asset.ticker}</div>

@@ -9,8 +9,8 @@ import {
   ArrowUpRight,
   ArrowDownRight
 } from 'lucide-react';
-import Image from 'next/image';
 import { usePreferences } from '@/lib/usePreferences';
+import CachedAssetLogo from './CachedAssetLogo';
 
 interface ShareCardModalProps {
   isOpen: boolean;
@@ -31,7 +31,6 @@ interface ShareCardModalProps {
 export default function ShareCardModal({ isOpen, onClose, stockData }: ShareCardModalProps) {
   const cardRef = useRef<HTMLDivElement>(null);
   const [isGenerating, setIsGenerating] = useState(false);
-  const [copied, setCopied] = useState(false);
   const { colors } = usePreferences();
 
   const {
@@ -95,7 +94,7 @@ export default function ShareCardModal({ isOpen, onClose, stockData }: ShareCard
       link.download = `folio-share-${ticker}-${new Date().getTime()}.png`;
       link.href = dataUrl;
       link.click();
-    } catch (err: any) {
+    } catch (err: unknown) {
       console.error('Failed to generate image:', err);
       // Fallback: try without cacheBust if it fails
       try {
@@ -104,19 +103,13 @@ export default function ShareCardModal({ isOpen, onClose, stockData }: ShareCard
          link.download = `folio-share-${ticker}.png`;
          link.href = dataUrl;
          link.click();
-      } catch (retryErr) {
+      } catch {
          alert('Failed to generate image. Please try again or use a different browser.');
       }
     } finally {
       setIsGenerating(false);
     }
   }, [cardRef, ticker]);
-
-  const handleCopyLink = () => {
-    navigator.clipboard.writeText(window.location.href);
-    setCopied(true);
-    setTimeout(() => setCopied(false), 2000);
-  };
 
   if (!isOpen) return null;
 
@@ -162,17 +155,14 @@ export default function ShareCardModal({ isOpen, onClose, stockData }: ShareCard
 
             {/* Logo Section */}
             <div className="w-16 h-16 sm:w-20 sm:h-20 rounded-full bg-card border border-border shadow-sm flex items-center justify-center overflow-hidden mb-4 sm:mb-6 relative z-10">
-              {logo ? (
-                /* Use the proxy API to avoid CORS issues when generating screenshots */
-                // eslint-disable-next-line @next/next/no-img-element
-                <img
-                  src={`/api/proxy-image?url=${encodeURIComponent(logo)}`}
-                  alt={ticker}
-                  className="w-full h-full object-cover scale-110"
-                />
-              ) : (
-                <span className="text-2xl sm:text-3xl font-bold text-primary">{ticker.charAt(0)}</span>
-              )}
+              <CachedAssetLogo
+                ticker={ticker}
+                logoUrl={logo}
+                size={80}
+                loading="eager"
+                className="w-full h-full object-cover scale-110"
+                fallbackClassName="font-bold text-2xl sm:text-3xl text-primary"
+              />
             </div>
 
             {/* Asset Title */}

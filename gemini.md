@@ -20,6 +20,7 @@ This project adheres to a strict "Restrained Minimalism" aesthetic, heavily insp
 ### 3. Consistency & Restraint
 - **Icon Usage**: Avoid unnecessary icons in lists or menus. Text should stand on its own.
 - **Circular Primaries**: Use circular containers (`rounded-full`) for profile photos and company logos. Apply `object-cover` to fill the circle completely.
+- **Remote Asset Logos**: All remote stock / asset / company logos MUST use the shared `CachedAssetLogo` component. Do not render raw remote logo URLs directly with `<img>` or `next/image` inside feature components. This is a performance and UX rule, not an optional styling preference.
 
 ### 4. Micro-Interaction Standards
 - **Active Icon Effect**: When a setting item is in "edit mode" or "active", its icon container MUST:
@@ -77,3 +78,4 @@ src/
 - **NEVER** perform any Git operations (add, commit, push, etc.) - all Git operations are handled by the user.
 - **ALWAYS** check for `tabular-nums` when rendering currency or percentages.
 - **ALWAYS** maintain the "Center-aligned White Box" layout for major management interfaces.
+- **ALWAYS** route remote asset/company logos through `CachedAssetLogo` so logo rendering is cached and behavior stays consistent across pages, modals, and cards.

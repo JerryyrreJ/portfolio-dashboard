@@ -4,6 +4,7 @@ import React, { useState, useEffect } from 'react';
 import { X, CheckCircle, AlertCircle, Loader2, DollarSign, Calendar, RefreshCw, ChevronRight, Info, MinusCircle, Pencil } from 'lucide-react';
 import { format } from 'date-fns';
 import { getCurrencySymbol } from '@/lib/currency';
+import CachedAssetLogo from './CachedAssetLogo';
 
 interface PendingDividend {
   id: string;
@@ -128,19 +129,19 @@ export default function DividendConfirmationModal({
     <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 sm:p-6 overflow-hidden">
       <div className="absolute inset-0 bg-black/60 backdrop-blur-xl animate-in fade-in duration-500" onClick={onClose} />
 
-      <div className="relative w-full max-w-[840px] bg-card rounded-[32px] sm:rounded-[48px] shadow-[0_40px_120px_-20px_rgba(0,0,0,0.5)] border border-border/50 overflow-hidden flex flex-col max-h-[92vh] sm:max-h-[90vh] animate-in fade-in zoom-in-95 duration-500 ease-out-expo">
+      <div className="relative w-full max-w-[840px] bg-card rounded-[28px] sm:rounded-[32px] shadow-[0_40px_120px_-20px_rgba(0,0,0,0.5)] border border-border/50 overflow-hidden flex flex-col max-h-[92vh] sm:max-h-[90vh] animate-in fade-in zoom-in-95 duration-500 ease-out-expo">
         
         {/* Header */}
         <div className="px-6 sm:px-10 pt-8 sm:pt-10 pb-6 sm:pb-8 flex items-center justify-between">
           <div className="min-w-0 pr-4">
-            <h2 className="text-[24px] sm:text-[32px] font-bold text-primary tracking-tight leading-tight truncate">Review Dividends</h2>
-            <p className="text-[13px] sm:text-[15px] text-secondary font-medium opacity-60">Record your expected payouts</p>
+            <h2 className="text-[24px] sm:text-[28px] font-bold text-primary tracking-tight leading-tight truncate">Review Dividends</h2>
+            <p className="text-[13px] sm:text-[14px] text-secondary font-medium opacity-60">Record your expected payouts</p>
           </div>
           <div className="flex items-center gap-2 sm:gap-3 shrink-0">
             <button
               onClick={handleSync}
               disabled={isSyncing}
-              className="px-3 sm:px-4 py-2 bg-element hover:bg-element-hover rounded-xl sm:rounded-2xl text-primary text-[12px] sm:text-[13px] font-bold transition-all active:scale-95 border border-border/40 flex items-center gap-2"
+              className="px-3 sm:px-4 py-2 bg-element hover:bg-element-hover rounded-xl text-primary text-[12px] sm:text-[13px] font-bold transition-all active:scale-95 border border-border/40 flex items-center gap-2"
             >
               <RefreshCw className={`w-3.5 h-3.5 sm:w-4 h-4 ${isSyncing ? 'animate-spin' : ''}`} />
               <span className="hidden xs:inline">Sync</span>
@@ -157,7 +158,7 @@ export default function DividendConfirmationModal({
         {/* Content */}
         <div className="flex-1 overflow-y-auto px-6 sm:px-10 pb-10 space-y-4">
           {error && (
-            <div className="p-4 bg-rose-500/10 rounded-2xl border border-rose-500/20 flex items-center gap-3 animate-in slide-in-from-top-2">
+            <div className="p-4 bg-rose-500/10 rounded-xl border border-rose-500/20 flex items-center gap-3 animate-in slide-in-from-top-2">
               <AlertCircle className="w-5 h-5 text-rose-500 shrink-0" />
               <p className="text-[13px] font-bold text-rose-500">{error}</p>
             </div>
@@ -169,7 +170,7 @@ export default function DividendConfirmationModal({
             </div>
           ) : pendingDividends.length === 0 ? (
             <div className="flex flex-col items-center justify-center py-16 sm:py-24 text-center">
-              <div className="w-20 h-20 sm:w-24 sm:h-24 rounded-[32px] sm:rounded-[40px] bg-element flex items-center justify-center mb-6 sm:mb-8 border border-border/50 shadow-inner">
+              <div className="w-20 h-20 sm:w-24 sm:h-24 rounded-2xl bg-element flex items-center justify-center mb-6 sm:mb-8 border border-border/50 shadow-inner">
                 <CheckCircle className="w-8 h-8 sm:w-10 sm:h-10 text-primary opacity-20" />
               </div>
               <h3 className="text-[18px] sm:text-[20px] font-bold text-primary tracking-tight">You&apos;re all set</h3>
@@ -187,7 +188,7 @@ export default function DividendConfirmationModal({
                 return (
                   <div
                     key={dividend.id}
-                    className="group bg-element/20 dark:bg-element/10 hover:bg-element/40 dark:hover:bg-element/20 rounded-[28px] sm:rounded-[36px] border border-border/30 hover:border-border transition-all duration-500 p-6 sm:p-8 animate-in fade-in slide-in-from-bottom-4 ease-out-expo"
+                    className="group bg-element/20 dark:bg-element/10 hover:bg-element/40 dark:hover:bg-element/20 rounded-[24px] border border-border/30 hover:border-border transition-all duration-500 p-6 sm:p-8 animate-in fade-in slide-in-from-bottom-4 ease-out-expo"
                     style={{ animationDelay: `${index * 60}ms` }}
                   >
                     <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-6 lg:gap-8">
@@ -195,11 +196,13 @@ export default function DividendConfirmationModal({
                       {/* Asset & Stats */}
                       <div className="flex items-center gap-4 sm:gap-6 flex-1 min-w-0">
                         <div className="w-12 h-12 sm:w-16 sm:h-16 rounded-full bg-card shadow-xl shadow-black/5 flex items-center justify-center border border-border overflow-hidden shrink-0 transition-transform duration-500 group-hover:scale-110">
-                          {dividend.logo ? (
-                            <img src={dividend.logo} alt={dividend.ticker} className="w-full h-full object-cover" />
-                          ) : (
-                            <span className="text-lg sm:text-xl font-bold">{dividend.ticker.charAt(0)}</span>
-                          )}
+                          <CachedAssetLogo
+                            ticker={dividend.ticker}
+                            logoUrl={dividend.logo}
+                            size={64}
+                            loading="lazy"
+                            fallbackClassName="font-bold text-lg sm:text-xl"
+                          />
                         </div>
                         <div className="min-w-0 flex-1">
                           <div className="flex items-center gap-2 mb-1 sm:mb-1.5">
@@ -264,7 +267,7 @@ export default function DividendConfirmationModal({
                         <div className="flex items-center gap-2 sm:gap-3">
                           <button
                             onClick={() => handleIgnore(dividend.id)}
-                            className="p-3 sm:p-3.5 text-secondary hover:text-rose-500 hover:bg-rose-500/10 rounded-xl sm:rounded-2xl transition-all active:scale-90"
+                            className="p-3 sm:p-3.5 text-secondary hover:text-rose-500 hover:bg-rose-500/10 rounded-xl transition-all active:scale-90"
                             title="Ignore"
                           >
                             <MinusCircle className="w-5 h-5" />
@@ -272,7 +275,7 @@ export default function DividendConfirmationModal({
                           <button
                             onClick={() => handleConfirm(dividend.id)}
                             disabled={isProcessing}
-                            className="h-10 sm:h-12 px-5 sm:px-8 bg-primary text-on-primary text-[13px] sm:text-[14px] font-bold rounded-xl sm:rounded-2xl hover:scale-105 active:scale-95 transition-all shadow-lg shadow-primary/20 flex items-center justify-center gap-2 disabled:opacity-50"
+                            className="h-10 sm:h-12 px-5 sm:px-8 bg-primary text-on-primary text-[13px] sm:text-[14px] font-bold rounded-xl transition-all shadow-lg shadow-primary/20 flex items-center justify-center gap-2 disabled:opacity-50"
                           >
                             {isProcessing ? <Loader2 className="w-4 h-4 sm:w-5 sm:h-5 animate-spin" /> : 'Confirm'}
                           </button>

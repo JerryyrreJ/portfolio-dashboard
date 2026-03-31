@@ -1,12 +1,12 @@
 'use client';
 
 import React, { useState, useCallback, useEffect, useRef } from 'react';
-import Image from 'next/image';
 import { X, Search as SearchIcon, Loader2, Calendar as CalendarIcon, DollarSign, AlertCircle, CheckCircle, ChevronRight, Hash, ChevronLeft, ChevronDown } from 'lucide-react';
 import { format, addMonths, subMonths, startOfMonth, endOfMonth, startOfWeek, endOfWeek, isSameMonth, isSameDay, eachDayOfInterval } from 'date-fns';
 import { useLocale, useTranslations } from 'next-intl';
 import { useStock } from '@/hooks/useStock';
 import { getCurrencySymbol } from '@/lib/currency';
+import CachedAssetLogo from './CachedAssetLogo';
 
 function inferCurrencyFromTicker(symbol: string): string {
   const s = symbol.toUpperCase();
@@ -570,11 +570,13 @@ export default function AddTransactionModal({
             }`}>
               <div className="flex items-center gap-3">
                 <div className="w-10 h-10 rounded-xl bg-card shadow-sm flex items-center justify-center font-bold text-gray-800 border border-border overflow-hidden">
-                  {txLogo ? (
-                    <Image src={txLogo} alt={selectedStock.symbol} width={40} height={40} className="w-full h-full object-cover" unoptimized={true} />
-                  ) : (
-                    selectedStock.symbol.charAt(0)
-                  )}
+                  <CachedAssetLogo
+                    ticker={selectedStock.symbol}
+                    logoUrl={txLogo}
+                    size={40}
+                    loading="eager"
+                    fallbackClassName="font-bold text-gray-800"
+                  />
                 </div>
                 <div>
                   <p className="font-bold text-primary leading-tight">{selectedStock.symbol}</p>
