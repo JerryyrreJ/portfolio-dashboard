@@ -1,7 +1,7 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
-import { X, CheckCircle, AlertCircle, Loader2, DollarSign, Calendar, RefreshCw, ChevronRight, Info, MinusCircle, Pencil } from 'lucide-react';
+import React, { useState, useEffect, useCallback } from 'react';
+import { X, CheckCircle, AlertCircle, Loader2, Calendar, RefreshCw, Info, MinusCircle, Pencil } from 'lucide-react';
 import { format } from 'date-fns';
 import { getCurrencySymbol } from '@/lib/currency';
 import CachedAssetLogo from './CachedAssetLogo';
@@ -17,6 +17,7 @@ interface PendingDividend {
   dividendPerShare: number;
   calculatedAmount: number;
   currency: string;
+  assetCurrency?: string | null;
   status: string;
 }
 
@@ -40,22 +41,30 @@ export default function DividendConfirmationModal({
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editedAmounts, setEditedAmounts] = useState<Record<string, number>>({});
   const [processingIds, setProcessingIds] = useState<Set<string>>(new Set());
+  const [reinvestingId, setReinvestingId] = useState<string | null>(null);
+  const [reinvestPrices, setReinvestPrices] = useState<Record<string, string>>({});
+  const [reinvestDates, setReinvestDates] = useState<Record<string, string>>({});
 
-  const fetchPendingDividends = async () => {
+  const getDefaultReinvestDate = useCallback((dividend: PendingDividend) => {
+    const baseDate = dividend.payDate ? new Date(dividend.payDate) : new Date(dividend.exDate);
+    return format(baseDate, 'yyyy-MM-dd');
+  }, []);
+
+  const fetchPendingDividends = useCallback(async () => {
     if (!portfolioId || portfolioId === 'local-portfolio') return;
     setIsLoading(true);
     setError(null);
     try {
       const response = await fetch(`/api/transactions/dividends/pending?portfolioId=${portfolioId}`);
       if (!response.ok) throw new Error('Failed to fetch dividends');
-      const data = await response.json();
+      const data: { dividends?: PendingDividend[] } = await response.json();
       setPendingDividends(data.dividends || []);
-    } catch (err) {
+    } catch {
       setError('Unable to load pending dividends');
     } finally {
       setIsLoading(false);
     }
-  };
+  }, [portfolioId]);
 
   const handleSync = async () => {
     if (!portfolioId || portfolioId === 'local-portfolio') return;
@@ -70,28 +79,43 @@ export default function DividendConfirmationModal({
       if (!response.ok) throw new Error('Sync failed');
       setEditedAmounts({});
       setEditingId(null);
+      setReinvestingId(null);
       await fetchPendingDividends();
-    } catch (err) {
+    } catch {
       setError('Sync failed. Please try again later.');
     } finally {
       setIsSyncing(false);
     }
   };
 
-  const handleConfirm = async (dividendId: string) => {
+  const handleConfirm = async (
+    dividendId: string,
+    options?: { mode?: 'cash' | 'reinvest'; reinvestPrice?: number; reinvestDate?: string }
+  ) => {
     setProcessingIds(prev => new Set(prev).add(dividendId));
     try {
       const finalAmount = editedAmounts[dividendId];
+      const mode = options?.mode || 'cash';
       const response = await fetch('/api/transactions/dividends/confirm', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ id: dividendId, ...(finalAmount !== undefined && { finalAmount }) }),
+        body: JSON.stringify({
+          id: dividendId,
+          mode,
+          ...(finalAmount !== undefined && { finalAmount }),
+          ...(options?.reinvestPrice !== undefined && { reinvestPrice: options.reinvestPrice }),
+          ...(options?.reinvestDate && { reinvestDate: options.reinvestDate }),
+        }),
       });
-      if (!response.ok) throw new Error();
+      if (!response.ok) {
+        const payload = await response.json().catch(() => null) as { error?: string } | null;
+        throw new Error(payload?.error || 'Confirmation failed');
+      }
       setPendingDividends(prev => prev.filter(d => d.id !== dividendId));
+      setReinvestingId(prev => prev === dividendId ? null : prev);
       if (onConfirmed) onConfirmed();
     } catch (err) {
-      setError('Confirmation failed');
+      setError(err instanceof Error ? err.message : 'Confirmation failed');
     } finally {
       setProcessingIds(prev => {
         const next = new Set(prev);
@@ -110,6 +134,7 @@ export default function DividendConfirmationModal({
         body: JSON.stringify({ id: dividendId }),
       });
       setPendingDividends(prev => prev.filter(d => d.id !== dividendId));
+      setReinvestingId(prev => prev === dividendId ? null : prev);
     } finally {
       setProcessingIds(prev => {
         const next = new Set(prev);
@@ -119,9 +144,39 @@ export default function DividendConfirmationModal({
     }
   };
 
+  const toggleReinvest = (dividend: PendingDividend) => {
+    setError(null);
+    setReinvestingId((current) => {
+      if (current === dividend.id) return null;
+      setReinvestDates((prev) => (
+        prev[dividend.id]
+          ? prev
+          : { ...prev, [dividend.id]: getDefaultReinvestDate(dividend) }
+      ));
+      return dividend.id;
+    });
+  };
+
+  const handleConfirmReinvestment = async (dividend: PendingDividend) => {
+    const priceRaw = reinvestPrices[dividend.id] ?? '';
+    const reinvestPrice = Number(priceRaw);
+    const reinvestDate = reinvestDates[dividend.id] || getDefaultReinvestDate(dividend);
+
+    if (!Number.isFinite(reinvestPrice) || reinvestPrice <= 0) {
+      setError(`Enter a valid reinvestment price for ${dividend.ticker}`);
+      return;
+    }
+
+    await handleConfirm(dividend.id, {
+      mode: 'reinvest',
+      reinvestPrice,
+      reinvestDate,
+    });
+  };
+
   useEffect(() => {
     if (isOpen) fetchPendingDividends();
-  }, [isOpen, portfolioId]);
+  }, [isOpen, fetchPendingDividends]);
 
   if (!isOpen) return null;
 
@@ -181,9 +236,17 @@ export default function DividendConfirmationModal({
               {pendingDividends.map((dividend, index) => {
                 const isEditing = editingId === dividend.id;
                 const isProcessing = processingIds.has(dividend.id);
+                const isReinvesting = reinvestingId === dividend.id;
                 const displayAmount = editedAmounts[dividend.id] ?? dividend.calculatedAmount;
-                const currencySymbol = getCurrencySymbol(dividend.currency);
+                const payoutCurrencySymbol = getCurrencySymbol(dividend.currency);
+                const reinvestCurrency = dividend.assetCurrency || dividend.currency;
+                const reinvestCurrencySymbol = getCurrencySymbol(reinvestCurrency);
                 const isFuture = dividend.payDate && new Date(dividend.payDate) > new Date();
+                const reinvestPriceValue = reinvestPrices[dividend.id] ?? '';
+                const reinvestPrice = Number(reinvestPriceValue);
+                const estimatedShares = Number.isFinite(reinvestPrice) && reinvestPrice > 0
+                  ? displayAmount / reinvestPrice
+                  : null;
 
                 return (
                   <div
@@ -233,7 +296,7 @@ export default function DividendConfirmationModal({
                           <p className="text-[10px] font-bold text-secondary uppercase tracking-[0.15em] mb-0.5 opacity-50">Estimated</p>
                           {isEditing ? (
                             <div className="flex items-center bg-card border border-primary rounded-xl px-2 py-0.5 ring-4 ring-primary/5 shadow-inner">
-                              <span className="text-[18px] font-bold text-primary mr-1">{currencySymbol}</span>
+                              <span className="text-[18px] font-bold text-primary mr-1">{payoutCurrencySymbol}</span>
                               <input
                                 type="text"
                                 inputMode="decimal"
@@ -256,7 +319,7 @@ export default function DividendConfirmationModal({
                                 <Pencil className="w-3.5 h-3.5 text-secondary" />
                               </div>
                               <span className="text-[22px] sm:text-[26px] font-bold text-primary tracking-tight tabular-nums leading-none">
-                                {currencySymbol}{displayAmount.toFixed(2)}
+                                {payoutCurrencySymbol}{displayAmount.toFixed(2)}
                               </span>
                               <Pencil className="lg:hidden w-3.5 h-3.5 text-secondary opacity-40" />
                             </div>
@@ -267,21 +330,83 @@ export default function DividendConfirmationModal({
                         <div className="flex items-center gap-2 sm:gap-3">
                           <button
                             onClick={() => handleIgnore(dividend.id)}
+                            disabled={isProcessing}
                             className="p-3 sm:p-3.5 text-secondary hover:text-rose-500 hover:bg-rose-500/10 rounded-xl transition-all active:scale-90"
                             title="Ignore"
                           >
                             <MinusCircle className="w-5 h-5" />
                           </button>
                           <button
+                            onClick={() => toggleReinvest(dividend)}
+                            disabled={isProcessing}
+                            className={`h-10 sm:h-12 px-4 sm:px-5 text-[12px] sm:text-[13px] font-bold rounded-xl transition-all border ${
+                              isReinvesting
+                                ? 'bg-element text-primary border-border'
+                                : 'bg-card text-secondary border-border hover:bg-element-hover'
+                            } disabled:opacity-50`}
+                          >
+                            {isReinvesting ? 'Hide Reinvest' : 'Reinvest'}
+                          </button>
+                          <button
                             onClick={() => handleConfirm(dividend.id)}
                             disabled={isProcessing}
                             className="h-10 sm:h-12 px-5 sm:px-8 bg-primary text-on-primary text-[13px] sm:text-[14px] font-bold rounded-xl transition-all shadow-lg shadow-primary/20 flex items-center justify-center gap-2 disabled:opacity-50"
                           >
-                            {isProcessing ? <Loader2 className="w-4 h-4 sm:w-5 sm:h-5 animate-spin" /> : 'Confirm'}
+                            {isProcessing ? <Loader2 className="w-4 h-4 sm:w-5 sm:h-5 animate-spin" /> : 'Confirm Cash'}
                           </button>
                         </div>
                       </div>
                     </div>
+
+                    {isReinvesting && (
+                      <div className="mt-4 sm:mt-5 pt-4 sm:pt-5 border-t border-border/20">
+                        <div className="grid grid-cols-1 sm:grid-cols-[1fr_180px_auto] gap-3 sm:gap-4 items-end">
+                          <div className="space-y-1.5">
+                            <label className="text-[10px] font-bold text-secondary uppercase tracking-widest ml-1">
+                              Reinvestment price per share ({reinvestCurrency})
+                            </label>
+                            <div className="flex items-center bg-card border border-border rounded-xl px-3 h-11">
+                              <span className="text-[14px] font-bold text-primary mr-2">{reinvestCurrencySymbol}</span>
+                              <input
+                                type="number"
+                                step="any"
+                                min="0"
+                                value={reinvestPriceValue}
+                                onChange={(e) => setReinvestPrices((prev) => ({ ...prev, [dividend.id]: e.target.value }))}
+                                className="w-full bg-transparent border-none p-0 text-[14px] font-semibold text-primary focus:ring-0 outline-none"
+                                placeholder="0.00"
+                              />
+                            </div>
+                          </div>
+                          <div className="space-y-1.5">
+                            <label className="text-[10px] font-bold text-secondary uppercase tracking-widest ml-1">
+                              Reinvestment date
+                            </label>
+                            <input
+                              type="date"
+                              value={reinvestDates[dividend.id] ?? getDefaultReinvestDate(dividend)}
+                              onChange={(e) => setReinvestDates((prev) => ({ ...prev, [dividend.id]: e.target.value }))}
+                              className="h-11 w-full px-3 bg-card rounded-xl text-[13px] font-semibold border border-border focus:border-primary outline-none transition-all"
+                            />
+                          </div>
+                          <button
+                            onClick={() => handleConfirmReinvestment(dividend)}
+                            disabled={isProcessing}
+                            className="h-11 px-5 bg-primary text-on-primary text-[13px] font-bold rounded-xl transition-all shadow-lg shadow-primary/20 flex items-center justify-center gap-2 disabled:opacity-50"
+                          >
+                            {isProcessing ? <Loader2 className="w-4 h-4 animate-spin" /> : 'Confirm Reinvestment'}
+                          </button>
+                        </div>
+                        <div className="mt-3 flex flex-wrap items-center gap-2 text-[12px] font-medium text-secondary">
+                          <span className="px-2 py-1 rounded-lg bg-element text-primary font-bold">
+                            Estimated shares: {estimatedShares != null ? estimatedShares.toFixed(6) : '—'}
+                          </span>
+                          <span>
+                            Folio will record this as one dividend and one DRIP buy.
+                          </span>
+                        </div>
+                      </div>
+                    )}
 
                     {isFuture && (
                       <div className="mt-4 sm:mt-5 pt-4 sm:pt-5 border-t border-border/20 flex items-center gap-2 text-[10px] sm:text-[12px] font-bold text-amber-500/80">

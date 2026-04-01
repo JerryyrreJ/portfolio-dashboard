@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useEffect, useState } from 'react';
-import { Mail, X, CheckCircle2, AlertCircle, Loader2 } from 'lucide-react';
+import { X, CheckCircle2, AlertCircle, Loader2 } from 'lucide-react';
 
 interface NotificationProps {
   show: boolean;
@@ -16,16 +16,22 @@ export default function Notification({ show, type, title, message, onClose, auto
   const [isRendered, setIsRendered] = useState(show);
 
   useEffect(() => {
+    let renderTimer: ReturnType<typeof setTimeout> | undefined;
+    let autoCloseTimer: ReturnType<typeof setTimeout> | undefined;
+
     if (show) {
-      setIsRendered(true);
+      renderTimer = setTimeout(() => setIsRendered(true), 0);
       if (type !== 'loading' && autoClose > 0) {
-        const timer = setTimeout(onClose, autoClose);
-        return () => clearTimeout(timer);
+        autoCloseTimer = setTimeout(onClose, autoClose);
       }
     } else {
-      const timer = setTimeout(() => setIsRendered(false), 3000);
-      return () => clearTimeout(timer);
+      renderTimer = setTimeout(() => setIsRendered(false), 3000);
     }
+
+    return () => {
+      if (renderTimer) clearTimeout(renderTimer);
+      if (autoCloseTimer) clearTimeout(autoCloseTimer);
+    };
   }, [show, type, autoClose, onClose]);
 
   if (!isRendered) return null;

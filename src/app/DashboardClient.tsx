@@ -6,6 +6,7 @@ import { useLocale, useTranslations } from 'next-intl';
 import {
   AreaChart,
   Area,
+  Line,
   XAxis,
   YAxis,
   CartesianGrid,
@@ -101,6 +102,8 @@ interface ChartPoint {
   Total?: number;
   Local?: number;
   Return?: number;
+  SPY?: number | null;
+  QQQ?: number | null;
 }
 
 interface XAxisTickProps {
@@ -215,6 +218,7 @@ export default function DashboardClient({ portfolioId, portfolioName, portfolios
   // 图表时间范围状态
   const [chartTimeRange, setChartTimeRange] = useState<'1M' | '3M' | '6M' | '1Y' | 'All'>('All');
   const [chartMode, setChartMode] = useState<'value' | 'return'>('value');
+  const [benchmark, setBenchmark] = useState<'SPY' | 'QQQ' | null>(null);
   
   // Local state for unauthenticated users
   const [localHoldings, setLocalHoldings] = useState<HoldingsGroup[]>(holdingsData);
@@ -536,9 +540,18 @@ export default function DashboardClient({ portfolioId, portfolioName, portfolios
         ? ((currentFactor / baselineFactor) - 1) * 100
         : (point.Return ?? 0) - (baselinePoint?.Return ?? 0);
 
+      const rebasedSPY = point.SPY != null && baselineFactor > 0
+        ? ((1 + point.SPY / 100) / baselineFactor - 1) * 100
+        : point.SPY;
+      const rebasedQQQ = point.QQQ != null && baselineFactor > 0
+        ? ((1 + point.QQQ / 100) / baselineFactor - 1) * 100
+        : point.QQQ;
+
       return {
         ...point,
         Return: Math.round(rebasedReturn * 100) / 100,
+        SPY: rebasedSPY != null ? Math.round(rebasedSPY * 100) / 100 : null,
+        QQQ: rebasedQQQ != null ? Math.round(rebasedQQQ * 100) / 100 : null,
       };
     });
   }, [chartMode, chartTimeRange, filteredChartData]);
@@ -1051,6 +1064,24 @@ export default function DashboardClient({ portfolioId, portfolioName, portfolios
                     </div>
                   )}
                 </div>
+                {chartMode === 'return' && portfolioId !== 'local-portfolio' && (
+                  <div className="flex items-center gap-2">
+                    <span className="text-[11px] text-secondary font-medium">vs</span>
+                    {(['SPY', 'QQQ'] as const).map((idx) => (
+                      <button
+                        key={idx}
+                        onClick={() => setBenchmark(benchmark === idx ? null : idx)}
+                        className={`px-2.5 py-1 text-[11px] font-semibold rounded-lg border transition-all ${
+                          benchmark === idx
+                            ? 'bg-primary/10 border-primary/30 text-primary'
+                            : 'bg-element border-border text-secondary hover:text-primary'
+                        }`}
+                      >
+                        {idx === 'SPY' ? 'S&P 500' : 'NASDAQ'}
+                      </button>
+                    ))}
+                  </div>
+                )}
               </div>
 
               <div className="flex-1 min-h-[300px] w-full relative">
@@ -1105,16 +1136,30 @@ export default function DashboardClient({ portfolioId, portfolioName, portfolios
                             if (isNaN(d.getTime())) return dateStr;
                             return d.toLocaleDateString(locale, { month: 'short', day: 'numeric', year: 'numeric' });
                           }}
-                          formatter={(value: number | string | undefined) =>
-                            chartMode === 'return'
-                              ? [`${Number(value ?? 0) >= 0 ? '+' : ''}${Number(value ?? 0).toFixed(2)}%`, t('chart.returnPercent')]
-                              : [`${fmt(Number(value ?? 0))}`, t('chart.value')]
-                          }
+                          formatter={(value: number | string | undefined, name: string) => {
+                            const numVal = Number(value ?? 0);
+                            if (name === 'SPY') return [`${numVal >= 0 ? '+' : ''}${numVal.toFixed(2)}%`, 'S&P 500'];
+                            if (name === 'QQQ') return [`${numVal >= 0 ? '+' : ''}${numVal.toFixed(2)}%`, 'NASDAQ'];
+                            return chartMode === 'return'
+                              ? [`${numVal >= 0 ? '+' : ''}${numVal.toFixed(2)}%`, t('chart.returnPercent')]
+                              : [`${fmt(numVal)}`, t('chart.value')];
+                          }}
                         />
                         {portfolioId === 'local-portfolio' ? (
                           <Area type="monotone" dataKey="Local" stroke={chartColorHex} strokeWidth={2} fill="var(--bg-element)" fillOpacity={1} activeDot={{ r: 4, strokeWidth: 0, fill: chartColorHex }} />
                         ) : (
                           <Area type="monotone" dataKey={chartMode === 'return' ? 'Return' : 'Total'} stroke={chartColorHex} strokeWidth={2} fill="url(#colorTotal)" activeDot={{ r: 4, strokeWidth: 0, fill: chartColorHex }} />
+                        )}
+                        {benchmark && chartMode === 'return' && (
+                          <Line
+                            type="monotone"
+                            dataKey={benchmark}
+                            stroke="var(--text-secondary)"
+                            strokeWidth={1.5}
+                            strokeDasharray="4 3"
+                            dot={false}
+                            activeDot={{ r: 3, strokeWidth: 0 }}
+                          />
                         )}
                       </AreaChart>
                     );

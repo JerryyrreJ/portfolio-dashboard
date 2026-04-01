@@ -27,6 +27,41 @@ interface TDValue {
   volume: string;
 }
 
+interface TDTimeSeriesResponse {
+  values?: TDValue[];
+}
+
+interface TDLogoResponse {
+  url?: string;
+}
+
+interface TDQuoteResponse {
+  currency?: string;
+  close?: string;
+  change?: string;
+  percent_change?: string;
+  high?: string;
+  low?: string;
+  open?: string;
+  previous_close?: string;
+  fifty_two_week?: {
+    high?: string;
+    low?: string;
+  };
+}
+
+interface TDDividendEntry {
+  ex_date: string;
+  payment_date?: string;
+  amount: string;
+}
+
+interface TDDividendsResponse {
+  symbol?: string;
+  currency?: string;
+  dividends?: TDDividendEntry[];
+}
+
 // 与 Finnhub HistoricalCandle 格式兼容
 export interface HistoricalCandle {
   c: number[]; // 收盘价
@@ -48,7 +83,7 @@ export function resetTwelveDataRateLimit() {
   isRateLimited = false;
 }
 
-async function fetchTwelveData(endpoint: string, params: Record<string, string> = {}) {
+async function fetchTwelveData<T>(endpoint: string, params: Record<string, string> = {}): Promise<T | null> {
   const url = new URL(`${BASE_URL}${endpoint}`);
   url.searchParams.append('apikey', API_KEY);
   Object.entries(params).forEach(([key, value]) => url.searchParams.append(key, value));
@@ -72,7 +107,11 @@ async function fetchTwelveData(endpoint: string, params: Record<string, string> 
       return null;
     }
 
-    const data = await response.json();
+    const data = await response.json() as {
+      status?: string;
+      code?: number;
+      message?: string;
+    } & T;
 
     if (data.status === 'error' || data.code === 429) {
       if (data.code === 429 || data.message?.includes('rate limit')) {
@@ -83,9 +122,10 @@ async function fetchTwelveData(endpoint: string, params: Record<string, string> 
     }
 
     return data;
-  } catch (error: any) {
+  } catch (error: unknown) {
     clearTimeout(timeoutId);
-    console.warn(`Twelve Data fetch exception for ${endpoint}:`, error.message || error);
+    const message = error instanceof Error ? error.message : error;
+    console.warn(`Twelve Data fetch exception for ${endpoint}:`, message);
     return null;
   }
 }
@@ -95,7 +135,7 @@ async function fetchTwelveData(endpoint: string, params: Record<string, string> 
  * @param symbol 股票代码
  */
 export async function getLogo(symbol: string): Promise<string | null> {
-  const data = await fetchTwelveData('/logo', {
+  const data = await fetchTwelveData<TDLogoResponse>('/logo', {
     symbol: symbol.toUpperCase(),
   });
   return data?.url || null;
@@ -118,7 +158,7 @@ export async function getCandles(
   const startDate = new Date(from * 1000).toISOString().split('T')[0];
   const endDate = new Date(to * 1000).toISOString().split('T')[0];
 
-  const data = await fetchTwelveData('/time_series', {
+  const data = await fetchTwelveData<TDTimeSeriesResponse>('/time_series', {
     symbol: symbol.toUpperCase(),
     interval,
     start_date: startDate,
@@ -157,7 +197,7 @@ export async function getQuote(symbol: string): Promise<{
   open: number;
   prevClose: number;
 } | null> {
-  const data = await fetchTwelveData('/quote', {
+  const data = await fetchTwelveData<TDQuoteResponse>('/quote', {
     symbol: symbol.toUpperCase(),
   });
   if (!data?.currency || !data?.close) return null;
@@ -184,7 +224,7 @@ export async function getPriceOnDate(symbol: string, date: string | Date): Promi
   const startDate = new Date(targetDate);
   startDate.setUTCDate(startDate.getUTCDate() - 7);
 
-  const data = await fetchTwelveData('/time_series', {
+  const data = await fetchTwelveData<TDTimeSeriesResponse>('/time_series', {
     symbol: symbol.toUpperCase(),
     interval: '1day',
     start_date: startDate.toISOString().split('T')[0],
@@ -207,7 +247,7 @@ export async function get12MonthHistory(symbol: string): Promise<{ date: string;
   const from = new Date();
   from.setFullYear(to.getFullYear() - 1);
 
-  const data = await fetchTwelveData('/time_series', {
+  const data = await fetchTwelveData<TDTimeSeriesResponse>('/time_series', {
     symbol: symbol.toUpperCase(),
     interval: '1day',
     start_date: from.toISOString().split('T')[0],
@@ -224,6 +264,34 @@ export async function get12MonthHistory(symbol: string): Promise<{ date: string;
     .reverse()
     .map(v => ({
       date: v.datetime.split(' ')[0], // 取 YYYY-MM-DD 部分
+      price: parseFloat(v.close),
+    }));
+}
+
+/**
+ * 获取从指定日期到今天的每日价格历史（用于指数对比）
+ * @param symbol 股票代码（如 SPY、QQQ）
+ * @param fromDate 开始日期 YYYY-MM-DD
+ */
+export async function getIndexHistory(symbol: string, fromDate: string): Promise<{ date: string; price: number }[]> {
+  const today = new Date().toISOString().split('T')[0];
+
+  const data = await fetchTwelveData<TDTimeSeriesResponse>('/time_series', {
+    symbol: symbol.toUpperCase(),
+    interval: '1day',
+    start_date: fromDate,
+    end_date: today,
+    outputsize: '5000',
+  });
+
+  if (!data || !data.values || data.values.length === 0) {
+    return [];
+  }
+
+  return ([...data.values] as TDValue[])
+    .reverse()
+    .map(v => ({
+      date: v.datetime.split(' ')[0],
       price: parseFloat(v.close),
     }));
 }
@@ -256,13 +324,13 @@ export async function getDividends(
   if (startDate) params.start_date = startDate;
   if (endDate) params.end_date = endDate;
 
-  const data = await fetchTwelveData('/dividends', params);
+  const data = await fetchTwelveData<TDDividendsResponse>('/dividends', params);
 
   if (!data || !data.dividends || data.dividends.length === 0) {
     return [];
   }
 
-  return data.dividends.map((d: any) => ({
+  return data.dividends.map((d) => ({
     symbol: data.symbol || symbol.toUpperCase(),
     ex_date: d.ex_date,
     payment_date: d.payment_date,

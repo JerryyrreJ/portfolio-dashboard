@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState, useRef, useCallback, useEffect } from 'react';
-import { Search, X, TrendingUp, History, Loader2, ChevronRight } from 'lucide-react';
+import { Search, X, Loader2, ChevronRight } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import { useTranslations } from 'next-intl';
 import { useStock } from '@/hooks/useStock';

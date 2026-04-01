@@ -59,6 +59,7 @@ export async function GET(request: NextRequest) {
         ticker: true,
         name: true,
         logo: true,
+        currency: true,
       },
     });
 
@@ -77,6 +78,7 @@ export async function GET(request: NextRequest) {
         dividendPerShare: d.dividendPerShare,
         calculatedAmount: d.calculatedAmount,
         currency: d.currency,
+        assetCurrency: asset?.currency || d.currency,
         status: d.status,
       };
     });

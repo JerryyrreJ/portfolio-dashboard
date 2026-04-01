@@ -11,7 +11,8 @@ export async function GET() {
   try {
     const credentials = await passkeyApi.user(user.id).credentials();
     return NextResponse.json(credentials);
-  } catch (err: any) {
-    return NextResponse.json({ error: err.message ?? "Failed to fetch credentials" }, { status: 500 });
+  } catch (err: unknown) {
+    const message = err instanceof Error ? err.message : "Failed to fetch credentials";
+    return NextResponse.json({ error: message }, { status: 500 });
   }
 }

@@ -1,3 +1,4 @@
+import type { Prisma } from '@prisma/client';
 import { getCompanyProfile } from '@/lib/finnhub';
 import { getLogo as getTwelveDataLogo } from '@/lib/twelvedata';
 import { getUser } from '@/lib/supabase-server';
@@ -7,6 +8,10 @@ import TransactionsClient from './TransactionsClient';
 interface TransactionWithAsset {
   id: string;
   type: string;
+  eventId?: string | null;
+  source?: string | null;
+  subtype?: string | null;
+  isSystemGenerated?: boolean;
   quantity: number;
   price: number;
   priceUSD: number;
@@ -50,7 +55,7 @@ async function getPortfolioWithTransactions(
 
   if (!resolvedPortfolio) return { portfolioId: '', portfolioName: 'Portfolio', transactions: [], total: 0 };
 
-  const where: any = { portfolioId: resolvedPortfolio.id };
+  const where: Prisma.TransactionWhereInput = { portfolioId: resolvedPortfolio.id };
   if (ticker) where.asset = { ticker: { contains: ticker, mode: 'insensitive' } };
   if (type && ['BUY', 'SELL'].includes(type)) where.type = type;
 
@@ -68,7 +73,28 @@ async function getPortfolioWithTransactions(
   return {
     portfolioId: resolvedPortfolio.id,
     portfolioName: resolvedPortfolio.name,
-    transactions: transactions as TransactionWithAsset[],
+    transactions: transactions.map((transaction) => ({
+      id: transaction.id,
+      type: transaction.type,
+      eventId: transaction.eventId,
+      source: transaction.source,
+      subtype: transaction.subtype,
+      isSystemGenerated: transaction.isSystemGenerated,
+      quantity: transaction.quantity,
+      price: transaction.price,
+      priceUSD: transaction.priceUSD,
+      fee: transaction.fee,
+      currency: transaction.currency,
+      date: transaction.date,
+      notes: transaction.notes,
+      asset: {
+        id: transaction.asset.id,
+        ticker: transaction.asset.ticker,
+        name: transaction.asset.name,
+        market: transaction.asset.market,
+        logo: transaction.asset.logo,
+      },
+    })),
     total,
   };
 }

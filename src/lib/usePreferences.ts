@@ -23,7 +23,21 @@ const DEFAULT_PREFERENCES: Preferences = {
 const LOCAL_KEY = 'user_preferences';
 const SETTINGS_UPDATED_AT_KEY = 'settings_updated_at';
 
+interface PortfolioPreferenceRecord {
+  id: string;
+  preferences?: string | null;
+  settingsUpdatedAt?: string | null;
+}
+
+interface PortfolioApiResponse {
+  portfolio?: PortfolioPreferenceRecord;
+  portfolios?: PortfolioPreferenceRecord[];
+}
+
 function loadLocal(): Preferences {
+  if (typeof window === 'undefined') {
+    return DEFAULT_PREFERENCES;
+  }
   try {
     const raw = localStorage.getItem(LOCAL_KEY);
     if (!raw) return DEFAULT_PREFERENCES;
@@ -34,12 +48,9 @@ function loadLocal(): Preferences {
 }
 
 export function usePreferences() {
-  const [prefs, setPrefs] = useState<Preferences>(DEFAULT_PREFERENCES);
+  const [prefs, setPrefs] = useState<Preferences>(() => loadLocal());
 
-  // 初始化：立即从 localStorage 读取
   useEffect(() => {
-    setPrefs(loadLocal());
-
     // 云端同步（仅登录用户）
     const sync = async () => {
       try {
@@ -48,11 +59,11 @@ export function usePreferences() {
 
         const res = await fetch(`/api/portfolio${idParam}`);
         if (!res.ok) return;
-        const data = await res.json();
+        const data: PortfolioApiResponse = await res.json();
 
         // GET 现在返回 { portfolios: [...] }，取匹配的那个
-        const portfolios: any[] = data.portfolios ?? (data.portfolio ? [data.portfolio] : []);
-        const portfolio = pid ? portfolios.find((p: any) => p.id === pid) : portfolios[0];
+        const portfolios = data.portfolios ?? (data.portfolio ? [data.portfolio] : []);
+        const portfolio = pid ? portfolios.find((p) => p.id === pid) : portfolios[0];
         if (!portfolio) return;
 
         const cloudPrefsRaw: string | null = portfolio.preferences ?? null;

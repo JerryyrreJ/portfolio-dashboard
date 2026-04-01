@@ -5,6 +5,7 @@ import { useRouter, useSearchParams } from 'next/navigation';
 import { useTranslations } from 'next-intl';
 import { createPortal } from 'react-dom';
 import { ChevronDown, Check, X, Settings2 } from 'lucide-react';
+import { useHydrated } from '@/lib/useHydrated';
 
 interface Portfolio {
   id: string;
@@ -22,14 +23,10 @@ export default function PortfolioSwitcher({ portfolios, currentId, variant = 'he
   const router = useRouter();
   const searchParams = useSearchParams();
   const [open, setOpen] = useState(false);
-  const [mounted, setMounted] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
+  const isHydrated = useHydrated();
 
   const current = portfolios.find(p => p.id === currentId) ?? portfolios[0];
-
-  useEffect(() => {
-    setMounted(true);
-  }, []);
 
   // Close on outside click
   useEffect(() => {
@@ -159,7 +156,7 @@ export default function PortfolioSwitcher({ portfolios, currentId, variant = 'he
       )}
 
       {/* Mobile Bottom Sheet */}
-      {mounted && open && createPortal(
+      {isHydrated && open && createPortal(
         <div
           className="sm:hidden fixed inset-0 z-[9999] flex items-end justify-center"
           style={{ pointerEvents: 'auto' }}

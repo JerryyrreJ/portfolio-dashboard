@@ -4,7 +4,6 @@ import React, { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { Lock, Eye, EyeOff, Loader2, CheckCircle2, AlertCircle } from 'lucide-react';
 import { createClient } from '@/lib/supabase';
-import Notification from '@/app/components/Notification';
 
 export default function UpdatePasswordPage() {
   const [password, setPassword] = useState('');
@@ -52,8 +51,9 @@ export default function UpdatePasswordPage() {
       setTimeout(() => {
         router.push('/settings');
       }, 3000);
-    } catch (err: any) {
-      setError(err.message || "Failed to update password");
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : "Failed to update password";
+      setError(message);
     } finally {
       setLoading(false);
     }

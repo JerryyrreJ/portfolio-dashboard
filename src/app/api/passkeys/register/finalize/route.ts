@@ -2,6 +2,10 @@ import { NextRequest, NextResponse } from "next/server";
 import { getUser } from "@/lib/supabase-server";
 import { passkeyApi } from "@/lib/passkey";
 
+interface ErrorWithOriginal extends Error {
+  originalError?: unknown;
+}
+
 export async function POST(req: NextRequest) {
   try {
     const user = await getUser();
@@ -13,8 +17,9 @@ export async function POST(req: NextRequest) {
     await passkeyApi.registration.finalize(credential);
 
     return NextResponse.json({ success: true });
-  } catch (error: any) {
-    const detail = error?.originalError ?? error?.message ?? "Failed to finalize passkey registration";
+  } catch (error: unknown) {
+    const typedError = error as ErrorWithOriginal;
+    const detail = typedError.originalError ?? typedError.message ?? "Failed to finalize passkey registration";
     console.error("Passkey register finalize error:", JSON.stringify(detail));
     return NextResponse.json({ error: detail }, { status: 500 });
   }

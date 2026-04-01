@@ -78,6 +78,10 @@ export async function POST(request: NextRequest) {
       transaction: {
         id: transaction.id,
         type: transaction.type,
+        eventId: transaction.eventId,
+        source: transaction.source,
+        subtype: transaction.subtype,
+        isSystemGenerated: transaction.isSystemGenerated,
         quantity: transaction.quantity,
         price: transaction.price,
         fee: transaction.fee,
@@ -155,6 +159,10 @@ export async function GET(request: NextRequest) {
       transactions: transactions.map(t => ({
         id: t.id,
         type: t.type,
+        eventId: t.eventId,
+        source: t.source,
+        subtype: t.subtype,
+        isSystemGenerated: t.isSystemGenerated,
         quantity: t.quantity,
         price: t.price,
         fee: t.fee,

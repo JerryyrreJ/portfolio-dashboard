@@ -1,5 +1,5 @@
 import React from 'react';
-import { Search, TrendingUp, ChevronRight, Plus, BarChart2, Newspaper, History, User } from 'lucide-react';
+import { Search, TrendingUp, ChevronRight, BarChart2, Newspaper, History, User } from 'lucide-react';
 
 export default function StockDetailLoading() {
   return (

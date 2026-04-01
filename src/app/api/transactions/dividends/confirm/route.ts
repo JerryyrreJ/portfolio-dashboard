@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { randomUUID } from 'crypto';
 import prisma from '@/lib/prisma';
 import { getPriceUSD } from '@/lib/exchange-rate';
 import {
@@ -14,6 +15,25 @@ function parseDividendAmount(rawAmount: unknown) {
   }
 
   return amount;
+}
+
+function parseReinvestPrice(rawPrice: unknown) {
+  const price = typeof rawPrice === 'number' ? rawPrice : Number(rawPrice);
+
+  if (!Number.isFinite(price) || price <= 0) {
+    return null;
+  }
+
+  return price;
+}
+
+function parseReinvestDate(rawDate: unknown) {
+  if (typeof rawDate !== 'string' || !rawDate.trim()) {
+    return null;
+  }
+
+  const parsed = new Date(`${rawDate}T00:00:00.000Z`);
+  return Number.isNaN(parsed.getTime()) ? null : parsed;
 }
 
 /**
@@ -40,12 +60,31 @@ export async function POST(request: NextRequest) {
     const ids = Array.from(new Set<string>(requestedIds));
     const adjustments = body.adjustments || {};
     const finalAmount = body.finalAmount; // 单个确认时的金额调整
+    const requestedMode = body.mode === 'reinvest' ? 'reinvest' : 'cash';
+    const reinvestPrice = parseReinvestPrice(body.reinvestPrice);
+    const reinvestDate = parseReinvestDate(body.reinvestDate);
 
     if (ids.length === 0) {
       return NextResponse.json(
         { error: 'Missing id or ids parameter' },
         { status: 400 }
       );
+    }
+
+    if (requestedMode === 'reinvest') {
+      if (ids.length !== 1) {
+        return NextResponse.json(
+          { error: 'Dividend reinvestment only supports confirming one dividend at a time' },
+          { status: 400 }
+        );
+      }
+
+      if (reinvestPrice === null) {
+        return NextResponse.json(
+          { error: 'Missing or invalid reinvestPrice' },
+          { status: 400 }
+        );
+      }
     }
 
     // 获取待确认的分红记录
@@ -79,6 +118,9 @@ export async function POST(request: NextRequest) {
         return {
           dividend,
           amount,
+          mode: requestedMode,
+          reinvestPrice,
+          reinvestDate,
           ...fx,
         };
       })
@@ -88,7 +130,7 @@ export async function POST(request: NextRequest) {
     const uniqueTickers = [...new Set(normalizedDividends.map(d => d.dividend.ticker))];
     const assets = await prisma.asset.findMany({
       where: { ticker: { in: uniqueTickers } },
-      select: { id: true, ticker: true },
+      select: { id: true, ticker: true, currency: true },
     });
     const assetByTicker = new Map(assets.map(a => [a.ticker, a]));
     const missingTicker = uniqueTickers.find(t => !assetByTicker.has(t));
@@ -102,8 +144,9 @@ export async function POST(request: NextRequest) {
     const results = await prisma.$transaction(async (tx) => {
       const confirmedResults = [];
 
-      for (const { dividend, amount, priceUSD, exchangeRate } of normalizedDividends) {
+      for (const { dividend, amount, priceUSD, exchangeRate, mode, reinvestPrice: normalizedReinvestPrice, reinvestDate: normalizedReinvestDate } of normalizedDividends) {
         const asset = assetByTicker.get(dividend.ticker)!;
+        const eventId = mode === 'reinvest' ? randomUUID() : null;
 
         const statusUpdate = await tx.pendingDividend.updateMany({
           where: {
@@ -122,6 +165,10 @@ export async function POST(request: NextRequest) {
             portfolioId: dividend.portfolioId,
             assetId: asset.id,
             type: 'DIVIDEND',
+            eventId,
+            source: mode === 'reinvest' ? 'drip' : 'dividend_sync',
+            subtype: mode === 'reinvest' ? 'REINVESTED_DIVIDEND' : null,
+            isSystemGenerated: false,
             quantity: 1,
             price: amount,
             priceUSD,
@@ -129,15 +176,53 @@ export async function POST(request: NextRequest) {
             fee: 0,
             currency: dividend.currency,
             date: dividend.payDate || dividend.exDate,
-            notes: `Dividend: ${dividend.sharesHeld} shares × ${dividend.dividendPerShare} per share`,
+            notes: `${mode === 'reinvest' ? 'Reinvested dividend' : 'Dividend'}: ${dividend.sharesHeld} shares × ${dividend.dividendPerShare} per share`,
           },
         });
+
+        let reinvestmentTransactionId: string | null = null;
+        let reinvestmentQuantity: number | null = null;
+
+        if (mode === 'reinvest' && normalizedReinvestPrice) {
+          const quantity = amount / normalizedReinvestPrice;
+          const reinvestCurrency = asset.currency || dividend.currency || 'USD';
+          const {
+            priceUSD: reinvestPriceUSD,
+            exchangeRate: reinvestExchangeRate,
+          } = await getPriceUSD(normalizedReinvestPrice, reinvestCurrency);
+
+          const reinvestmentTransaction = await tx.transaction.create({
+            data: {
+              portfolioId: dividend.portfolioId,
+              assetId: asset.id,
+              type: 'BUY',
+              eventId,
+              source: 'drip',
+              subtype: 'DRIP',
+              isSystemGenerated: true,
+              quantity,
+              price: normalizedReinvestPrice,
+              priceUSD: reinvestPriceUSD,
+              exchangeRate: reinvestExchangeRate,
+              fee: 0,
+              currency: reinvestCurrency,
+              date: normalizedReinvestDate || dividend.payDate || dividend.exDate,
+              notes: `Dividend reinvestment from ${amount.toFixed(2)} ${dividend.currency}`,
+            },
+          });
+
+          reinvestmentTransactionId = reinvestmentTransaction.id;
+          reinvestmentQuantity = quantity;
+        }
 
         confirmedResults.push({
           dividendId: dividend.id,
           transactionId: transaction.id,
+          reinvestmentTransactionId,
           ticker: dividend.ticker,
           amount,
+          mode,
+          reinvestmentQuantity,
         });
       }
 

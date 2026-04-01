@@ -1,5 +1,13 @@
 import { NextRequest, NextResponse } from 'next/server';
+import type { Prisma } from '@prisma/client';
 import prisma from '@/lib/prisma';
+
+interface CreateAssetRequest {
+  ticker?: string;
+  name?: string;
+  market?: string;
+  currency?: string;
+}
 
 // 获取所有资产列表
 export async function GET(request: NextRequest) {
@@ -8,7 +16,7 @@ export async function GET(request: NextRequest) {
     const market = searchParams.get('market');
     const search = searchParams.get('search');
 
-    const where: any = {};
+    const where: Prisma.AssetWhereInput = {};
 
     if (market) {
       where.market = market;
@@ -49,7 +57,7 @@ export async function GET(request: NextRequest) {
 // 创建新资产
 export async function POST(request: NextRequest) {
   try {
-    const body = await request.json();
+    const body: CreateAssetRequest = await request.json();
 
     // 验证必填字段
     if (!body.ticker || !body.name) {

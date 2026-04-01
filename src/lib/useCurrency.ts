@@ -28,7 +28,7 @@ export function useCurrency(): UseCurrencyReturn {
   const [rates, setRates] = useState<Record<string, number>>(USD_RATES);
   const [isLoading, setIsLoading] = useState(false);
 
-  const fetchRates = useCallback(async (currency: string) => {
+  const fetchRates = useCallback(async () => {
     try {
       // Always fetch USD-based rates, ignore the currency parameter
       const res = await fetch(`/api/exchange-rates?base=USD`);
@@ -63,10 +63,10 @@ export function useCurrency(): UseCurrencyReturn {
     if (cacheValid) {
       setRates(JSON.parse(cachedRates!));
       // Still refresh in background after 1s to keep rates fresh
-      setTimeout(() => fetchRates(currency), 1000);
+      setTimeout(() => fetchRates(), 1000);
     } else {
       setIsLoading(true);
-      fetchRates(currency);
+      fetchRates();
     }
   }, [fetchRates]);
 
@@ -76,7 +76,7 @@ export function useCurrency(): UseCurrencyReturn {
       if (e.key === 'base_currency' && e.newValue && e.newValue !== baseCurrency) {
         setBaseCurrency(e.newValue);
         setIsLoading(true);
-        fetchRates(e.newValue);
+        fetchRates();
       }
     };
     window.addEventListener('storage', handleStorage);

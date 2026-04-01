@@ -1,9 +1,10 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { startTransition, useState } from 'react';
 import { format } from 'date-fns';
 import { useLocale, useTranslations } from 'next-intl';
 import Link from 'next/link';
+import { useRouter } from 'next/navigation';
 import {
   Filter, Download, TrendingUp, Search, ChevronRight, Edit2, Trash2, Check, X, User, RefreshCw, FileSpreadsheet, FileText, FileJson
 } from 'lucide-react';
@@ -17,6 +18,10 @@ import { usePreferences } from '@/lib/usePreferences';
 interface TransactionWithAsset {
   id: string;
   type: string;
+  eventId?: string | null;
+  source?: string | null;
+  subtype?: string | null;
+  isSystemGenerated?: boolean;
   quantity: number;
   price: number;
   priceUSD: number;
@@ -143,6 +148,7 @@ export default function TransactionsClient({
   portfolioId, portfolioName, logoMap, searchTicker, searchType,
   buyCount, sellCount, totalVolume, userDisplayName = '',
 }: TransactionsClientProps) {
+  const router = useRouter();
   const t = useTranslations('transactions');
   const locale = useLocale();
   const { fmt, convert, symbol } = useCurrency();
@@ -175,6 +181,18 @@ export default function TransactionsClient({
     if (type === 'DIVIDEND') return t('types.dividend');
     return type;
   };
+
+  const getTransactionTag = (transaction: TransactionWithAsset) => {
+    if (transaction.subtype === 'DRIP') return 'DRIP';
+    if (transaction.subtype === 'REINVESTED_DIVIDEND') return 'Reinvested';
+    return null;
+  };
+
+  const isManagedDripTransaction = (transaction: TransactionWithAsset) => (
+    transaction.source === 'drip' ||
+    transaction.subtype === 'DRIP' ||
+    transaction.subtype === 'REINVESTED_DIVIDEND'
+  );
 
   const getExportFilterLabel = () => {
     const parts: string[] = [];
@@ -209,13 +227,17 @@ export default function TransactionsClient({
 
   const handleSave = async (tx: TransactionWithAsset) => {
     if (!editState) return;
+
+    const isManaged = isManagedDripTransaction(tx);
     setIsSaving(true);
     const prev = transactions;
     const quantity = parseFloat(editState.quantity);
-    setTransactions(ts => ts.map(t => t.id === tx.id
-      ? { ...t, date: new Date(editState.date), quantity, price: parseFloat(editState.price), fee: parseFloat(editState.fee), notes: editState.notes || null }
-      : t
-    ));
+    if (!isManaged) {
+      setTransactions(ts => ts.map(t => t.id === tx.id
+        ? { ...t, date: new Date(editState.date), quantity, price: parseFloat(editState.price), fee: parseFloat(editState.fee), notes: editState.notes || null }
+        : t
+      ));
+    }
     closeEdit();
     try {
       const res = await fetch(`/api/transactions/${tx.id}`, {
@@ -230,20 +252,33 @@ export default function TransactionsClient({
         }),
       });
       if (!res.ok) throw new Error();
+      if (isManaged) {
+        startTransition(() => router.refresh());
+      }
     } catch {
-      setTransactions(prev);
+      if (!isManaged) {
+        setTransactions(prev);
+      }
     } finally {
       setIsSaving(false);
     }
   };
 
-  const handleDelete = async (id: string) => {
+  const handleDelete = async (tx: TransactionWithAsset) => {
+    const isManaged = isManagedDripTransaction(tx);
     const prev = transactions;
-    setTransactions(t => t.filter(tx => tx.id !== id));
+    if (isManaged && tx.eventId) {
+      setTransactions((currentTransactions) => currentTransactions.filter((currentTx) => currentTx.eventId !== tx.eventId));
+    } else {
+      setTransactions((currentTransactions) => currentTransactions.filter((currentTx) => currentTx.id !== tx.id));
+    }
     setConfirmingId(null);
     try {
-      const res = await fetch(`/api/transactions/${id}`, { method: 'DELETE' });
+      const res = await fetch(`/api/transactions/${tx.id}`, { method: 'DELETE' });
       if (!res.ok) throw new Error();
+      if (isManaged) {
+        startTransition(() => router.refresh());
+      }
     } catch {
       setTransactions(prev);
     }
@@ -654,9 +689,16 @@ export default function TransactionsClient({
                           </Link>
                         </td>
                         <td className="px-6 py-4 text-center">
-                          <span className={`px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-wide ${tx.type === 'BUY' ? `${colors.gain.tailwind.bgLight} ${colors.gain.tailwind.text}` : tx.type === 'SELL' ? `${colors.loss.tailwind.bgLight} ${colors.loss.tailwind.text}` : 'bg-indigo-50 text-indigo-600 dark:bg-indigo-950/30 dark:text-indigo-400'}`}>
-                            {getTransactionTypeLabel(tx.type)}
-                          </span>
+                          <div className="flex items-center justify-center gap-1.5 flex-wrap">
+                            <span className={`px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-wide ${tx.type === 'BUY' ? `${colors.gain.tailwind.bgLight} ${colors.gain.tailwind.text}` : tx.type === 'SELL' ? `${colors.loss.tailwind.bgLight} ${colors.loss.tailwind.text}` : 'bg-indigo-50 text-indigo-600 dark:bg-indigo-950/30 dark:text-indigo-400'}`}>
+                              {getTransactionTypeLabel(tx.type)}
+                            </span>
+                            {getTransactionTag(tx) && (
+                              <span className="px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-wide bg-sky-50 text-sky-700 dark:bg-sky-950/30 dark:text-sky-300">
+                                {getTransactionTag(tx)}
+                              </span>
+                            )}
+                          </div>
                         </td>
                         <td className="px-6 py-4 text-right tabular-nums text-[13px] font-semibold">{tx.type === 'DIVIDEND' ? '—' : formatNumber(tx.quantity, locale)}</td>
                         <td className="px-6 py-4 text-right tabular-nums text-[13px] text-secondary font-medium">{tx.type === 'DIVIDEND' ? '—' : fmt(tx.priceUSD || tx.price)}</td>
@@ -664,14 +706,17 @@ export default function TransactionsClient({
                           <p className="text-[14px] font-bold text-primary tabular-nums">{fmt(tx.type === 'DIVIDEND' ? tx.price : (tx.priceUSD || tx.price) * Math.abs(tx.quantity))}</p>
                           {tx.type === 'DIVIDEND' && tx.notes && (
                             <p className="text-[10px] text-secondary/60 font-medium tabular-nums mt-0.5 tracking-tight">
-                              {tx.notes.replace(/Dividend: /g, '').replace(/ shares x /g, ' × ').replace(/ per share/g, '')}
+                              {tx.notes
+                                .replace(/^(Dividend|Reinvested dividend): /g, '')
+                                .replace(/ shares x /g, ' × ')
+                                .replace(/ per share/g, '')}
                             </p>
                           )}
                         </td>
                         <td className="px-6 py-4 text-center">
                           {confirmingId === tx.id ? (
                             <div className="flex items-center justify-center gap-1.5 animate-in fade-in zoom-in-95">
-                              <button onClick={() => handleDelete(tx.id)} className="text-[11px] font-bold text-rose-500 hover:text-rose-600 transition-colors">{t('confirm')}</button>
+                              <button onClick={() => handleDelete(tx)} className="text-[11px] font-bold text-rose-500 hover:text-rose-600 transition-colors">{t('confirm')}</button>
                               <button onClick={() => setConfirmingId(null)} className="text-[11px] font-bold text-secondary hover:text-primary transition-colors">{t('cancel')}</button>
                             </div>
                           ) : (
@@ -695,14 +740,20 @@ export default function TransactionsClient({
                                   <label className="text-[10px] font-bold text-secondary uppercase tracking-widest ml-1">{t('date')}</label>
                                   <input type="date" value={editState?.date} onChange={e => setEditState(s => s ? { ...s, date: e.target.value } : s)} className="h-10 px-3 bg-card rounded-xl text-[13px] font-semibold border border-border focus:border-primary outline-none transition-all" />
                                 </div>
-                                {tx.type !== 'DIVIDEND' && (
+                                {tx.type !== 'DIVIDEND' && !isManagedDripTransaction(tx) && (
                                   <div className="space-y-1.5">
                                     <label className="text-[10px] font-bold text-secondary uppercase tracking-widest ml-1">{t('shares')}</label>
                                     <input type="number" step="any" value={editState?.quantity} onChange={e => setEditState(s => s ? { ...s, quantity: e.target.value } : s)} className="h-10 w-32 px-3 bg-card rounded-xl text-[13px] font-semibold border border-border focus:border-primary outline-none transition-all" />
                                   </div>
                                 )}
                                 <div className="space-y-1.5">
-                                  <label className="text-[10px] font-bold text-secondary uppercase tracking-widest ml-1">{tx.type === 'DIVIDEND' ? t('amount') : t('unitPrice')}</label>
+                                  <label className="text-[10px] font-bold text-secondary uppercase tracking-widest ml-1">
+                                    {tx.type === 'DIVIDEND'
+                                      ? t('amount')
+                                      : isManagedDripTransaction(tx)
+                                        ? 'Reinvest Price'
+                                        : t('unitPrice')}
+                                  </label>
                                   <input type="number" step="any" value={editState?.price} onChange={e => setEditState(s => s ? { ...s, price: e.target.value } : s)} className="h-10 w-32 px-3 bg-card rounded-xl text-[13px] font-semibold border border-border focus:border-primary outline-none transition-all" />
                                 </div>
                              </div>
@@ -742,6 +793,12 @@ export default function TransactionsClient({
                         <span>{shortDateFormatter.format(new Date(tx.date))}</span>
                         <span className="opacity-30">·</span>
                         <span className="uppercase tracking-wider text-[10px] font-bold text-primary/70">{getTransactionTypeLabel(tx.type)}</span>
+                        {getTransactionTag(tx) && (
+                          <>
+                            <span className="opacity-30">·</span>
+                            <span className="uppercase tracking-wider text-[10px] font-bold text-sky-600 dark:text-sky-300">{getTransactionTag(tx)}</span>
+                          </>
+                        )}
                       </div>
                     </div>
                   </div>

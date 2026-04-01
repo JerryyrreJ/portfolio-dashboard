@@ -1,8 +1,9 @@
 'use client';
 
-import React, { useEffect, useState } from 'react';
+import React, { useEffect } from 'react';
 import { createPortal } from 'react-dom';
 import { AlertCircle, Loader2 } from 'lucide-react';
+import { useHydrated } from '@/lib/useHydrated';
 
 interface ConfirmationModalProps {
   isOpen: boolean;
@@ -27,10 +28,9 @@ export default function ConfirmationModal({
   isLoading = false,
   variant = 'danger'
 }: ConfirmationModalProps) {
-  const [mounted, setMounted] = useState(false);
+  const isHydrated = useHydrated();
 
   useEffect(() => {
-    setMounted(true);
     if (isOpen) {
       document.body.style.overflow = 'hidden';
     } else {
@@ -39,7 +39,7 @@ export default function ConfirmationModal({
     return () => { document.body.style.overflow = 'unset'; };
   }, [isOpen]);
 
-  if (!mounted || !isOpen) return null;
+  if (!isHydrated || !isOpen) return null;
 
   const isDanger = variant === 'danger';
 

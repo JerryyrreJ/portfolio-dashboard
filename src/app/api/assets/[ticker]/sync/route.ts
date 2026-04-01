@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
+import type { Prisma } from '@prisma/client';
 import prisma from '@/lib/prisma';
 import { getCompanyProfile, getBasicFinancials, isFinnhubRateLimited, resetFinnhubRateLimit } from '@/lib/finnhub';
 import { getLogo as getTwelveDataLogo, isTwelveDataRateLimited, resetTwelveDataRateLimit } from '@/lib/twelvedata';
@@ -33,7 +34,7 @@ export async function POST(
     const needsHistorySync = !asset.historyLastUpdated || asset.historyLastUpdated < twentyFourHoursAgo;
     const needsProfileSync = !asset.profile;
 
-    const updateData: any = {};
+    const updateData: Prisma.AssetUpdateInput = {};
     const currentTime = new Date();
 
     // 1. Quote: Twelve Data first, Finnhub as fallback
@@ -50,7 +51,7 @@ export async function POST(
         updateData.lastPriceUpdated = currentTime;
       } else {
         // Fallback to Finnhub
-        const fq = await getFinnhubQuote(decodedTicker) as any;
+        const fq = await getFinnhubQuote(decodedTicker);
         if (fq && fq.c > 0) {
           updateData.lastPrice = fq.c;
           updateData.priceChange = fq.d;
@@ -77,7 +78,7 @@ export async function POST(
 
     // 2. Profile (Finnhub only)
     if (needsProfileSync) {
-      const p = await getCompanyProfile(decodedTicker) as any;
+      const p = await getCompanyProfile(decodedTicker);
       if (p?.name) {
         let logoUrl = p.logo || asset.logo;
         // Twelve Data fallback for logo
@@ -100,7 +101,7 @@ export async function POST(
 
     // 3. Financials (Finnhub only)
     if (needsQuoteSync || needsProfileSync) {
-      const fr = await getBasicFinancials(decodedTicker) as any;
+      const fr = await getBasicFinancials(decodedTicker);
       if (fr?.metric) {
         const m = fr.metric;
         updateData.metrics = JSON.stringify({

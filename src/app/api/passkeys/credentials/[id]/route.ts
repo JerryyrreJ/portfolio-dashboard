@@ -15,7 +15,8 @@ export async function DELETE(
     const { id } = await params;
     await passkeyApi.credential(id).remove();
     return NextResponse.json({ success: true });
-  } catch (err: any) {
-    return NextResponse.json({ error: err.message ?? "Failed to remove credential" }, { status: 500 });
+  } catch (err: unknown) {
+    const message = err instanceof Error ? err.message : "Failed to remove credential";
+    return NextResponse.json({ error: message }, { status: 500 });
   }
 }

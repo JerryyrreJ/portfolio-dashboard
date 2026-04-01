@@ -1,12 +1,9 @@
 import { NextResponse } from 'next/server';
-import { getFallbackRates, USD_RATES } from '@/lib/currency';
+import { USD_RATES } from '@/lib/currency';
 
 const EXCHANGE_API_KEY = process.env.EXCHANGE_RATE_API_KEY;
 
-export async function GET(request: Request) {
-  const { searchParams } = new URL(request.url);
-  const requestedBase = searchParams.get('base') || 'USD';
-
+export async function GET() {
   // Always return USD-based rates for consistent conversion logic
   // Client will handle the conversion to the target currency
   if (!EXCHANGE_API_KEY) {

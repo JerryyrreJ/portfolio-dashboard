@@ -1,7 +1,7 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
-import { DollarSign, RefreshCw, Globe, ChevronDown } from 'lucide-react';
+import React, { useState, useEffect, useCallback } from 'react';
+import { RefreshCw, Globe, ChevronDown } from 'lucide-react';
 
 interface ExchangeRates {
   base: string;
@@ -40,12 +40,12 @@ export default function CurrencySelector({
 
   const selectedCurrencyInfo = COMMON_CURRENCIES.find(c => c.code === selectedCurrency) || COMMON_CURRENCIES[0];
 
-  const fetchExchangeRates = async () => {
+  const fetchExchangeRates = useCallback(async () => {
     setIsLoading(true);
     try {
       const response = await fetch(`/api/exchange-rates?base=${selectedCurrency}`);
       if (response.ok) {
-        const data = await response.json();
+        const data: ExchangeRates = await response.json();
         setExchangeRates(data);
       }
     } catch (error) {
@@ -53,14 +53,14 @@ export default function CurrencySelector({
     } finally {
       setIsLoading(false);
     }
-  };
+  }, [selectedCurrency]);
 
   useEffect(() => {
     fetchExchangeRates();
     // 每5分钟自动刷新汇率
     const interval = setInterval(fetchExchangeRates, 300000);
     return () => clearInterval(interval);
-  }, [selectedCurrency]);
+  }, [fetchExchangeRates]);
 
   const handleCurrencySelect = (currencyCode: string) => {
     onCurrencyChange(currencyCode);

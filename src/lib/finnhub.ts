@@ -18,7 +18,7 @@ export function resetFinnhubRateLimit() {
 }
 
 // 统一的请求函数
-async function fetchFinnhub(endpoint: string, params: Record<string, string> = {}) {
+async function fetchFinnhub<T>(endpoint: string, params: Record<string, string> = {}): Promise<T | null> {
   const url = new URL(`${BASE_URL}${endpoint}`);
   url.searchParams.append('token', API_KEY);
 
@@ -46,10 +46,11 @@ async function fetchFinnhub(endpoint: string, params: Record<string, string> = {
       return null;
     }
 
-    return await response.json();
-  } catch (error: any) {
+    return await response.json() as T;
+  } catch (error: unknown) {
     clearTimeout(timeoutId);
-    console.warn(`Finnhub fetch exception for ${endpoint}:`, error.message || error);
+    const message = error instanceof Error ? error.message : error;
+    console.warn(`Finnhub fetch exception for ${endpoint}:`, message);
     return null;
   }
 }
@@ -82,16 +83,16 @@ export interface StockSearchResult {
  * 获取股票实时报价
  * @param symbol 股票代码，如 "AAPL"
  */
-export async function getQuote(symbol: string): Promise<StockQuote> {
-  return fetchFinnhub('/quote', { symbol: symbol.toUpperCase() });
+export async function getQuote(symbol: string): Promise<StockQuote | null> {
+  return fetchFinnhub<StockQuote>('/quote', { symbol: symbol.toUpperCase() });
 }
 
 /**
  * 搜索股票
  * @param query 搜索关键词，如 "Apple" 或 "AAPL"
  */
-export async function searchStock(query: string): Promise<StockSearchResult> {
-  return fetchFinnhub('/search', { q: query });
+export async function searchStock(query: string): Promise<StockSearchResult | null> {
+  return fetchFinnhub<StockSearchResult>('/search', { q: query });
 }
 
 /**
@@ -136,8 +137,8 @@ export interface CompanyProfile {
  * 获取公司基本资料
  * @param symbol 股票代码
  */
-export async function getCompanyProfile(symbol: string): Promise<CompanyProfile> {
-  return fetchFinnhub('/stock/profile2', { symbol: symbol.toUpperCase() });
+export async function getCompanyProfile(symbol: string): Promise<CompanyProfile | null> {
+  return fetchFinnhub<CompanyProfile>('/stock/profile2', { symbol: symbol.toUpperCase() });
 }
 
 // ---- Company News ----
@@ -165,11 +166,11 @@ export async function getCompanyNews(
   from: string,
   to: string
 ): Promise<NewsArticle[]> {
-  return fetchFinnhub('/company-news', {
+  return await fetchFinnhub<NewsArticle[]>('/company-news', {
     symbol: symbol.toUpperCase(),
     from,
     to,
-  });
+  }) ?? [];
 }
 
 // ---- Basic Financials / Key Metrics ----
@@ -194,8 +195,8 @@ export interface BasicFinancials {
  * 获取股票关键财务指标
  * @param symbol 股票代码
  */
-export async function getBasicFinancials(symbol: string): Promise<BasicFinancials> {
-  return fetchFinnhub('/stock/metric', {
+export async function getBasicFinancials(symbol: string): Promise<BasicFinancials | null> {
+  return fetchFinnhub<BasicFinancials>('/stock/metric', {
     symbol: symbol.toUpperCase(),
     metric: 'all',
   });

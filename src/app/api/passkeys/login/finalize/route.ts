@@ -5,12 +5,14 @@ import { cookies } from "next/headers";
 import { createServerClient } from "@supabase/ssr";
 import { decodeJwt } from "jose";
 
+type PasskeyLoginResult = string | { token?: string };
+
 export async function POST(req: NextRequest) {
   try {
     const credential = await req.json();
 
-    const result = await passkeyApi.login.finalize(credential);
-    const jwt = typeof result === 'string' ? result : (result as any)?.token;
+    const result = await passkeyApi.login.finalize(credential) as PasskeyLoginResult;
+    const jwt = typeof result === 'string' ? result : result?.token;
     if (!jwt) {
       return NextResponse.json({ error: "Authentication failed" }, { status: 401 });
     }
@@ -68,9 +70,10 @@ export async function POST(req: NextRequest) {
     }
 
     return NextResponse.json({ success: true });
-  } catch (error: any) {
+  } catch (error: unknown) {
+    const message = error instanceof Error ? error.message : "Failed to finalize passkey login";
     return NextResponse.json(
-      { error: error.message || "Failed to finalize passkey login" },
+      { error: message },
       { status: 500 }
     );
   }

@@ -56,11 +56,25 @@ model AssetPriceHistory {
   @@index([ticker, date])
 }
 
+model IndexPriceHistory {
+  id     Int      @id @default(autoincrement())
+  ticker String
+  date   DateTime @db.Date
+  close  Float
+
+  @@unique([ticker, date])
+  @@index([ticker, date])
+}
+
 model Transaction {
   id           String    @id @default(cuid())
   portfolioId  String
   assetId      String
   type         String
+  eventId      String?
+  source       String?
+  subtype      String?
+  isSystemGenerated Boolean @default(false)
   date         DateTime
   quantity     Float     @default(0)
   price        Float     @default(0)

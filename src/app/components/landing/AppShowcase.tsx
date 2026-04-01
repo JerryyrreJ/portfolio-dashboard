@@ -2,7 +2,6 @@
 
 import { useRef } from "react";
 import { motion, useScroll, useTransform } from "framer-motion";
-import Image from "next/image";
 
 export default function AppShowcase() {
   const containerRef = useRef<HTMLDivElement>(null);
@@ -72,7 +71,7 @@ export default function AppShowcase() {
                   <p className="font-medium text-sm">Please place your 1:1 Dashboard Screenshot here</p>
                   <p className="text-xs mt-1">Suggested resolution: 2560x1600 (16:10 or 16:9)</p>
                   <code className="mt-4 px-2 py-1 bg-black/20 rounded text-[11px] font-mono">
-                    src="/dashboard-preview.png"
+                    src=&quot;/dashboard-preview.png&quot;
                   </code>
                 </div>
               </div>

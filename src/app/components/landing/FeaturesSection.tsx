@@ -1,8 +1,8 @@
 "use client";
 
-import { useRef, useState, useEffect } from "react";
 import { motion, useMotionTemplate, useMotionValue } from "framer-motion";
-import { LineChart, Lock, Layers, ZapOff, Percent } from "lucide-react";
+import { Lock, Layers, ZapOff, Percent } from "lucide-react";
+import { useHydrated } from "@/lib/useHydrated";
 
 const features = [
   {
@@ -95,10 +95,9 @@ function FeatureCard({ feature }: { feature: typeof features[0] }) {
 }
 
 export default function FeaturesSection() {
-  const [mounted, setMounted] = useState(false);
-  useEffect(() => setMounted(true), []);
+  const isHydrated = useHydrated();
 
-  if (!mounted) return null; // Prevent hydration issues with motion values
+  if (!isHydrated) return null; // Prevent hydration issues with motion values
 
   return (
     <section id="features" className="relative w-full px-6 py-24 md:py-32 flex justify-center bg-page">

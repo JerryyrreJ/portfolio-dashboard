@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 import type { Asset } from "@prisma/client";
 import DashboardClient from '../DashboardClient'
 import { getCompanyProfile } from '@/lib/finnhub'
-import { get12MonthHistory, getLogo as getTwelveDataLogo } from '@/lib/twelvedata'
+import { get12MonthHistory, getIndexHistory, getLogo as getTwelveDataLogo } from '@/lib/twelvedata'
 import { getUser } from '@/lib/supabase-server'
 import prisma, { withRetry } from '@/lib/prisma'
 import { getPriceOnOrBefore } from '@/lib/portfolio-chart'
@@ -41,6 +41,22 @@ type HoldingAccumulator = {
   realizedGain: number;
   dividendIncome: number;
   lots: HoldingLot[];
+}
+
+function getIndexPriceHistoryDelegate() {
+  const delegate = (prisma as typeof prisma & {
+    indexPriceHistory?: typeof prisma.assetPriceHistory
+  }).indexPriceHistory
+  return delegate && typeof delegate.findFirst === 'function' && typeof delegate.findMany === 'function'
+    ? delegate
+    : null
+}
+
+function isIndexPriceHistoryUnavailable(error: unknown) {
+  const prismaError = error as { code?: string; message?: string }
+  const code = prismaError.code
+  const message = String(prismaError.message || '')
+  return code === 'P2021' || message.includes('IndexPriceHistory')
 }
 
 export default async function Page({ searchParams }: { searchParams: Promise<{ pid?: string }> }) {
@@ -201,6 +217,7 @@ export default async function Page({ searchParams }: { searchParams: Promise<{ p
   const assetsNeedingHistorySync = assetsWithLogo.filter(
     a => !a.historyLastUpdated || a.historyLastUpdated < new Date(Date.now() - 24 * 60 * 60 * 1000)
   );
+  const indexPriceHistory = getIndexPriceHistoryDelegate();
 
   if (missingLogos.length > 0 || assetsNeedingHistorySync.length > 0) {
     // 异步闭包，在后台运行
@@ -235,6 +252,48 @@ export default async function Page({ searchParams }: { searchParams: Promise<{ p
               where: { id: asset.id },
               data: { historyLastUpdated: new Date() }
             });
+          }
+        }
+
+        // Sync index price history (SPY, QQQ) - incremental
+        if (!indexPriceHistory) {
+          console.warn('[Dashboard] Prisma client is missing indexPriceHistory. Run `prisma generate` and restart `next dev`.')
+        } else {
+          try {
+            const INDEX_TICKERS = ['SPY', 'QQQ'];
+            for (const indexTicker of INDEX_TICKERS) {
+              const latest = await indexPriceHistory.findFirst({
+                where: { ticker: indexTicker },
+                orderBy: { date: 'desc' },
+                select: { date: true },
+              });
+
+              const fromDate = latest
+                ? new Date(latest.date.getTime() + 86400000).toISOString().split('T')[0]
+                : null;
+
+              const yesterday = new Date();
+              yesterday.setDate(yesterday.getDate() - 1);
+              if (latest && latest.date >= yesterday) continue;
+
+              if (!fromDate) continue; // No seed data yet, skip incremental sync
+
+              const history = await getIndexHistory(indexTicker, fromDate);
+              if (history && history.length > 0) {
+                const values = history.map(p => `('${indexTicker}', '${p.date}'::date, ${p.price})`).join(',');
+                await prisma.$executeRawUnsafe(`
+                  INSERT INTO "IndexPriceHistory" (ticker, date, close)
+                  VALUES ${values}
+                  ON CONFLICT (ticker, date) DO UPDATE SET close = EXCLUDED.close
+                `);
+              }
+            }
+          } catch (e) {
+            if (isIndexPriceHistoryUnavailable(e)) {
+              console.warn('[Dashboard] IndexPriceHistory table is not available yet. Apply the latest Prisma migration.')
+            } else {
+              throw e;
+            }
           }
         }
       } catch (e) {
@@ -316,6 +375,36 @@ export default async function Page({ searchParams }: { searchParams: Promise<{ p
     new Set(Object.values(priceHistories).flatMap(h => h.map(p => p.date)))
   ).sort();
 
+  // Fetch index price history covering the same date range
+  const firstChartDate = allDateLabels[0];
+  let indexPriceRows: { ticker: string; date: Date; close: number }[] = [];
+
+  if (firstChartDate && indexPriceHistory) {
+    try {
+      indexPriceRows = await indexPriceHistory.findMany({
+        where: {
+          ticker: { in: ['SPY', 'QQQ'] },
+          date: { gte: new Date(firstChartDate) },
+        },
+        orderBy: { date: 'asc' },
+        select: { ticker: true, date: true, close: true },
+      });
+    } catch (e) {
+      if (isIndexPriceHistoryUnavailable(e)) {
+        console.warn('[Dashboard] Skipping benchmark series because IndexPriceHistory is not available yet.')
+      } else {
+        throw e;
+      }
+    }
+  }
+
+  const indexPriceHistories: Record<string, { date: string; price: number }[]> = {};
+  for (const row of indexPriceRows) {
+    const dateStr = row.date.toISOString().split('T')[0];
+    if (!indexPriceHistories[row.ticker]) indexPriceHistories[row.ticker] = [];
+    indexPriceHistories[row.ticker].push({ date: dateStr, price: row.close });
+  }
+
   // 5d. 将交易记录按时间排序，用于逐日回放
   const sortedTransactions = [...portfolio.transactions].sort(
     (a, b) => new Date(a.date).getTime() - new Date(b.date).getTime()
@@ -382,9 +471,49 @@ export default async function Page({ searchParams }: { searchParams: Promise<{ p
     };
   }).filter(p => p.Total > 0);
 
+  // Compute index cumulative returns over the same date range
+  const INDEX_TICKERS = ['SPY', 'QQQ'] as const;
+  const indexReturnFactors: Record<string, number> = { SPY: 1.0, QQQ: 1.0 };
+  const indexReturns: Record<string, number[]> = { SPY: [], QQQ: [] };
+
+  for (let i = 0; i < allDateLabels.length; i++) {
+    const dateLabel = allDateLabels[i];
+    for (const idx of INDEX_TICKERS) {
+      const prices = indexPriceHistories[idx];
+      if (!prices || prices.length === 0) {
+        indexReturns[idx].push(0);
+        continue;
+      }
+      if (i > 0) {
+        const prevLabel = allDateLabels[i - 1];
+        const todayPrice = getPriceOnOrBefore(prices, dateLabel);
+        const prevPrice = getPriceOnOrBefore(prices, prevLabel);
+        if (todayPrice != null && prevPrice != null && prevPrice > 0) {
+          indexReturnFactors[idx] *= todayPrice / prevPrice;
+        }
+      }
+      indexReturns[idx].push(Math.round((indexReturnFactors[idx] - 1) * 10000) / 100);
+    }
+  }
+
+  // Merge index returns into historical chart data points
+  // We need to align by allDateLabels index, but historicalChartData is filtered (p.Total > 0)
+  // Build a map from dateLabel → allDateLabels index for alignment
+  const dateLabelIndexMap = new Map<string, number>();
+  allDateLabels.forEach((d, i) => dateLabelIndexMap.set(d, i));
+
+  const historicalChartDataWithIndex = historicalChartData.map((point) => {
+    const i = dateLabelIndexMap.get(point.date);
+    return {
+      ...point,
+      SPY: i != null ? (indexReturns['SPY'][i] ?? null) : null,
+      QQQ: i != null ? (indexReturns['QQQ'][i] ?? null) : null,
+    };
+  });
+
   // 5f. 末尾追加 Today 实时数据
   // Today 的 TWR：用最后一个历史日的价格作为昨天
-  const lastHistorical = historicalChartData[historicalChartData.length - 1];
+  const lastHistorical = historicalChartDataWithIndex[historicalChartDataWithIndex.length - 1];
   let todayReturnFactor = cumulativeReturnFactor;
   if (lastHistorical) {
     const lastLabel = lastHistorical.date;
@@ -406,12 +535,22 @@ export default async function Page({ searchParams }: { searchParams: Promise<{ p
       todayReturnFactor *= dailyFactor / weightSum;
     }
   }
+
+  // Index returns for Today point — carry forward the last historical value
+  const todayIndexReturns: Record<string, number | null> = { SPY: null, QQQ: null };
+  for (const idx of INDEX_TICKERS) {
+    const lastVal = indexReturns[idx][indexReturns[idx].length - 1];
+    if (lastVal != null) todayIndexReturns[idx] = lastVal;
+  }
+
   const chartData = [
-    ...historicalChartData,
+    ...historicalChartDataWithIndex,
     {
       date: 'Today',
       Total: Math.round(totalValue * 100) / 100,
       Return: Math.round((todayReturnFactor - 1) * 10000) / 100,
+      SPY: todayIndexReturns['SPY'],
+      QQQ: todayIndexReturns['QQQ'],
     },
   ];
 

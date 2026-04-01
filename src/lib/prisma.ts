@@ -4,11 +4,33 @@ const prismaClientSingleton = () => {
   return new PrismaClient()
 }
 
-declare global {
-  var prisma: undefined | ReturnType<typeof prismaClientSingleton>
+type PrismaClientInstance = ReturnType<typeof prismaClientSingleton>
+
+const REQUIRED_DELEGATES = [
+  'portfolio',
+  'asset',
+  'assetPriceHistory',
+  'indexPriceHistory',
+  'transaction',
+  'pendingDividend',
+] as const satisfies readonly (keyof PrismaClientInstance)[]
+
+function hasRequiredDelegates(client: PrismaClientInstance) {
+  return REQUIRED_DELEGATES.every((delegate) => typeof client[delegate]?.findMany === 'function')
 }
 
-const prisma = globalThis.prisma ?? prismaClientSingleton()
+declare global {
+  var prisma: undefined | PrismaClientInstance
+}
+
+const cachedPrisma = globalThis.prisma
+const prisma = cachedPrisma && hasRequiredDelegates(cachedPrisma)
+  ? cachedPrisma
+  : prismaClientSingleton()
+
+if (cachedPrisma && prisma !== cachedPrisma) {
+  console.warn('[Prisma] Recreated PrismaClient because the cached dev singleton was generated from an older schema.')
+}
 
 export default prisma
 
@@ -27,9 +49,10 @@ export async function withRetry<T>(
   for (let attempt = 1; attempt <= retries; attempt++) {
     try {
       return await fn()
-    } catch (err: any) {
-      const code: string | undefined = err?.code
-      const message: string = err?.message || ''
+    } catch (err: unknown) {
+      const prismaError = err as { code?: string; message?: string }
+      const code: string | undefined = prismaError.code
+      const message: string = prismaError.message || ''
       const isRetryableError = (code && RETRYABLE_CODES.has(code)) || 
                                 message.includes('Can\'t reach database server') ||
                                 message.includes('Connection closed') ||

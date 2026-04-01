@@ -1,4 +1,4 @@
-import { absoluteUrl, getHomePageJsonLd, siteConfig } from "@/lib/site";
+import { absoluteUrl, siteConfig } from "@/lib/site";
 import type { Metadata } from "next";
 import HeroSection from "./components/landing/HeroSection";
 import Header from "./components/landing/Header";
