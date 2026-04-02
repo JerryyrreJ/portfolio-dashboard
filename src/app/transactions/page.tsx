@@ -1,6 +1,7 @@
 import type { Prisma } from '@prisma/client';
 import { getCompanyProfile } from '@/lib/finnhub';
 import { getLogo as getTwelveDataLogo } from '@/lib/twelvedata';
+import { createServerProfiler } from '@/lib/perf';
 import { getUser } from '@/lib/supabase-server';
 import prisma, { withRetry } from '@/lib/prisma';
 import TransactionsClient from './TransactionsClient';
@@ -33,6 +34,7 @@ async function getPortfolioWithTransactions(
   userId: string,
   searchParams: { [key: string]: string | undefined }
 ): Promise<{ portfolioId: string; portfolioName: string; transactions: TransactionWithAsset[]; total: number }> {
+  const perf = createServerProfiler('transactions/data', searchParams.pid ? `pid=${searchParams.pid}` : undefined);
   const page = parseInt(searchParams.page || '1');
   const limit = parseInt(searchParams.limit || '20');
   const ticker = searchParams.ticker;
@@ -41,25 +43,28 @@ async function getPortfolioWithTransactions(
 
   // 按 pid 查找，找不到则 fallback 到第一个
   const portfolio = pid
-    ? await withRetry(() => prisma.portfolio.findFirst({
+    ? await perf.time('portfolio.findFirstByPid', () => withRetry(() => prisma.portfolio.findFirst({
         where: { id: pid, userId },
         select: { id: true, name: true },
-      }))
+      })))
     : null;
 
-  const resolvedPortfolio = portfolio ?? await withRetry(() => prisma.portfolio.findFirst({
+  const resolvedPortfolio = portfolio ?? await perf.time('portfolio.findFirstFallback', () => withRetry(() => prisma.portfolio.findFirst({
     where: { userId },
     select: { id: true, name: true },
     orderBy: { id: 'asc' },
-  }));
+  })));
 
-  if (!resolvedPortfolio) return { portfolioId: '', portfolioName: 'Portfolio', transactions: [], total: 0 };
+  if (!resolvedPortfolio) {
+    perf.flush('no-portfolio');
+    return { portfolioId: '', portfolioName: 'Portfolio', transactions: [], total: 0 };
+  }
 
   const where: Prisma.TransactionWhereInput = { portfolioId: resolvedPortfolio.id };
   if (ticker) where.asset = { ticker: { contains: ticker, mode: 'insensitive' } };
   if (type && ['BUY', 'SELL'].includes(type)) where.type = type;
 
-  const [transactions, total] = await Promise.all([
+  const [transactions, total] = await perf.time('transactions.findMany+count', () => Promise.all([
     prisma.transaction.findMany({
       where,
       include: { asset: true },
@@ -68,8 +73,9 @@ async function getPortfolioWithTransactions(
       take: limit,
     }),
     prisma.transaction.count({ where }),
-  ]);
+  ]));
 
+  perf.flush(`portfolio=${resolvedPortfolio.id} rows=${transactions.length} total=${total}`);
   return {
     portfolioId: resolvedPortfolio.id,
     portfolioName: resolvedPortfolio.name,
@@ -102,6 +108,7 @@ async function getPortfolioWithTransactions(
 export default async function TransactionsPage(props: {
   searchParams: Promise<{ [key: string]: string | undefined }>;
 }) {
+  const perf = createServerProfiler('transactions/page');
   // Parallelize user auth and searchParams resolution
   const [user, searchParams] = await Promise.all([
     getUser(),
@@ -116,7 +123,7 @@ export default async function TransactionsPage(props: {
 
   if (isLoggedIn) {
     try {
-      const data = await getPortfolioWithTransactions(user!.id, searchParams);
+      const data = await perf.time('getPortfolioWithTransactions', () => getPortfolioWithTransactions(user!.id, searchParams));
       portfolioId = data.portfolioId;
       portfolioName = data.portfolioName;
       transactions = data.transactions;
@@ -170,6 +177,7 @@ export default async function TransactionsPage(props: {
     ? (user.user_metadata?.display_name || user.email?.split('@')[0] || '')
     : ''
 
+  perf.flush(`loggedIn=${isLoggedIn} rows=${transactions.length} page=${currentPage}`);
   return (
     <TransactionsClient
       transactions={transactions}

@@ -34,6 +34,13 @@ const CURRENCIES = [
   { code: 'SGD', name: 'SGD' },
 ];
 
+const inputBaseClass = 'w-full h-[50px] rounded-[18px] border-none outline-none focus:ring-2 focus:ring-black/5';
+const filledInputClass = `${inputBaseClass} bg-element`;
+const iconInputClass = `${filledInputClass} pl-11 pr-4 py-3.5`;
+const numericInputClass = `${iconInputClass} text-[15px] font-bold tabular-nums [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none`;
+const plainTextInputClass = `${filledInputClass} px-4 py-3.5 text-[13px] font-medium`;
+const inputTriggerClass = 'w-full h-[50px] rounded-[18px] bg-element hover:bg-element-hover transition-colors';
+
 interface AddTransactionModalProps {
   isOpen: boolean;
   onClose: () => void;
@@ -608,7 +615,7 @@ export default function AddTransactionModal({
               <button
                 type="button"
                 onClick={() => setShowCurrencyPicker(v => !v)}
-                className="w-full px-4 py-3 bg-element rounded-[18px] flex items-center justify-between hover:bg-element-hover transition-colors active:scale-[0.99]"
+                className={`${inputTriggerClass} px-4 flex items-center justify-between active:scale-[0.99]`}
               >
                 <span className="text-[14px] font-bold text-primary">
                   {getCurrencySymbol(txCurrency)}&nbsp;&nbsp;{txCurrency}
@@ -648,7 +655,7 @@ export default function AddTransactionModal({
             <button 
               type="button" 
               onClick={() => setShowCalendar(!showCalendar)}
-              className="w-full pl-11 pr-4 py-3.5 bg-element border-none rounded-[18px] text-[14px] font-bold flex items-center justify-start relative hover:bg-element-hover transition-colors"
+              className={`${inputTriggerClass} pl-11 pr-4 border-none text-[14px] font-bold flex items-center justify-start relative`}
             >
               <CalendarIcon className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-secondary" />
               {fullDateFormatter.format(new Date(purchaseDate))}
@@ -662,93 +669,95 @@ export default function AddTransactionModal({
             )}
           </div>
 
-          {/* Inputs Grid: Shares & Unit Price */}
-          {transactionType !== 'DIVIDEND' ? (
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-5 sm:gap-6">
-              <div className="space-y-2">
-                <label className="text-[11px] font-bold text-secondary uppercase tracking-widest px-1">{t('shares')}</label>
-                <div className="relative">
-                  <Hash className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-secondary" />
-                  <input 
-                    type="number" 
-                    step="0.0001" 
-                    value={shares} 
-                    onChange={(e) => setShares(e.target.value)} 
-                    onWheel={(e) => (e.target as HTMLInputElement).blur()}
-                    placeholder="0.00" 
-                    className="w-full pl-11 pr-4 py-3.5 bg-element border-none rounded-[18px] text-[15px] font-bold tabular-nums outline-none focus:ring-2 focus:ring-black/5 [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none" 
-                  />
-                </div>
-              </div>
-              <div className="space-y-2">
-                <label className="text-[11px] font-bold text-secondary uppercase tracking-widest px-1 flex items-center gap-1.5">
-                  {t('unitPrice')}
-                  <span className="text-secondary">·</span>
-                  <span>{getCurrencySymbol(txCurrency)}</span>
-                </label>
-                <div className="relative">
-                  <DollarSign className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-secondary" />
-                  <input 
-                    type="number" 
-                    step="0.01" 
-                    value={price} 
-                    onChange={(e) => { setPrice(e.target.value); setPriceSource('manual'); }} 
-                    onWheel={(e) => (e.target as HTMLInputElement).blur()}
-                    placeholder="0.00" 
-                    className={`w-full pl-11 pr-4 py-3.5 border-none rounded-[18px] text-[15px] font-bold tabular-nums outline-none focus:ring-2 focus:ring-black/5 transition-colors [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none ${priceSource === 'api' ? 'bg-blue-50/50 text-blue-900 ring-1 ring-blue-100' : 'bg-element text-primary'}`} 
-                  />
-                </div>
-              </div>
-            </div>
-          ) : (
-            <div className="grid grid-cols-1 gap-5">
-              <div className="space-y-2">
-                <label className="text-[11px] font-bold text-secondary uppercase tracking-widest px-1 flex items-center gap-1.5">
-                  {t('totalPayoutAmount')}
-                  <span className="text-secondary">·</span>
-                  <span>{getCurrencySymbol(txCurrency)}</span>
-                </label>
-                <div className="relative">
-                  <DollarSign className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-secondary" />
-                  <input 
-                    type="number" 
-                    step="0.01" 
-                    value={price} 
-                    onChange={(e) => { setPrice(e.target.value); setPriceSource('manual'); }} 
-                    onWheel={(e) => (e.target as HTMLInputElement).blur()}
-                    placeholder="0.00" 
-                    className="w-full pl-11 pr-4 py-3.5 bg-element border-none rounded-[18px] text-[15px] font-bold tabular-nums outline-none focus:ring-2 focus:ring-black/5 transition-colors [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none text-primary" 
-                  />
-                </div>
-              </div>
-            </div>
-          )}
-
-          {/* Fee & Optional Notes Grid */}
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-5 sm:gap-6">
+          <div className="space-y-5 sm:space-y-6 sm:min-h-[168px]">
+            {/* Inputs Grid: Shares & Unit Price */}
             {transactionType !== 'DIVIDEND' ? (
-              <div className="space-y-2">
-                <label className="text-[11px] font-bold text-secondary uppercase tracking-widest px-1 flex items-center gap-1.5">
-                  {t('feeOptional')}
-                  <span className="text-secondary">·</span>
-                  <span>{getCurrencySymbol(txCurrency)}</span>
-                </label>
-                <div className="relative">
-                  <DollarSign className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-secondary" />
-                  <input 
-                    type="number" 
-                    step="0.01" 
-                    value={fees} 
-                    onChange={(e) => setFees(e.target.value)} 
-                    onWheel={(e) => (e.target as HTMLInputElement).blur()}
-                    className="w-full pl-11 pr-4 py-3.5 bg-element border-none rounded-[18px] text-[15px] font-bold outline-none focus:ring-2 focus:ring-black/5 [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none" 
-                  />
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-5 sm:gap-6">
+                <div className="space-y-2">
+                  <label className="text-[11px] font-bold text-secondary uppercase tracking-widest px-1">{t('shares')}</label>
+                  <div className="relative">
+                    <Hash className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-secondary" />
+                    <input 
+                      type="number" 
+                      step="0.0001" 
+                      value={shares} 
+                      onChange={(e) => setShares(e.target.value)} 
+                      onWheel={(e) => (e.target as HTMLInputElement).blur()}
+                      placeholder="0.00" 
+                      className={numericInputClass}
+                    />
+                  </div>
+                </div>
+                <div className="space-y-2">
+                  <label className="text-[11px] font-bold text-secondary uppercase tracking-widest px-1 flex items-center gap-1.5">
+                    {t('unitPrice')}
+                    <span className="text-secondary">·</span>
+                    <span>{getCurrencySymbol(txCurrency)}</span>
+                  </label>
+                  <div className="relative">
+                    <DollarSign className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-secondary" />
+                    <input 
+                      type="number" 
+                      step="0.01" 
+                      value={price} 
+                      onChange={(e) => { setPrice(e.target.value); setPriceSource('manual'); }} 
+                      onWheel={(e) => (e.target as HTMLInputElement).blur()}
+                      placeholder="0.00" 
+                      className={`${numericInputClass} transition-colors ${priceSource === 'api' ? 'bg-blue-50/50 text-blue-900 ring-1 ring-blue-100' : 'bg-element text-primary'}`}
+                    />
+                  </div>
                 </div>
               </div>
-            ) : <div className="hidden sm:block"></div>}
-            <div className="space-y-2">
-              <label className="text-[11px] font-bold text-secondary uppercase tracking-widest px-1">{t('notes')}</label>
-              <input type="text" value={notes} onChange={(e) => setNotes(e.target.value)} placeholder={t('optional')} className="w-full px-4 py-3.5 bg-element border-none rounded-[18px] text-[13px] font-medium outline-none focus:ring-2 focus:ring-black/5" />
+            ) : (
+              <div className="grid grid-cols-1 gap-5">
+                <div className="space-y-2">
+                  <label className="text-[11px] font-bold text-secondary uppercase tracking-widest px-1 flex items-center gap-1.5">
+                    {t('totalPayoutAmount')}
+                    <span className="text-secondary">·</span>
+                    <span>{getCurrencySymbol(txCurrency)}</span>
+                  </label>
+                  <div className="relative">
+                    <DollarSign className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-secondary" />
+                    <input 
+                      type="number" 
+                      step="0.01" 
+                      value={price} 
+                      onChange={(e) => { setPrice(e.target.value); setPriceSource('manual'); }} 
+                      onWheel={(e) => (e.target as HTMLInputElement).blur()}
+                      placeholder="0.00" 
+                      className={`${numericInputClass} transition-colors text-primary`}
+                    />
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* Fee & Optional Notes Grid */}
+            <div className={`grid grid-cols-1 gap-5 sm:gap-6 ${transactionType !== 'DIVIDEND' ? 'sm:grid-cols-2' : ''}`}>
+              {transactionType !== 'DIVIDEND' ? (
+                <div className="space-y-2">
+                  <label className="text-[11px] font-bold text-secondary uppercase tracking-widest px-1 flex items-center gap-1.5">
+                    {t('feeOptional')}
+                    <span className="text-secondary">·</span>
+                    <span>{getCurrencySymbol(txCurrency)}</span>
+                  </label>
+                  <div className="relative">
+                    <DollarSign className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-secondary" />
+                    <input 
+                      type="number" 
+                      step="0.01" 
+                      value={fees} 
+                      onChange={(e) => setFees(e.target.value)} 
+                      onWheel={(e) => (e.target as HTMLInputElement).blur()}
+                      className={numericInputClass}
+                    />
+                  </div>
+                </div>
+              ) : null}
+              <div className="space-y-2">
+                <label className="text-[11px] font-bold text-secondary uppercase tracking-widest px-1">{t('notes')}</label>
+                <input type="text" value={notes} onChange={(e) => setNotes(e.target.value)} placeholder={t('optional')} className={plainTextInputClass} />
+              </div>
             </div>
           </div>
 

@@ -3,6 +3,8 @@
 import { useState, useEffect, useCallback } from 'react';
 import { getCurrencySymbol, convertAmount, formatCurrency, USD_RATES } from './currency';
 
+type IdleCallbackHandle = number;
+
 interface ExchangeRates {
   base: string;
   rates: Record<string, number>;
@@ -22,6 +24,21 @@ const CACHE_KEY = 'exchange_rates';
 const CACHE_UPDATED_KEY = 'exchange_rates_updated_at';
 const CACHE_BASE_KEY = 'exchange_rates_base';
 const CACHE_TTL_MS = 60 * 60 * 1000; // 1 hour
+
+function scheduleIdleRefresh(callback: () => void, timeout = 1500): IdleCallbackHandle {
+  if (typeof window !== 'undefined' && 'requestIdleCallback' in window) {
+    return window.requestIdleCallback(() => callback(), { timeout });
+  }
+  return window.setTimeout(callback, timeout);
+}
+
+function cancelIdleRefresh(handle: IdleCallbackHandle) {
+  if (typeof window !== 'undefined' && 'cancelIdleCallback' in window) {
+    window.cancelIdleCallback(handle);
+    return;
+  }
+  window.clearTimeout(handle);
+}
 
 export function useCurrency(): UseCurrencyReturn {
   const [baseCurrency, setBaseCurrency] = useState<string>('USD');
@@ -48,6 +65,7 @@ export function useCurrency(): UseCurrencyReturn {
   useEffect(() => {
     const currency = localStorage.getItem('base_currency') || 'USD';
     setBaseCurrency(currency);
+    let refreshHandle: IdleCallbackHandle | null = null;
 
     // Load cached rates immediately
     const cachedBase = localStorage.getItem(CACHE_BASE_KEY);
@@ -62,12 +80,18 @@ export function useCurrency(): UseCurrencyReturn {
 
     if (cacheValid) {
       setRates(JSON.parse(cachedRates!));
-      // Still refresh in background after 1s to keep rates fresh
-      setTimeout(() => fetchRates(), 1000);
+      // Refresh in browser idle time so hydration/UI work wins first
+      refreshHandle = scheduleIdleRefresh(() => { void fetchRates(); }, 3000);
     } else {
       setIsLoading(true);
-      fetchRates();
+      void fetchRates();
     }
+
+    return () => {
+      if (refreshHandle != null) {
+        cancelIdleRefresh(refreshHandle);
+      }
+    };
   }, [fetchRates]);
 
   // Re-fetch when base_currency changes (e.g. user updates in Settings)

@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { Fingerprint, Loader2, CheckCircle2, AlertCircle, Plus, Trash2 } from 'lucide-react';
 import { create } from '@github/webauthn-json';
 import { User } from '@supabase/supabase-js';
@@ -34,24 +34,83 @@ function getDeviceLabel(): string {
 }
 
 const CACHE_KEY = 'passkey_credentials';
+const PASSKEY_CACHE_TTL_MS = 5000;
 
-function loadCache(): Credential[] {
+const memoryCredentialCache = new Map<string, { data: Credential[]; cachedAt: number }>();
+const inFlightCredentialRequests = new Map<string, Promise<Credential[]>>();
+
+function getCacheKey(userId?: string) {
+  return userId ? `${CACHE_KEY}:${userId}` : CACHE_KEY;
+}
+
+function loadCache(userId?: string): Credential[] {
   try {
-    const raw = localStorage.getItem(CACHE_KEY);
+    const raw = localStorage.getItem(getCacheKey(userId)) ?? localStorage.getItem(CACHE_KEY);
     return raw ? JSON.parse(raw) : [];
   } catch {
     return [];
   }
 }
 
-function saveCache(data: Credential[]) {
-  localStorage.setItem(CACHE_KEY, JSON.stringify(data));
+function saveCache(data: Credential[], userId?: string) {
+  const serialized = JSON.stringify(data);
+  localStorage.setItem(getCacheKey(userId), serialized);
+  localStorage.setItem(CACHE_KEY, serialized);
+  if (userId) {
+    memoryCredentialCache.set(userId, { data, cachedAt: Date.now() });
+  }
+}
+
+function clearCredentialCache(userId?: string) {
+  localStorage.removeItem(getCacheKey(userId));
+  if (userId) {
+    memoryCredentialCache.delete(userId);
+    inFlightCredentialRequests.delete(userId);
+  }
+}
+
+async function fetchCredentialList(userId: string, options?: { force?: boolean }) {
+  const force = options?.force ?? false;
+  const localCache = typeof window !== 'undefined' ? loadCache(userId) : [];
+  const memory = memoryCredentialCache.get(userId);
+  const now = Date.now();
+
+  if (!force && memory && now - memory.cachedAt < PASSKEY_CACHE_TTL_MS) {
+    return memory.data;
+  }
+
+  if (!force && localCache.length > 0) {
+    memoryCredentialCache.set(userId, { data: localCache, cachedAt: now });
+    return localCache;
+  }
+
+  const inFlight = inFlightCredentialRequests.get(userId);
+  if (!force && inFlight) {
+    return inFlight;
+  }
+
+  const request = fetch('/api/passkeys/credentials')
+    .then(async (res) => {
+      if (!res.ok) {
+        throw new Error('Failed to fetch passkeys');
+      }
+      const cloud = await res.json() as Credential[];
+      saveCache(cloud, userId);
+      return cloud;
+    })
+    .finally(() => {
+      inFlightCredentialRequests.delete(userId);
+    });
+
+  inFlightCredentialRequests.set(userId, request);
+  return request;
 }
 
 export default function PasskeySection({ user }: PasskeySectionProps) {
   const t = useTranslations('settings.passkeys');
   const locale = useLocale();
-  const cached = typeof window !== 'undefined' ? loadCache() : [];
+  const userId = user?.id;
+  const cached = typeof window !== 'undefined' ? loadCache(userId) : [];
   const [credentials, setCredentials] = useState<Credential[]>(cached);
   const [isLoadingList, setIsLoadingList] = useState(cached.length === 0);
   const [isRegistering, setIsRegistering] = useState(false);
@@ -67,9 +126,29 @@ export default function PasskeySection({ user }: PasskeySectionProps) {
     day: 'numeric',
   });
 
+  const fetchCredentials = useCallback(async () => {
+    if (!userId) return;
+    try {
+      const cloud = await fetchCredentialList(userId);
+      setCredentials(cloud);
+    } catch {
+      // silently fail — cached list stays
+    } finally {
+      setIsLoadingList(false);
+    }
+  }, [userId]);
+
   useEffect(() => {
-    if (user) fetchCredentials();
-  }, [user]);
+    if (!userId) {
+      setCredentials([]);
+      setIsLoadingList(false);
+      return;
+    }
+    const localCache = loadCache(userId);
+    setCredentials(localCache);
+    setIsLoadingList(localCache.length === 0);
+    void fetchCredentials();
+  }, [fetchCredentials, userId]);
 
   // Auto-focus name input when add drawer opens
   useEffect(() => {
@@ -78,20 +157,6 @@ export default function PasskeySection({ user }: PasskeySectionProps) {
       setTimeout(() => nameInputRef.current?.select(), 50);
     }
   }, [isAddingNew]);
-
-  const fetchCredentials = async () => {
-    try {
-      const res = await fetch('/api/passkeys/credentials');
-      if (!res.ok) return;
-      const cloud: Credential[] = await res.json();
-      setCredentials(cloud);
-      saveCache(cloud);
-    } catch {
-      // silently fail — cached list stays
-    } finally {
-      setIsLoadingList(false);
-    }
-  };
 
   const handleRegister = async () => {
     if (!newPasskeyName.trim()) return;
@@ -120,6 +185,7 @@ export default function PasskeySection({ user }: PasskeySectionProps) {
       setNewPasskeyName('');
       setSuccess(true);
       setTimeout(() => setSuccess(false), 3000);
+      clearCredentialCache(userId);
       await fetchCredentials();
     } catch (err: unknown) {
       if (err instanceof Error && err.name === 'NotAllowedError') {
@@ -138,14 +204,14 @@ export default function PasskeySection({ user }: PasskeySectionProps) {
     const prev = credentials;
     const next = credentials.filter(c => c.id !== credentialId);
     setCredentials(next);
-    saveCache(next);
+    saveCache(next, userId);
     try {
       const res = await fetch(`/api/passkeys/credentials/${credentialId}`, { method: 'DELETE' });
       if (!res.ok) throw new Error(t('removeFailed'));
     } catch (err: unknown) {
       // Rollback on failure
       setCredentials(prev);
-      saveCache(prev);
+      saveCache(prev, userId);
       setError(err instanceof Error ? err.message : t('removeFailed'));
     }
   };

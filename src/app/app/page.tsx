@@ -6,6 +6,7 @@ import { get12MonthHistory, getIndexHistory, getLogo as getTwelveDataLogo } from
 import { getUser } from '@/lib/supabase-server'
 import prisma, { withRetry } from '@/lib/prisma'
 import { getPriceOnOrBefore } from '@/lib/portfolio-chart'
+import { createServerProfiler } from '@/lib/perf'
 import { absoluteUrl, siteConfig } from '@/lib/site'
 
 export const metadata: Metadata = {
@@ -60,13 +61,18 @@ function isIndexPriceHistoryUnavailable(error: unknown) {
 }
 
 export default async function Page({ searchParams }: { searchParams: Promise<{ pid?: string }> }) {
-  const user = await getUser()
+  const [user, { pid }] = await Promise.all([
+    getUser(),
+    searchParams,
+  ])
+  const perf = createServerProfiler('app/dashboard', pid ? `pid=${pid}` : undefined)
   const userDisplayName = user
     ? (user.user_metadata?.display_name || user.email?.split('@')[0] || '')
     : ''
 
   // 未登录：返回空状态，完全不查 DB
   if (!user) {
+    perf.flush('guest');
     return (
       <DashboardClient
         portfolioId="local-portfolio"
@@ -78,19 +84,16 @@ export default async function Page({ searchParams }: { searchParams: Promise<{ p
       />
     );
   }
-
-  const { pid } = await searchParams;
-
   // 已登录：查找当前用户所有 Portfolios，没有则自动创建
-  let allPortfolios = await withRetry(() => prisma.portfolio.findMany({
+  let allPortfolios = await perf.time('portfolio.findMany', () => withRetry(() => prisma.portfolio.findMany({
     where: { userId: user.id },
     orderBy: { createdAt: 'asc' },
-  }))
+  })))
 
   if (allPortfolios.length === 0) {
-    const created = await withRetry(() => prisma.portfolio.create({
+    const created = await perf.time('portfolio.createDefault', () => withRetry(() => prisma.portfolio.create({
       data: { userId: user.id, name: 'My Portfolio' },
-    }))
+    })))
     allPortfolios = [created]
   }
 
@@ -100,7 +103,7 @@ export default async function Page({ searchParams }: { searchParams: Promise<{ p
   const selectedMeta = allPortfolios.find(p => p.id === pid) ?? allPortfolios[0]
 
   // 加载选中 portfolio 的完整交易数据
-  let portfolio = await withRetry(() => prisma.portfolio.findUnique({
+  let portfolio = await perf.time('portfolio.findUniqueWithTransactions', () => withRetry(() => prisma.portfolio.findUnique({
     where: { id: selectedMeta.id },
     include: {
       transactions: {
@@ -108,11 +111,12 @@ export default async function Page({ searchParams }: { searchParams: Promise<{ p
         orderBy: { date: 'asc' }
       }
     }
-  }))
+  })))
 
   if (!portfolio) portfolio = { ...selectedMeta, transactions: [], preferences: null, currency: 'USD', createdAt: new Date(), updatedAt: new Date(), settingsUpdatedAt: null }
 
   if (portfolio.transactions.length === 0) {
+    perf.flush(`user=${user.id} tx=0`);
     return (
       <DashboardClient
         portfolioId={portfolio.id}
@@ -353,14 +357,14 @@ export default async function Page({ searchParams }: { searchParams: Promise<{ p
   const oneYearAgo = new Date();
   oneYearAgo.setFullYear(oneYearAgo.getFullYear() - 1);
 
-  const priceRows = await prisma.assetPriceHistory.findMany({
+  const priceRows = await perf.time('assetPriceHistory.findMany', () => prisma.assetPriceHistory.findMany({
     where: {
       ticker: { in: tickers },
       date: { gte: oneYearAgo },
     },
     orderBy: { date: 'asc' },
     select: { ticker: true, date: true, close: true },
-  });
+  }));
 
   // 5b. 按 ticker 分组，date 转为 YYYY-MM-DD 字符串
   const priceHistories: Record<string, { date: string; price: number }[]> = {};
@@ -381,14 +385,14 @@ export default async function Page({ searchParams }: { searchParams: Promise<{ p
 
   if (firstChartDate && indexPriceHistory) {
     try {
-      indexPriceRows = await indexPriceHistory.findMany({
+      indexPriceRows = await perf.time('indexPriceHistory.findMany', () => indexPriceHistory.findMany({
         where: {
           ticker: { in: ['SPY', 'QQQ'] },
           date: { gte: new Date(firstChartDate) },
         },
         orderBy: { date: 'asc' },
         select: { ticker: true, date: true, close: true },
-      });
+      }));
     } catch (e) {
       if (isIndexPriceHistoryUnavailable(e)) {
         console.warn('[Dashboard] Skipping benchmark series because IndexPriceHistory is not available yet.')
@@ -563,6 +567,7 @@ export default async function Page({ searchParams }: { searchParams: Promise<{ p
   };
 
   // 6. 将所有算好的数据作为 Props 传递给客户端组件渲染
+  perf.flush(`user=${user.id} tx=${portfolio.transactions.length} holdings=${holdingsMap.size} chart=${historicalChartData.length}`);
   return (
     <DashboardClient
       portfolioId={portfolio.id}

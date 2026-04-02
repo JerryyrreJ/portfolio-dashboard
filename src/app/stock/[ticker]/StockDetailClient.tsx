@@ -17,6 +17,7 @@ import CachedAssetLogo from '@/app/components/CachedAssetLogo';
 import Link from 'next/link';
 import { useCurrency } from '@/lib/useCurrency';
 import { usePreferences } from '@/lib/usePreferences';
+import type { PersonalDataState } from '@/lib/stock-personal-data';
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
@@ -88,6 +89,7 @@ interface StockData {
   dayOpen: number;
   prevClose: number;
   lastUpdated: Date;
+  personalDataState: PersonalDataState;
   totalQty: number;
   currentValue: number;
   costBasis: number;
@@ -98,6 +100,7 @@ interface StockData {
   totalFees: number;
   chartData: ChartPoint[];
   transactions: Transaction[];
+  requestedPortfolioId: string;
   portfolioId: string;
   portfolioName: string;
   profile: CompanyProfile | null;
@@ -105,6 +108,22 @@ interface StockData {
   userDisplayName: string;
   userInitial: string;
 }
+
+type PersonalPositionState = Pick<
+  StockData,
+  'personalDataState'
+  | 'totalQty'
+  | 'currentValue'
+  | 'costBasis'
+  | 'totalReturn'
+  | 'totalReturnPercent'
+  | 'totalDividend'
+  | 'avgBuyPrice'
+  | 'totalFees'
+  | 'transactions'
+  | 'portfolioId'
+  | 'portfolioName'
+>
 
 // ─── Helper Components ────────────────────────────────────────────────────────
 
@@ -247,20 +266,112 @@ export default function StockDetailClient({ stockData }: { stockData: StockData 
   const [newsLoaded, setNewsLoaded] = useState(false);
   const [showMobileSearch, setShowMobileSearch] = useState(false);
   const hasSynced = useRef(false);
+  const hasRequestedPersonalData = useRef(false);
 
 
   const {
     ticker, name, market,
     currentPrice, priceChange, priceChangePercent,
     dayHigh, dayLow, dayOpen, prevClose, lastUpdated,
-    totalQty, currentValue, costBasis, totalReturn, totalReturnPercent, totalDividend,
-    avgBuyPrice, totalFees,
-    transactions, portfolioId, portfolioName,
+    requestedPortfolioId,
     profile, metrics,
     userDisplayName, userInitial
   } = stockData;
 
+  const [personalPosition, setPersonalPosition] = useState<PersonalPositionState>(() => ({
+    personalDataState: stockData.personalDataState,
+    totalQty: stockData.totalQty,
+    currentValue: stockData.currentValue,
+    costBasis: stockData.costBasis,
+    totalReturn: stockData.totalReturn,
+    totalReturnPercent: stockData.totalReturnPercent,
+    totalDividend: stockData.totalDividend,
+    avgBuyPrice: stockData.avgBuyPrice,
+    totalFees: stockData.totalFees,
+    transactions: stockData.transactions,
+    portfolioId: stockData.portfolioId,
+    portfolioName: stockData.portfolioName,
+  }));
+
   const lastUpdatedMs = lastUpdated instanceof Date ? lastUpdated.getTime() : Number(lastUpdated);
+
+  useEffect(() => {
+    setPersonalPosition({
+      personalDataState: stockData.personalDataState,
+      totalQty: stockData.totalQty,
+      currentValue: stockData.currentValue,
+      costBasis: stockData.costBasis,
+      totalReturn: stockData.totalReturn,
+      totalReturnPercent: stockData.totalReturnPercent,
+      totalDividend: stockData.totalDividend,
+      avgBuyPrice: stockData.avgBuyPrice,
+      totalFees: stockData.totalFees,
+      transactions: stockData.transactions,
+      portfolioId: stockData.portfolioId,
+      portfolioName: stockData.portfolioName,
+    });
+    hasRequestedPersonalData.current = false;
+  }, [stockData]);
+
+  useEffect(() => {
+    if (personalPosition.personalDataState !== 'loading' || hasRequestedPersonalData.current) {
+      return;
+    }
+
+    hasRequestedPersonalData.current = true;
+    const controller = new AbortController();
+
+    const fetchPersonalPosition = async () => {
+      try {
+        const params = new URLSearchParams();
+        if (requestedPortfolioId) {
+          params.set('pid', requestedPortfolioId);
+        }
+        const query = params.toString();
+        const response = await fetch(`/api/assets/${encodeURIComponent(ticker)}/position${query ? `?${query}` : ''}`, {
+          signal: controller.signal,
+        });
+
+        if (!response.ok) {
+          throw new Error('Failed to load personal stock position');
+        }
+
+        const data = await response.json() as PersonalPositionState;
+        setPersonalPosition(data);
+      } catch (error) {
+        if ((error as Error).name === 'AbortError') {
+          return;
+        }
+        setPersonalPosition((current) => ({
+          ...current,
+          personalDataState: 'unavailable',
+          portfolioId: current.portfolioId,
+          portfolioName: current.portfolioName,
+        }));
+      }
+    };
+
+    void fetchPersonalPosition();
+
+    return () => {
+      controller.abort();
+      hasRequestedPersonalData.current = false;
+    };
+  }, [personalPosition.personalDataState, requestedPortfolioId, ticker]);
+
+  const {
+    totalQty,
+    currentValue,
+    costBasis,
+    totalReturn,
+    totalReturnPercent,
+    totalDividend,
+    avgBuyPrice,
+    totalFees,
+    transactions,
+    portfolioId,
+    portfolioName,
+  } = personalPosition;
 
   const isUp = priceChange >= 0;
   const isProfit = totalReturn >= 0;

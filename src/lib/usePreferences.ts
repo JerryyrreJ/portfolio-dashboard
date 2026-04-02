@@ -1,6 +1,11 @@
 'use client';
 
 import { useState, useEffect, useCallback } from 'react';
+import { fetchPortfolioList, invalidatePortfolioListCache, type PortfolioClientRecord } from '@/lib/portfolio-client';
+
+type IdleCallbackHandle = number;
+type IdleScheduler = (callback: () => void, timeout?: number) => IdleCallbackHandle;
+type IdleCanceler = (handle: IdleCallbackHandle) => void;
 
 export interface Preferences {
   colorScheme: 'Emerald' | 'Rose';
@@ -23,17 +28,6 @@ const DEFAULT_PREFERENCES: Preferences = {
 const LOCAL_KEY = 'user_preferences';
 const SETTINGS_UPDATED_AT_KEY = 'settings_updated_at';
 
-interface PortfolioPreferenceRecord {
-  id: string;
-  preferences?: string | null;
-  settingsUpdatedAt?: string | null;
-}
-
-interface PortfolioApiResponse {
-  portfolio?: PortfolioPreferenceRecord;
-  portfolios?: PortfolioPreferenceRecord[];
-}
-
 function loadLocal(): Preferences {
   if (typeof window === 'undefined') {
     return DEFAULT_PREFERENCES;
@@ -47,8 +41,28 @@ function loadLocal(): Preferences {
   }
 }
 
-export function usePreferences() {
+const scheduleIdleTask: IdleScheduler = (callback, timeout = 500) => {
+  if (typeof window !== 'undefined' && 'requestIdleCallback' in window) {
+    return window.requestIdleCallback(() => callback(), { timeout });
+  }
+  return window.setTimeout(callback, timeout);
+};
+
+const cancelIdleTask: IdleCanceler = (handle) => {
+  if (typeof window !== 'undefined' && 'cancelIdleCallback' in window) {
+    window.cancelIdleCallback(handle);
+    return;
+  }
+  window.clearTimeout(handle);
+};
+
+interface UsePreferencesOptions {
+  initialPortfolios?: PortfolioClientRecord[];
+}
+
+export function usePreferences(options?: UsePreferencesOptions) {
   const [prefs, setPrefs] = useState<Preferences>(() => loadLocal());
+  const initialPortfolios = options?.initialPortfolios;
 
   useEffect(() => {
     // 云端同步（仅登录用户）
@@ -56,13 +70,10 @@ export function usePreferences() {
       try {
         const pid = new URLSearchParams(window.location.search).get('pid') ?? '';
         const idParam = pid ? `?id=${pid}` : '';
-
-        const res = await fetch(`/api/portfolio${idParam}`);
-        if (!res.ok) return;
-        const data: PortfolioApiResponse = await res.json();
-
-        // GET 现在返回 { portfolios: [...] }，取匹配的那个
-        const portfolios = data.portfolios ?? (data.portfolio ? [data.portfolio] : []);
+        const data = initialPortfolios && initialPortfolios.length > 0
+          ? { portfolios: initialPortfolios }
+          : await fetchPortfolioList();
+        const portfolios: PortfolioClientRecord[] = data.portfolios ?? [];
         const portfolio = pid ? portfolios.find((p) => p.id === pid) : portfolios[0];
         if (!portfolio) return;
 
@@ -88,15 +99,21 @@ export function usePreferences() {
             method: 'PATCH',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ preferences: localPrefs }),
-          }).catch(() => {});
+          })
+            .then(() => invalidatePortfolioListCache())
+            .catch(() => {});
         }
       } catch {
         // 未登录或网络错误，静默失败
       }
     };
 
-    sync();
-  }, []);
+    const handle = scheduleIdleTask(sync, 800);
+
+    return () => {
+      cancelIdleTask(handle);
+    };
+  }, [initialPortfolios]);
 
   // 监听其他 tab 的变更
   useEffect(() => {
@@ -131,7 +148,9 @@ export function usePreferences() {
       method: 'PATCH',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ preferences: updated }),
-    }).catch(() => {});
+    })
+      .then(() => invalidatePortfolioListCache())
+      .catch(() => {});
   }, []);
 
   // 根据 colorScheme 派生出具体颜色值，方便组件直接使用

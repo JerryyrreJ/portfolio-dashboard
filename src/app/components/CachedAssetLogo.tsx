@@ -12,23 +12,24 @@ type CachedAssetLogoProps = {
   loading?: 'eager' | 'lazy';
 };
 
-function buildProxyImageUrl(logoUrl: string) {
-  return `/api/proxy-image?url=${encodeURIComponent(logoUrl)}`;
+function buildProxyImageUrl(ticker: string) {
+  return `/api/assets/${encodeURIComponent(ticker)}/logo`;
 }
 
 const CachedAssetLogo = memo(function CachedAssetLogo({
   ticker,
-  logoUrl,
   size,
   alt,
   className,
   fallbackClassName,
   loading = 'eager',
 }: CachedAssetLogoProps) {
-  const [hasError, setHasError] = useState(false);
+  const [failedTicker, setFailedTicker] = useState<string | null>(null);
+  const hasError = failedTicker === ticker;
+
   const proxiedSrc = useMemo(
-    () => (logoUrl && !hasError ? buildProxyImageUrl(logoUrl) : null),
-    [hasError, logoUrl]
+    () => (ticker && !hasError ? buildProxyImageUrl(ticker) : null),
+    [hasError, ticker]
   );
 
   if (!proxiedSrc) {
@@ -53,7 +54,7 @@ const CachedAssetLogo = memo(function CachedAssetLogo({
       loading={loading}
       decoding="async"
       draggable={false}
-      onError={() => setHasError(true)}
+      onError={() => setFailedTicker(ticker)}
     />
   );
 });

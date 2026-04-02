@@ -32,6 +32,7 @@ import {
 } from 'lucide-react';
 import AuthPanel from '@/app/components/settings/AuthPanel';
 import PasskeySection from '@/app/components/settings/PasskeySection';
+import { fetchPortfolioList, invalidatePortfolioListCache } from '@/lib/portfolio-client';
 import { createClient } from '@/lib/supabase';
 import { User } from '@supabase/supabase-js';
 import Notification from '@/app/components/Notification';
@@ -50,12 +51,8 @@ type PortfolioSummary = {
   id: string;
   name: string;
   currency: string;
+  preferences?: string | null;
   settingsUpdatedAt?: string | null;
-};
-
-type PortfolioListResponse = {
-  portfolios?: PortfolioSummary[];
-  error?: string;
 };
 
 type PortfolioMutationResponse = {
@@ -298,7 +295,7 @@ export default function SettingsClient({ initialUser, initialPortfolios }: Setti
   });
 
   const supabase = createClient();
-  const { prefs, updatePreference } = usePreferences();
+  const { prefs, updatePreference } = usePreferences({ initialPortfolios });
   const { theme, setTheme } = useTheme();
   const [mounted, setMounted] = useState(false);
 
@@ -617,7 +614,13 @@ export default function SettingsClient({ initialUser, initialPortfolios }: Setti
       }
 
       const cached = loadCachedPortfolios(user.id);
-      if (cached.length > 0) {
+      const hasServerPortfolios = initialPortfolios.length > 0;
+
+      if (hasServerPortfolios) {
+        setAllPortfolios(initialPortfolios);
+        saveCachedPortfolios(user.id, initialPortfolios);
+        setPortfoliosLoading(false);
+      } else if (cached.length > 0) {
         setAllPortfolios(cached);
         setPortfoliosLoading(false);
       } else {
@@ -625,13 +628,16 @@ export default function SettingsClient({ initialUser, initialPortfolios }: Setti
       }
 
       try {
-        const response = await fetch('/api/portfolio', { cache: 'no-store' });
-        if (!response.ok) throw new Error('Failed to load portfolios');
+        let cloudPortfolios = hasServerPortfolios
+          ? initialPortfolios
+          : [];
 
-        const payload = await response.json() as PortfolioListResponse;
-        let cloudPortfolios = Array.isArray(payload.portfolios) ? payload.portfolios : [];
+        if (!hasServerPortfolios) {
+          const payload = await fetchPortfolioList({ force: true });
+          cloudPortfolios = Array.isArray(payload.portfolios) ? payload.portfolios as PortfolioSummary[] : [];
+        }
 
-        if (cloudPortfolios.length === 0) {
+        if (!hasServerPortfolios && cloudPortfolios.length === 0) {
           const createResponse = await fetch('/api/portfolio', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
@@ -641,6 +647,7 @@ export default function SettingsClient({ initialUser, initialPortfolios }: Setti
           if (createResponse.ok) {
             const createPayload = await createResponse.json() as PortfolioMutationResponse;
             cloudPortfolios = createPayload.portfolio ? [createPayload.portfolio] : [];
+            invalidatePortfolioListCache();
           }
         }
 
@@ -696,14 +703,15 @@ export default function SettingsClient({ initialUser, initialPortfolios }: Setti
     return () => {
       cancelled = true;
     };
-  }, [user]);
+  }, [initialPortfolios, user]);
 
   useEffect(() => {
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
-      const previousUserId = user?.id;
-      setUser(session?.user ?? null);
-      if (!session?.user) {
-        clearCachedPortfolios(previousUserId);
+      const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+        const previousUserId = user?.id;
+        setUser(session?.user ?? null);
+        invalidatePortfolioListCache();
+        if (!session?.user) {
+          clearCachedPortfolios(previousUserId);
         localStorage.removeItem('portfolio_name');
         localStorage.removeItem('base_currency');
         localStorage.removeItem('settings_updated_at');
@@ -786,6 +794,7 @@ export default function SettingsClient({ initialUser, initialPortfolios }: Setti
       });
 
       if (res.ok) {
+        invalidatePortfolioListCache();
         const data = await res.json();
         if (data.portfolio) {
           const updatedPortfolios = optimisticPortfolios.map((p) => p.id === data.portfolio.id ? data.portfolio : p);
@@ -846,6 +855,7 @@ export default function SettingsClient({ initialUser, initialPortfolios }: Setti
         const data = await res.json();
         throw new Error(data.error || tNotifications('deleteFailedMessage'));
       }
+      invalidatePortfolioListCache();
 
       showNotification('success', tNotifications('portfolioDeletedTitle'), tNotifications('portfolioDeletedMessage'));
       
@@ -905,6 +915,7 @@ export default function SettingsClient({ initialUser, initialPortfolios }: Setti
       }
 
       const { portfolio } = await res.json();
+      invalidatePortfolioListCache();
       const nextPortfolios = [...allPortfolios, portfolio];
       setAllPortfolios(nextPortfolios);
       if (user?.id) {

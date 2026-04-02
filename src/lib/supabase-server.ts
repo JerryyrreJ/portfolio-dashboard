@@ -1,5 +1,6 @@
 import { createServerClient } from '@supabase/ssr'
 import { cookies } from 'next/headers'
+import { createServerProfiler } from '@/lib/perf'
 
 interface NetworkLikeError {
   message?: string
@@ -7,51 +8,89 @@ interface NetworkLikeError {
   __isAuthError?: boolean
 }
 
-export async function createSupabaseServerClient() {
-  const cookieStore = await cookies()
-  return createServerClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
-    {
-      cookies: {
-        getAll() {
-          return cookieStore.getAll()
+type ServerProfilerLike = {
+  time<T>(label: string, operation: () => Promise<T>): Promise<T>
+}
+
+export async function createSupabaseServerClient(profiler?: ServerProfilerLike) {
+  const cookieStore = profiler
+    ? await profiler.time('cookies', () => cookies())
+    : await cookies()
+
+  return profiler
+    ? profiler.time('createServerClient', async () => createServerClient(
+      process.env.NEXT_PUBLIC_SUPABASE_URL!,
+      process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+      {
+        cookies: {
+          getAll() {
+            return cookieStore.getAll()
+          },
+          setAll(cookiesToSet) {
+            try {
+              cookiesToSet.forEach(({ name, value, options }) =>
+                cookieStore.set(name, value, options)
+              )
+            } catch {
+              // Called from a Server Component — safe to ignore
+            }
+          },
         },
-        setAll(cookiesToSet) {
-          try {
-            cookiesToSet.forEach(({ name, value, options }) =>
-              cookieStore.set(name, value, options)
-            )
-          } catch {
-            // Called from a Server Component — safe to ignore
-          }
+      }
+    ))
+    : createServerClient(
+      process.env.NEXT_PUBLIC_SUPABASE_URL!,
+      process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+      {
+        cookies: {
+          getAll() {
+            return cookieStore.getAll()
+          },
+          setAll(cookiesToSet) {
+            try {
+              cookiesToSet.forEach(({ name, value, options }) =>
+                cookieStore.set(name, value, options)
+              )
+            } catch {
+              // Called from a Server Component — safe to ignore
+            }
+          },
         },
-      },
-    }
-  )
+      }
+    )
 }
 
 export async function getUser() {
-  const supabase = await createSupabaseServerClient()
+  const perf = createServerProfiler('supabase.getUser')
+  try {
+    const supabase = await createSupabaseServerClient(perf)
 
-  for (let attempt = 1; attempt <= 3; attempt++) {
-    try {
-      const { data: { user } } = await supabase.auth.getUser()
-      return user
-    } catch (err: unknown) {
-      const error = err as NetworkLikeError
-      const isNetworkError = error.message?.includes('fetch failed') ||
-        error.cause?.code === 'ECONNREFUSED' ||
-        error.cause?.code === 'ECONNRESET' ||
-        error.cause?.code === 'UND_ERR_CONNECT_TIMEOUT' ||
-        error.__isAuthError === true
-      if (isNetworkError && attempt < 3) {
-        await new Promise(res => setTimeout(res, 1500 * attempt))
-      } else {
-        console.warn('getUser failed after retries:', error.message)
-        return null
+    for (let attempt = 1; attempt <= 3; attempt++) {
+      try {
+        const { data: { user } } = await perf.time(`auth.getUser#${attempt}`, () => supabase.auth.getUser())
+        perf.flush(`result=${user ? 'user' : 'null'} attempt=${attempt}`)
+        return user
+      } catch (err: unknown) {
+        const error = err as NetworkLikeError
+        const isNetworkError = error.message?.includes('fetch failed') ||
+          error.cause?.code === 'ECONNREFUSED' ||
+          error.cause?.code === 'ECONNRESET' ||
+          error.cause?.code === 'UND_ERR_CONNECT_TIMEOUT' ||
+          error.__isAuthError === true
+        if (isNetworkError && attempt < 3) {
+          const delayMs = 1500 * attempt
+          await perf.time(`retryDelay#${attempt}`, () => new Promise<void>(res => setTimeout(res, delayMs)))
+        } else {
+          console.warn('getUser failed after retries:', error.message)
+          perf.flush(`result=error attempt=${attempt}`)
+          return null
+        }
       }
     }
+    perf.flush('result=null attempts=3')
+    return null
+  } catch (error) {
+    perf.flush('result=throw')
+    throw error
   }
-  return null
 }

@@ -328,7 +328,13 @@ export default function DashboardClient({ portfolioId, portfolioName, portfolios
       }
     };
 
-    fetchLivePrices();
+    const timer = window.setTimeout(() => {
+      void fetchLivePrices();
+    }, 400);
+
+    return () => {
+      window.clearTimeout(timer);
+    };
   }, [localHoldings, portfolioId]);
 
   // 获取待确认分红数量
@@ -368,10 +374,13 @@ export default function DashboardClient({ portfolioId, portfolioName, portfolios
       }
     };
 
-    syncAndFetchDividendStats();
+    const timer = window.setTimeout(() => {
+      void syncAndFetchDividendStats();
+    }, 1200);
 
     return () => {
       cancelled = true;
+      window.clearTimeout(timer);
     };
   }, [portfolioId]);
 

@@ -1,9 +1,11 @@
 import type { Metadata } from 'next'
-import type { Asset as PrismaAsset, Portfolio, Transaction } from '@prisma/client'
+import type { Asset as PrismaAsset } from '@prisma/client'
 import { notFound } from 'next/navigation'
 import StockDetailClient from './StockDetailClient'
+import { createServerProfiler } from '@/lib/perf'
 import { getUser } from '@/lib/supabase-server'
 import prisma, { withRetry } from '@/lib/prisma'
+import { createEmptyPersonalPosition } from '@/lib/stock-personal-data'
 import type { CompanyProfile as FinnhubCompanyProfile, StockQuote } from '@/lib/finnhub'
 import { getQuote, getCompanyProfile } from '@/lib/finnhub'
 import { get12MonthHistory, getLogo as getTwelveDataLogo } from '@/lib/twelvedata'
@@ -15,88 +17,19 @@ interface PageProps {
 }
 
 type StockDetailData = Parameters<typeof StockDetailClient>[0]["stockData"]
-type StockTransaction = Transaction & { portfolio: Portfolio }
 type CachedProfile = StockDetailData["profile"]
 type CachedMetrics = StockDetailData["metrics"]
-type PositionSummary = {
-  totalQty: number
-  totalCost: number
-  totalFees: number
-  totalDividend: number
-  transactions: StockDetailData["transactions"]
-}
-
-function buildPositionSummary(transactions: StockTransaction[]): PositionSummary {
-  return transactions.reduce<PositionSummary>(
-    (summary, transaction) => {
-      let nextQty = summary.totalQty
-      let nextCost = summary.totalCost
-      let nextDividend = summary.totalDividend
-
-      if (transaction.type === 'BUY') {
-        nextQty += transaction.quantity
-        nextCost += transaction.price * transaction.quantity + transaction.fee
-      } else if (transaction.type === 'SELL') {
-        if (nextQty > 0) {
-          const avgCost = nextCost / nextQty
-          nextCost -= avgCost * transaction.quantity
-        }
-        nextQty -= transaction.quantity
-      } else if (transaction.type === 'DIVIDEND') {
-        nextDividend += transaction.price * transaction.quantity
-      }
-
-      return {
-        totalQty: nextQty,
-        totalCost: nextCost,
-        totalFees: summary.totalFees + transaction.fee,
-        totalDividend: nextDividend,
-        transactions: [
-          ...summary.transactions,
-          {
-            id: transaction.id,
-            date: transaction.date.toISOString(),
-            type: transaction.type,
-            quantity: transaction.quantity,
-            price: transaction.price,
-            fee: transaction.fee,
-            portfolioName: transaction.portfolio.name,
-          },
-        ],
-      }
-    },
-    {
-      totalQty: 0,
-      totalCost: 0,
-      totalFees: 0,
-      totalDividend: 0,
-      transactions: [],
-    }
-  )
-}
 
 async function buildFallbackStockData(
   decodedTicker: string,
-  pid: string | undefined,
-  userId: string | undefined,
+  requestedPortfolioId: string,
+  portfolioContext: { portfolioId: string; portfolioName: string },
+  personalDataState: StockDetailData['personalDataState'],
   userDisplayName: string,
   quote: StockQuote | null,
   companyProfile: FinnhubCompanyProfile | null,
   chartData: StockDetailData["chartData"]
 ): Promise<StockDetailData> {
-  let defaultPortfolioId = ''
-  let defaultPortfolioName = ''
-
-  if (userId) {
-    const portfolio = pid
-      ? await withRetry(() => prisma.portfolio.findFirst({ where: { id: pid, userId } }))
-      : await withRetry(() => prisma.portfolio.findFirst({ where: { userId } }))
-    if (portfolio) {
-      defaultPortfolioId = portfolio.id
-      defaultPortfolioName = portfolio.name
-    }
-  }
-
   return {
     ticker: decodedTicker,
     name: companyProfile?.name || decodedTicker,
@@ -109,18 +42,8 @@ async function buildFallbackStockData(
     dayOpen: quote?.o || 0,
     prevClose: quote?.pc || 0,
     lastUpdated: new Date(),
-    totalQty: 0,
-    currentValue: 0,
-    costBasis: 0,
-    totalReturn: 0,
-    totalReturnPercent: 0,
-    totalDividend: 0,
-    avgBuyPrice: 0,
-    totalFees: 0,
     chartData,
-    transactions: [],
-    portfolioId: defaultPortfolioId,
-    portfolioName: defaultPortfolioName,
+    requestedPortfolioId,
     profile: {
       name: companyProfile?.name || decodedTicker,
       exchange: companyProfile?.exchange || '',
@@ -135,6 +58,7 @@ async function buildFallbackStockData(
     metrics: null,
     userDisplayName,
     userInitial: userDisplayName ? userDisplayName[0].toUpperCase() : '',
+    ...createEmptyPersonalPosition(personalDataState, portfolioContext),
   }
 }
 
@@ -238,22 +162,23 @@ export default async function StockDetailPage(props: PageProps) {
   const { ticker } = params
   const decodedTicker = decodeURIComponent(ticker).toUpperCase()
   const pid = searchParams.pid
+  const perf = createServerProfiler('stock/page', `ticker=${decodedTicker}${pid ? ` pid=${pid}` : ''}`)
 
-  const user = await getUser()
+  const user = await perf.time('getUser', () => getUser())
+  const userDisplayName = user
+    ? (user.user_metadata?.display_name || user.email?.split('@')[0] || '')
+    : ''
+  const personalDataState: StockDetailData['personalDataState'] = user ? 'loading' : 'guest'
 
-  // 1. Fetch asset + only this user's transactions from DB
-  const asset = await withRetry(() => prisma.asset.findUnique({
-    where: { ticker: decodedTicker },
-    include: {
-      transactions: {
-        where: user
-          ? { portfolio: { userId: user.id } }
-          : { id: 'none' },
-        include: { portfolio: true },
-        orderBy: { date: 'desc' },
-      },
-    },
-  }))
+  // 1. Fetch public asset data only. Personal position data is loaded separately.
+  let asset: PrismaAsset | null = null
+  try {
+    asset = await perf.time('asset.findUniquePublic', () => prisma.asset.findUnique({
+      where: { ticker: decodedTicker },
+    }))
+  } catch (error) {
+    console.warn(`Failed to load cached asset for ${decodedTicker}:`, error)
+  }
 
   if (!asset) {
     // Asset not in DB — fetch live data from Finnhub for read-only view
@@ -263,11 +188,11 @@ export default async function StockDetailPage(props: PageProps) {
     let chartData: StockDetailData["chartData"] = []
 
     try {
-      const results = await Promise.allSettled([
+      const results = await perf.time('fallback.remoteFetch', () => Promise.allSettled([
         getQuote(decodedTicker),
         getCompanyProfile(decodedTicker),
         get12MonthHistory(decodedTicker),
-      ])
+      ]))
 
       if (results[0].status === 'fulfilled') quote = results[0].value
       if (results[1].status === 'fulfilled') companyProfile = results[1].value
@@ -285,14 +210,11 @@ export default async function StockDetailPage(props: PageProps) {
       if (!decodedTicker || decodedTicker.length > 20) notFound()
     }
 
-    const userDisplayName = user
-      ? (user.user_metadata?.display_name || user.email?.split('@')[0] || '')
-      : ''
-
     const stockData = await buildFallbackStockData(
       decodedTicker,
-      pid,
-      user?.id,
+      pid ?? '',
+      { portfolioId: '', portfolioName: '' },
+      user ? 'empty' : 'guest',
       userDisplayName,
       quote,
       companyProfile,
@@ -308,6 +230,7 @@ export default async function StockDetailPage(props: PageProps) {
       issuerUrl: stockData.profile?.weburl || null,
     })
 
+    perf.flush(`fallback user=${user?.id ?? 'guest'} tx=0 chart=${stockData.chartData.length}`)
     return (
       <>
         <script
@@ -319,22 +242,23 @@ export default async function StockDetailPage(props: PageProps) {
     )
   }
 
-  // 2. Compute position data (process in chronological order)
-  const chronoTx = [...asset.transactions].reverse()
-  const positionSummary = buildPositionSummary(chronoTx)
-  const { totalQty, totalCost, totalFees, totalDividend, transactions } = positionSummary
-
-  // 3. Read daily price history from AssetPriceHistory table
+  // 2. Read daily price history from AssetPriceHistory table
   let chartData: { date: string; price: number }[] = []
-  const priceRows = await prisma.assetPriceHistory.findMany({
-    where: { ticker: decodedTicker },
-    orderBy: { date: 'asc' },
-    select: { date: true, close: true },
-  })
-  chartData = priceRows.map(r => ({
-    date: r.date.toISOString().split('T')[0],
-    price: r.close,
-  }))
+  try {
+    const priceRows = await perf.time('assetPriceHistory.findMany', () => prisma.assetPriceHistory.findMany({
+      where: { ticker: decodedTicker },
+      orderBy: { date: 'asc' },
+      select: { date: true, close: true },
+    }))
+    chartData = priceRows.map(r => ({
+      date: r.date.toISOString().split('T')[0],
+      price: r.close,
+    }))
+  } catch (error) {
+    console.warn(`Failed to load cached chart data for ${decodedTicker}:`, error)
+    const remoteHistory = await perf.time('chart.remoteFallback', () => get12MonthHistory(decodedTicker))
+    chartData = remoteHistory
+  }
 
   const profile = parseCachedProfile(
     asset,
@@ -342,35 +266,8 @@ export default async function StockDetailPage(props: PageProps) {
   )
   const metrics = parseCachedMetrics(asset.metrics)
 
-  // 4. Position metrics based on CACHED currentPrice
+  // 3. Public market metrics based on cached current price
   const currentPrice = asset.lastPrice || 0
-  const currentValue = currentPrice * totalQty
-  const costBasis = totalCost
-  // totalReturn 包含资本利得 + 股息，与 dashboard 层保持一致
-  const capitalGain = currentValue - costBasis
-  const totalReturn = capitalGain + totalDividend
-  const totalReturnPercent = costBasis > 0 ? (totalReturn / costBasis) * 100 : 0
-  const avgBuyPrice = totalQty > 0 ? costBasis / totalQty : 0
-
-  // 5. Default portfolio for modal
-  let defaultPortfolioId = ''
-  let defaultPortfolioName = ''
-  if (asset.transactions.length > 0) {
-    defaultPortfolioId = asset.transactions[0].portfolioId
-    defaultPortfolioName = asset.transactions[0].portfolio.name
-  } else if (user) {
-    const portfolio = pid
-      ? await withRetry(() => prisma.portfolio.findFirst({ where: { id: pid, userId: user.id } }))
-      : await withRetry(() => prisma.portfolio.findFirst({ where: { userId: user.id } }))
-    if (portfolio) {
-      defaultPortfolioId = portfolio.id
-      defaultPortfolioName = portfolio.name
-    }
-  }
-
-  const userDisplayName = user
-    ? (user.user_metadata?.display_name || user.email?.split('@')[0] || '')
-    : ''
   const userInitial = userDisplayName ? userDisplayName[0].toUpperCase() : ''
 
   const stockData: StockDetailData = {
@@ -385,22 +282,13 @@ export default async function StockDetailPage(props: PageProps) {
     dayOpen: asset.dayOpen || 0,
     prevClose: asset.prevClose || 0,
     lastUpdated: asset.lastPriceUpdated || new Date(),
-    totalQty,
-    currentValue,
-    costBasis,
-    totalReturn,
-    totalReturnPercent,
-    totalDividend,
-    avgBuyPrice,
-    totalFees,
     chartData,
-    transactions,
-    portfolioId: defaultPortfolioId,
-    portfolioName: defaultPortfolioName,
+    requestedPortfolioId: pid ?? '',
     profile,
     metrics,
     userDisplayName,
-    userInitial
+    userInitial,
+    ...createEmptyPersonalPosition(personalDataState),
   }
 
   const description = `Track ${stockData.name} price, holdings, transactions, and dividend performance with ${siteConfig.name}.`
@@ -412,6 +300,7 @@ export default async function StockDetailPage(props: PageProps) {
     issuerUrl: stockData.profile?.weburl || null,
   })
 
+  perf.flush(`user=${user?.id ?? 'guest'} chart=${chartData.length} personal=${personalDataState}`)
   return (
     <>
       <script
@@ -421,4 +310,4 @@ export default async function StockDetailPage(props: PageProps) {
       <StockDetailClient stockData={stockData} />
     </>
   )
-  }
+}
