@@ -32,9 +32,11 @@ import GlobalSearch from './components/GlobalSearch';
 import PortfolioSwitcher from './components/PortfolioSwitcher';
 import DividendConfirmationModal from './components/DividendConfirmationModal';
 import CachedAssetLogo from './components/CachedAssetLogo';
+import DashboardSkeleton from './components/DashboardSkeleton';
 import Link from 'next/link';
 import { useCurrency } from '@/lib/useCurrency';
 import { usePreferences } from '@/lib/usePreferences';
+import type { PortfolioClientRecord } from '@/lib/portfolio-client';
 
 // --- 辅助格式化组件 ---
 interface FormatValueProps {
@@ -91,9 +93,11 @@ interface DashboardClientProps {
   portfolioId: string;
   portfolioName: string;
   portfolios: { id: string; name: string }[];
+  initialPortfolios?: PortfolioClientRecord[];
   holdingsData: HoldingsGroup[];
   chartData: ChartPoint[];
   summary: Summary;
+  initialPendingDividendCount?: number;
   userDisplayName?: string;
 }
 
@@ -197,15 +201,31 @@ const CustomXAxisTick = (props: XAxisTickProps) => {
   );
 };
 
-export default function DashboardClient({ portfolioId, portfolioName, portfolios, holdingsData, chartData, summary, userDisplayName = '' }: DashboardClientProps) {
+export default function DashboardClient({
+  portfolioId,
+  portfolioName,
+  portfolios,
+  initialPortfolios,
+  holdingsData,
+  chartData,
+  summary,
+  initialPendingDividendCount = 0,
+  userDisplayName = '',
+}: DashboardClientProps) {
   const router = useRouter();
   const locale = useLocale();
   const t = useTranslations('dashboard');
   const { symbol, convert, fmt } = useCurrency();
-  const { prefs, colors } = usePreferences();
+  const { prefs, colors } = usePreferences({
+    initialPortfolios,
+    cloudSync: portfolioId !== 'local-portfolio',
+  });
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isDividendModalOpen, setIsDividendModalOpen] = useState(false);
-  const [pendingDividendCount, setPendingDividendCount] = useState(0);
+  const [pendingDividendCountOverride, setPendingDividendCountOverride] = useState<{
+    portfolioId: string;
+    count: number;
+  } | null>(null);
   const [userInitial] = useState<string>(userDisplayName[0]?.toUpperCase() || '');
   const [displayName] = useState<string>(userDisplayName);
 
@@ -338,10 +358,14 @@ export default function DashboardClient({ portfolioId, portfolioName, portfolios
   }, [localHoldings, portfolioId]);
 
   // 获取待确认分红数量
+  const pendingDividendCount = pendingDividendCountOverride?.portfolioId === portfolioId
+    ? pendingDividendCountOverride.count
+    : initialPendingDividendCount;
+
   useEffect(() => {
     let cancelled = false;
 
-    const syncAndFetchDividendStats = async () => {
+    const syncAndRefreshDividendStats = async () => {
       if (portfolioId === 'local-portfolio') return;
 
       // 客户端节流：与服务端 6 小时节流保持一致，避免每次加载都发请求
@@ -350,24 +374,28 @@ export default function DashboardClient({ portfolioId, portfolioName, portfolios
       const lastSyncAt = Number(localStorage.getItem(storageKey) || 0);
       const shouldSync = Date.now() - lastSyncAt >= THROTTLE_MS;
 
-      if (shouldSync) {
-        try {
-          await fetch('/api/transactions/dividends/sync', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ portfolioId }),
-          });
-          localStorage.setItem(storageKey, String(Date.now()));
-        } catch (err) {
-          console.error('Failed to sync dividends automatically:', err);
-        }
+      if (!shouldSync) return;
+
+      try {
+        await fetch('/api/transactions/dividends/sync', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ portfolioId }),
+        });
+        localStorage.setItem(storageKey, String(Date.now()));
+      } catch (err) {
+        console.error('Failed to sync dividends automatically:', err);
+        return;
       }
 
       try {
         const response = await fetch(`/api/transactions/dividends/stats?portfolioId=${portfolioId}`);
         if (!cancelled && response.ok) {
           const data = await response.json();
-          setPendingDividendCount(data.pendingCount || 0);
+          setPendingDividendCountOverride({
+            portfolioId,
+            count: data.pendingCount || 0,
+          });
         }
       } catch (err) {
         console.error('Failed to fetch dividend stats:', err);
@@ -375,7 +403,7 @@ export default function DashboardClient({ portfolioId, portfolioName, portfolios
     };
 
     const timer = window.setTimeout(() => {
-      void syncAndFetchDividendStats();
+      void syncAndRefreshDividendStats();
     }, 1200);
 
     return () => {
@@ -683,116 +711,7 @@ export default function DashboardClient({ portfolioId, portfolioName, portfolios
   const totalHoldingsCount = localHoldings.reduce((sum: number, g: HoldingsGroup) => sum + g.holdings.length, 0);
 
   if (isSwitching) {
-    return (
-      <div className="min-h-screen bg-page text-primary font-sans antialiased">
-        <header className="bg-card/70 backdrop-blur-xl border-b border-border px-6 h-[56px] flex items-center justify-between sticky top-0 z-50">
-          <div className="flex items-center space-x-8">
-            <div className="flex items-center space-x-2 text-primary font-bold text-[17px] tracking-tight">
-              <div className="bg-primary text-on-primary p-1 rounded-md">
-                <TrendingUp className="w-4 h-4" />
-              </div>
-              <span>Folio</span>
-            </div>
-          </div>
-        </header>
-        <main className="flex-1 max-w-[1400px] w-full mx-auto px-6 py-6 animate-pulse">
-          <div className="flex justify-between items-center mb-6">
-            <div className="flex items-center space-x-3">
-              <div className="h-10 w-48 bg-border rounded-xl"></div>
-              <div className="hidden sm:inline-block h-5 w-16 bg-border rounded-md"></div>
-            </div>
-            <div className="flex items-center space-x-2">
-              <div className="w-8 h-8 bg-border rounded-lg"></div>
-              <div className="w-24 h-8 bg-border rounded-lg"></div>
-            </div>
-          </div>
-          <div className="grid grid-cols-12 gap-5 mb-5">
-            <div className="col-span-12 lg:col-span-3 space-y-4">
-              <div className="bg-card rounded-2xl p-5 border border-border shadow-sm">
-                <div className="h-3 w-24 bg-border rounded mb-3"></div>
-                <div className="h-8 w-32 bg-border rounded mb-3"></div>
-                <div className="flex space-x-2">
-                  <div className="h-5 w-12 bg-border rounded"></div>
-                  <div className="h-5 w-16 bg-border rounded"></div>
-                </div>
-              </div>
-              <div className="bg-card rounded-2xl p-5 border border-border shadow-sm space-y-4">
-                {[1, 2, 3].map(i => (
-                  <div key={i}>
-                    {i > 1 && <div className="border-t border-border mb-4" />}
-                    <div className="h-3 w-20 bg-border rounded mb-2"></div>
-                    <div className="h-6 w-24 bg-border rounded mb-2"></div>
-                    <div className="h-2 w-16 bg-border rounded"></div>
-                  </div>
-                ))}
-              </div>
-              <div className="bg-card rounded-2xl p-5 border border-border shadow-sm flex items-center justify-between">
-                <div>
-                  <div className="h-3 w-12 bg-border rounded mb-2"></div>
-                  <div className="h-7 w-8 bg-border rounded"></div>
-                </div>
-                <div className="flex -space-x-1.5">
-                  <div className="w-7 h-7 rounded-full bg-border border border-card shadow-sm z-10"></div>
-                  <div className="w-7 h-7 rounded-full bg-border border border-card shadow-sm z-20"></div>
-                  <div className="w-7 h-7 rounded-full bg-border border border-card shadow-sm z-30"></div>
-                </div>
-              </div>
-            </div>
-            <div className="col-span-12 lg:col-span-9">
-              <div className="bg-card rounded-2xl p-6 border border-border shadow-sm h-full flex flex-col">
-                <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-6">
-                  <div>
-                    <div className="h-4 w-32 bg-border rounded mb-2"></div>
-                    <div className="h-3 w-40 bg-border rounded"></div>
-                  </div>
-                  <div className="flex bg-element rounded-lg p-0.5 border border-border w-full sm:w-auto h-8 space-x-1">
-                    {[1, 2, 3, 4, 5].map(i => (
-                      <div key={i} className="flex-1 sm:w-10 h-full bg-border/50 rounded-md"></div>
-                    ))}
-                  </div>
-                </div>
-                <div className="flex-1 bg-element-hover/30 rounded-xl w-full h-[300px]"></div>
-              </div>
-            </div>
-          </div>
-          <div className="bg-card rounded-2xl border border-border shadow-sm overflow-hidden">
-            <div className="px-6 py-4 border-b border-border">
-              <div className="h-5 w-48 bg-border rounded"></div>
-            </div>
-            <table className="w-full text-left border-collapse">
-              <thead>
-                <tr className="bg-element/50 border-b border-border">
-                  <th className="px-6 py-3"><div className="h-3 w-12 bg-border rounded"></div></th>
-                  <th className="px-6 py-3"><div className="h-3 w-20 bg-border rounded ml-auto"></div></th>
-                  <th className="px-6 py-3"><div className="h-3 w-16 bg-border rounded ml-auto"></div></th>
-                  <th className="px-6 py-3"><div className="h-3 w-12 bg-border rounded ml-auto"></div></th>
-                  <th className="px-6 py-3"><div className="h-3 w-20 bg-border rounded ml-auto"></div></th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-border bg-card">
-                {[1, 2, 3, 4, 5].map(row => (
-                  <tr key={row}>
-                    <td className="px-6 py-4">
-                      <div className="flex items-center space-x-3">
-                        <div className="w-8 h-8 rounded-full bg-border"></div>
-                        <div>
-                          <div className="h-4 w-14 bg-border rounded mb-1"></div>
-                          <div className="h-3 w-24 bg-border rounded"></div>
-                        </div>
-                      </div>
-                    </td>
-                    <td className="px-6 py-4"><div className="h-4 w-16 bg-border rounded ml-auto"></div></td>
-                    <td className="px-6 py-4"><div className="h-4 w-12 bg-border rounded ml-auto"></div></td>
-                    <td className="px-6 py-4"><div className="h-4 w-20 bg-border rounded ml-auto"></div></td>
-                    <td className="px-6 py-4"><div className="h-4 w-12 bg-border rounded ml-auto"></div></td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        </main>
-      </div>
-    );
+    return <DashboardSkeleton />;
   }
 
   return (

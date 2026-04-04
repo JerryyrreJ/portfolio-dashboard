@@ -19,7 +19,7 @@ export default function Footer() {
             </span>
           </Link>
           <p className="text-[13px] font-medium text-secondary max-w-xs leading-relaxed">
-            The restrained workspace for monitoring holdings and turning market noise into clear financial signals.
+            A cleaner portfolio tracker for holdings, dividends, transactions, and the return that ties them together.
           </p>
           <div className="flex gap-4 text-secondary mt-2">
             <a href="#" className="hover:text-primary transition-colors">
@@ -40,6 +40,7 @@ export default function Footer() {
             <h4 className="text-[12px] font-bold uppercase tracking-wider text-primary">Platform</h4>
             <ul className="flex flex-col gap-3 text-[13px] font-medium text-secondary">
               <li><Link href="#features" className="hover:text-primary transition-colors">Features</Link></li>
+              <li><Link href="#workflow" className="hover:text-primary transition-colors">Workflow</Link></li>
               <li><Link href="/stock/AAPL" className="hover:text-primary transition-colors">Explore</Link></li>
               <li><Link href="/login" className="hover:text-primary transition-colors">Sign In</Link></li>
             </ul>

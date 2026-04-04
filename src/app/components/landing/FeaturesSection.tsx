@@ -1,32 +1,32 @@
 "use client";
 
 import { motion, useMotionTemplate, useMotionValue } from "framer-motion";
-import { Lock, Layers, ZapOff, Percent } from "lucide-react";
+import { Lock, Layers, BarChart2, Percent } from "lucide-react";
 import { useHydrated } from "@/lib/useHydrated";
 
 const features = [
   {
-    title: "Absolute Privacy",
-    description: "Zero server tracking by default. Build a local portfolio entirely stored on your own device.",
+    title: "Private by default",
+    description: "Start with a local portfolio on your own device, then sign in only when you want sync and account features.",
     icon: Lock,
     colSpan: "md:col-span-2",
   },
   {
-    title: "Unified Portfolios",
-    description: "Manage multiple brokerage accounts. Combine them instantly for a holistic overview of your net worth.",
-    icon: Layers,
-    colSpan: "md:col-span-1",
-  },
-  {
-    title: "True Returns",
-    description: "Accurate cost basis calculations supporting both FIFO and Average Cost. Dividends are automatically factored in.",
+    title: "Net return that includes dividends",
+    description: "Track cost basis, fees, realized gains, cash dividends, and reinvested dividends in one return view.",
     icon: Percent,
     colSpan: "md:col-span-1",
   },
   {
-    title: "Focused on US Equities",
-    description: "Built for clarity, not anxiety. Reliable delayed pricing drops the noise of real-time trading so you can focus on long-term signals.",
-    icon: ZapOff,
+    title: "Unified portfolios",
+    description: "Manage multiple brokerage accounts and switch context quickly without losing the bigger picture.",
+    icon: Layers,
+    colSpan: "md:col-span-1",
+  },
+  {
+    title: "A clearer performance view",
+    description: "See holdings, allocation, price history, transaction logs, and stock detail pages in a layout built for review, not distraction.",
+    icon: BarChart2,
     colSpan: "md:col-span-2",
   },
 ];
@@ -110,11 +110,11 @@ export default function FeaturesSection() {
             transition={{ duration: 0.8, ease: "easeOut" }}
           >
             <h2 className="text-4xl font-bold tracking-tight text-primary md:text-5xl lg:text-6xl max-w-2xl">
-              Engineered for signal.<br />
-              <span className="text-secondary">Stripped of noise.</span>
+              Built for long-term tracking.<br />
+              <span className="text-secondary">Not for trading theater.</span>
             </h2>
             <p className="mt-6 max-w-xl text-lg font-medium text-secondary">
-              Folio strips away the clutter of traditional brokerages to give you an uninterrupted, beautiful view of your true financial standing.
+              Folio focuses on the parts that matter after the trade: position sizing, dividends, cost basis, and the return you actually keep.
             </p>
           </motion.div>
         </div>

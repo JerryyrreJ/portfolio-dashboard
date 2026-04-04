@@ -110,7 +110,10 @@ export function buildPositionSummary(transactions: StockTransaction[]): Position
 export async function getDefaultPortfolioContext(userId: string, pid?: string) {
   const portfolio = pid
     ? await withRetry(() => prisma.portfolio.findFirst({ where: { id: pid, userId } }))
-    : await withRetry(() => prisma.portfolio.findFirst({ where: { userId } }))
+    : await withRetry(() => prisma.portfolio.findFirst({
+        where: { userId },
+        orderBy: { createdAt: 'asc' },
+      }))
 
   return {
     portfolioId: portfolio?.id ?? '',

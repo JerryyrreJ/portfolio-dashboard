@@ -1,6 +1,8 @@
+import type React from "react";
 import type { Metadata } from "next";
-import type { Asset } from "@prisma/client";
-import DashboardClient from '../DashboardClient'
+import { Prisma } from "@prisma/client";
+import { getLocale, getMessages } from "next-intl/server";
+import DashboardPageShell from './DashboardPageShell'
 import { getCompanyProfile } from '@/lib/finnhub'
 import { get12MonthHistory, getIndexHistory, getLogo as getTwelveDataLogo } from '@/lib/twelvedata'
 import { getUser } from '@/lib/supabase-server'
@@ -35,8 +37,32 @@ type HoldingLot = {
   unitCost: number;
 };
 
+const dashboardTransactionSelect = Prisma.validator<Prisma.TransactionDefaultArgs>()({
+  select: {
+    type: true,
+    date: true,
+    quantity: true,
+    price: true,
+    fee: true,
+    asset: {
+      select: {
+        id: true,
+        ticker: true,
+        name: true,
+        market: true,
+        logo: true,
+        lastPrice: true,
+        historyLastUpdated: true,
+      },
+    },
+  },
+});
+
+type DashboardTransaction = Prisma.TransactionGetPayload<typeof dashboardTransactionSelect>;
+type DashboardAsset = DashboardTransaction["asset"];
+
 type HoldingAccumulator = {
-  asset: Asset;
+  asset: DashboardAsset;
   totalQty: number;
   totalCost: number;
   realizedGain: number;
@@ -60,29 +86,45 @@ function isIndexPriceHistoryUnavailable(error: unknown) {
   return code === 'P2021' || message.includes('IndexPriceHistory')
 }
 
+function isDatabaseConnectionIssue(error: unknown) {
+  const prismaError = error as { code?: string; message?: string }
+  const code = prismaError.code
+  const message = String(prismaError.message || '')
+  return code === 'P1001'
+    || code === 'P1017'
+    || code === 'P1002'
+    || message.includes("Can't reach database server")
+    || message.includes('Connection closed')
+    || message.includes('fetch failed')
+}
+
 export default async function Page({ searchParams }: { searchParams: Promise<{ pid?: string }> }) {
-  const [user, { pid }] = await Promise.all([
+  const [user, { pid }, locale, messages] = await Promise.all([
     getUser(),
     searchParams,
+    getLocale(),
+    getMessages(),
   ])
   const perf = createServerProfiler('app/dashboard', pid ? `pid=${pid}` : undefined)
   const userDisplayName = user
     ? (user.user_metadata?.display_name || user.email?.split('@')[0] || '')
     : ''
+  const renderDashboard = (props: React.ComponentProps<typeof DashboardPageShell>['dashboardProps']) => (
+    <DashboardPageShell locale={locale} messages={messages} dashboardProps={props} />
+  )
 
   // 未登录：返回空状态，完全不查 DB
   if (!user) {
     perf.flush('guest');
-    return (
-      <DashboardClient
-        portfolioId="local-portfolio"
-        portfolioName="My Portfolio"
-        portfolios={[]}
-        holdingsData={[]}
-        chartData={[]}
-        summary={{ totalValue: 0, totalCapGain: 0, totalCapGainPercentage: 0, totalRealizedGain: 0, totalDividendIncome: 0 }}
-      />
-    );
+    return renderDashboard({
+      portfolioId: "local-portfolio",
+      portfolioName: "My Portfolio",
+      portfolios: [],
+      initialPortfolios: [],
+      holdingsData: [],
+      chartData: [],
+      summary: { totalValue: 0, totalCapGain: 0, totalCapGainPercentage: 0, totalRealizedGain: 0, totalDividendIncome: 0 },
+    });
   }
   // 已登录：查找当前用户所有 Portfolios，没有则自动创建
   let allPortfolios = await perf.time('portfolio.findMany', () => withRetry(() => prisma.portfolio.findMany({
@@ -98,43 +140,51 @@ export default async function Page({ searchParams }: { searchParams: Promise<{ p
   }
 
   const portfolioMeta = allPortfolios.map(p => ({ id: p.id, name: p.name }))
+  const initialPortfolioRecords = allPortfolios.map((portfolio) => ({
+    id: portfolio.id,
+    name: portfolio.name,
+    currency: portfolio.currency,
+    preferences: portfolio.preferences,
+    settingsUpdatedAt: portfolio.settingsUpdatedAt?.toISOString() ?? null,
+  }))
 
   // 根据 ?pid= 选中 portfolio，找不到则 fallback 到第一个
   const selectedMeta = allPortfolios.find(p => p.id === pid) ?? allPortfolios[0]
 
-  // 加载选中 portfolio 的完整交易数据
-  let portfolio = await perf.time('portfolio.findUniqueWithTransactions', () => withRetry(() => prisma.portfolio.findUnique({
-    where: { id: selectedMeta.id },
-    include: {
-      transactions: {
-        include: { asset: true },
-        orderBy: { date: 'asc' }
-      }
-    }
-  })))
+  const [transactions, initialPendingDividendCount] = await Promise.all([
+    perf.time('transaction.findManyWithAsset', () => withRetry(() => prisma.transaction.findMany({
+      where: { portfolioId: selectedMeta.id },
+      ...dashboardTransactionSelect,
+      orderBy: { date: 'asc' },
+    }))),
+    perf.time('pendingDividend.count', () => withRetry(() => prisma.pendingDividend.count({
+      where: {
+        portfolioId: selectedMeta.id,
+        status: 'pending',
+      },
+    }))),
+  ])
 
-  if (!portfolio) portfolio = { ...selectedMeta, transactions: [], preferences: null, currency: 'USD', createdAt: new Date(), updatedAt: new Date(), settingsUpdatedAt: null }
-
-  if (portfolio.transactions.length === 0) {
+  if (transactions.length === 0) {
     perf.flush(`user=${user.id} tx=0`);
-    return (
-      <DashboardClient
-        portfolioId={portfolio.id}
-        portfolioName={portfolio.name}
-        portfolios={portfolioMeta}
-        holdingsData={[]}
-        chartData={[]}
-        summary={{ totalValue: 0, totalCapGain: 0, totalCapGainPercentage: 0, totalRealizedGain: 0, totalDividendIncome: 0 }}
-        userDisplayName={userDisplayName}
-      />
-    )
+    return renderDashboard({
+      portfolioId: selectedMeta.id,
+      portfolioName: selectedMeta.name,
+      portfolios: portfolioMeta,
+      initialPortfolios: initialPortfolioRecords,
+      holdingsData: [],
+      chartData: [],
+      summary: { totalValue: 0, totalCapGain: 0, totalCapGainPercentage: 0, totalRealizedGain: 0, totalDividendIncome: 0 },
+      initialPendingDividendCount,
+      userDisplayName,
+    })
   }
 
   // 2. 读取用户偏好的成本计算方式
   let costBasisMethod: 'FIFO' | 'AVCO' = 'FIFO';
-  if (portfolio.preferences) {
+  if (selectedMeta.preferences) {
     try {
-      const parsed = JSON.parse(portfolio.preferences);
+      const parsed = JSON.parse(selectedMeta.preferences);
       if (parsed.costBasisMethod === 'AVCO') costBasisMethod = 'AVCO';
     } catch { /* 忽略解析错误，使用默认值 */ }
   }
@@ -142,7 +192,7 @@ export default async function Page({ searchParams }: { searchParams: Promise<{ p
   // 3. 核心财务逻辑：通过历史交易流水计算实时持仓 (Holdings)
   const holdingsMap = new Map<string, HoldingAccumulator>();
 
-  for (const t of portfolio.transactions) {
+  for (const t of transactions) {
     const ticker = t.asset.ticker;
     if (!holdingsMap.has(ticker)) {
       holdingsMap.set(ticker, {
@@ -266,11 +316,11 @@ export default async function Page({ searchParams }: { searchParams: Promise<{ p
           try {
             const INDEX_TICKERS = ['SPY', 'QQQ'];
             for (const indexTicker of INDEX_TICKERS) {
-              const latest = await indexPriceHistory.findFirst({
+              const latest = await withRetry(() => indexPriceHistory.findFirst({
                 where: { ticker: indexTicker },
                 orderBy: { date: 'desc' },
                 select: { date: true },
-              });
+              }));
 
               const fromDate = latest
                 ? new Date(latest.date.getTime() + 86400000).toISOString().split('T')[0]
@@ -285,16 +335,18 @@ export default async function Page({ searchParams }: { searchParams: Promise<{ p
               const history = await getIndexHistory(indexTicker, fromDate);
               if (history && history.length > 0) {
                 const values = history.map(p => `('${indexTicker}', '${p.date}'::date, ${p.price})`).join(',');
-                await prisma.$executeRawUnsafe(`
+                await withRetry(() => prisma.$executeRawUnsafe(`
                   INSERT INTO "IndexPriceHistory" (ticker, date, close)
                   VALUES ${values}
                   ON CONFLICT (ticker, date) DO UPDATE SET close = EXCLUDED.close
-                `);
+                `));
               }
             }
           } catch (e) {
             if (isIndexPriceHistoryUnavailable(e)) {
               console.warn('[Dashboard] IndexPriceHistory table is not available yet. Apply the latest Prisma migration.')
+            } else if (isDatabaseConnectionIssue(e)) {
+              console.warn('[Dashboard] Skipping background index sync because the database connection is temporarily unavailable.')
             } else {
               throw e;
             }
@@ -357,14 +409,14 @@ export default async function Page({ searchParams }: { searchParams: Promise<{ p
   const oneYearAgo = new Date();
   oneYearAgo.setFullYear(oneYearAgo.getFullYear() - 1);
 
-  const priceRows = await perf.time('assetPriceHistory.findMany', () => prisma.assetPriceHistory.findMany({
+  const priceRows = await perf.time('assetPriceHistory.findMany', () => withRetry(() => prisma.assetPriceHistory.findMany({
     where: {
       ticker: { in: tickers },
       date: { gte: oneYearAgo },
     },
     orderBy: { date: 'asc' },
     select: { ticker: true, date: true, close: true },
-  }));
+  })));
 
   // 5b. 按 ticker 分组，date 转为 YYYY-MM-DD 字符串
   const priceHistories: Record<string, { date: string; price: number }[]> = {};
@@ -385,14 +437,14 @@ export default async function Page({ searchParams }: { searchParams: Promise<{ p
 
   if (firstChartDate && indexPriceHistory) {
     try {
-      indexPriceRows = await perf.time('indexPriceHistory.findMany', () => indexPriceHistory.findMany({
+      indexPriceRows = await perf.time('indexPriceHistory.findMany', () => withRetry(() => indexPriceHistory.findMany({
         where: {
           ticker: { in: ['SPY', 'QQQ'] },
           date: { gte: new Date(firstChartDate) },
         },
         orderBy: { date: 'asc' },
         select: { ticker: true, date: true, close: true },
-      }));
+      })));
     } catch (e) {
       if (isIndexPriceHistoryUnavailable(e)) {
         console.warn('[Dashboard] Skipping benchmark series because IndexPriceHistory is not available yet.')
@@ -410,7 +462,7 @@ export default async function Page({ searchParams }: { searchParams: Promise<{ p
   }
 
   // 5d. 将交易记录按时间排序，用于逐日回放
-  const sortedTransactions = [...portfolio.transactions].sort(
+  const sortedTransactions = [...transactions].sort(
     (a, b) => new Date(a.date).getTime() - new Date(b.date).getTime()
   );
 
@@ -567,16 +619,16 @@ export default async function Page({ searchParams }: { searchParams: Promise<{ p
   };
 
   // 6. 将所有算好的数据作为 Props 传递给客户端组件渲染
-  perf.flush(`user=${user.id} tx=${portfolio.transactions.length} holdings=${holdingsMap.size} chart=${historicalChartData.length}`);
-  return (
-    <DashboardClient
-      portfolioId={portfolio.id}
-      portfolioName={portfolio.name}
-      portfolios={portfolioMeta}
-      holdingsData={holdingsData}
-      chartData={chartData}
-      summary={summary}
-      userDisplayName={userDisplayName}
-    />
-  );
+  perf.flush(`user=${user.id} tx=${transactions.length} holdings=${holdingsMap.size} chart=${historicalChartData.length}`);
+  return renderDashboard({
+    portfolioId: selectedMeta.id,
+    portfolioName: selectedMeta.name,
+    portfolios: portfolioMeta,
+    initialPortfolios: initialPortfolioRecords,
+    holdingsData,
+    chartData,
+    summary,
+    initialPendingDividendCount,
+    userDisplayName,
+  });
 }

@@ -62,7 +62,7 @@ export default function HeroSection() {
         {/* Subtle Pill */}
         <motion.div variants={itemVariants} className="mb-6 md:mb-10">
           <span className="inline-flex rounded-full border border-border bg-card/50 px-4 py-1.5 text-[11px] font-bold tracking-[0.2em] text-secondary shadow-sm backdrop-blur-xl">
-            PORTFOLIO INTELLIGENCE
+            STOCKS • DIVIDENDS • TRANSACTIONS
           </span>
         </motion.div>
 
@@ -71,8 +71,8 @@ export default function HeroSection() {
           variants={itemVariants}
           className="max-w-3xl text-5xl font-bold leading-[1.05] tracking-tight text-primary sm:text-6xl md:text-7xl lg:text-[88px]"
         >
-          Track less. <br className="hidden sm:block" />
-          <span className="text-secondary">Know more.</span>
+          Track your portfolio <br className="hidden sm:block" />
+          <span className="text-secondary">with less noise.</span>
         </motion.h1>
 
         {/* Subtitle */}
@@ -80,7 +80,7 @@ export default function HeroSection() {
           variants={itemVariants}
           className="mt-6 max-w-2xl text-[17px] font-medium leading-relaxed text-secondary sm:text-[19px] md:mt-8"
         >
-          The restrained workspace for monitoring holdings, logging transactions, and turning market noise into clear financial signals.
+          Folio gives you a cleaner way to record trades, monitor dividend income, and understand true portfolio return without broker clutter.
         </motion.p>
 
         {/* Action Buttons */}
@@ -95,7 +95,7 @@ export default function HeroSection() {
               className="group relative flex w-full items-center justify-center gap-2 overflow-hidden rounded-full bg-primary px-8 py-4 text-[15px] font-bold text-on-primary shadow-[0_1px_3px_rgba(0,0,0,0.3)] transition-all sm:w-auto"
             >
               <span className="relative z-10 flex items-center gap-2">
-                Open Workspace
+                Open Dashboard
                 <ArrowRight className="h-4 w-4 transition-transform duration-300 group-hover:translate-x-1" />
               </span>
               {/* Subtle hover glare moving across the button */}
@@ -109,7 +109,7 @@ export default function HeroSection() {
               whileTap={{ scale: 0.98 }}
               className="flex w-full items-center justify-center gap-2 rounded-full border border-border bg-transparent px-8 py-4 text-[15px] font-bold text-secondary transition-colors hover:bg-element hover:text-primary sm:w-auto"
             >
-              Explore Public Assets
+              Browse Public Stocks
             </motion.button>
           </Link>
         </motion.div>

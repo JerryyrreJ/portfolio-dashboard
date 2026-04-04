@@ -52,7 +52,7 @@ async function getPortfolioWithTransactions(
   const resolvedPortfolio = portfolio ?? await perf.time('portfolio.findFirstFallback', () => withRetry(() => prisma.portfolio.findFirst({
     where: { userId },
     select: { id: true, name: true },
-    orderBy: { id: 'asc' },
+    orderBy: { createdAt: 'asc' },
   })));
 
   if (!resolvedPortfolio) {

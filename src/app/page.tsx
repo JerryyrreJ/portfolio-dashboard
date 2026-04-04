@@ -33,9 +33,9 @@ export default function LandingPage() {
     <main className="min-h-screen bg-page text-primary selection:bg-primary selection:text-on-primary">
       <Header />
       <HeroSection />
-      <AppShowcase />
       <FeaturesSection />
       <WorkflowSection />
+      <AppShowcase />
       <Footer />
     </main>
   );

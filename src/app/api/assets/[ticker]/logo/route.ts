@@ -1,51 +1,25 @@
 import { NextResponse } from 'next/server';
 
-import prisma from '@/lib/prisma';
-import { getCompanyProfile } from '@/lib/finnhub';
-import { getLogo as getTwelveDataLogo } from '@/lib/twelvedata';
+import prisma, { withRetry } from '@/lib/prisma';
 
 interface RouteContext {
   params: Promise<{ ticker: string }>;
 }
 
 async function resolveLogoUrl(ticker: string) {
-  let assetId: string | null = null;
   let cachedLogo: string | null = null;
 
   try {
-    const asset = await prisma.asset.findUnique({
+    const asset = await withRetry(() => prisma.asset.findUnique({
       where: { ticker },
-      select: { id: true, logo: true },
-    });
-    assetId = asset?.id ?? null;
+      select: { logo: true },
+    }));
     cachedLogo = asset?.logo ?? null;
   } catch (error) {
     console.warn(`Failed to read cached logo for ${ticker}:`, error);
   }
 
-  if (cachedLogo) {
-    return cachedLogo;
-  }
-
-  const profile = await getCompanyProfile(ticker);
-  let logoUrl = profile?.logo || null;
-
-  if (!logoUrl) {
-    logoUrl = await getTwelveDataLogo(ticker);
-  }
-
-  if (assetId && logoUrl) {
-    try {
-      await prisma.asset.update({
-        where: { id: assetId },
-        data: { logo: logoUrl },
-      });
-    } catch (error) {
-      console.warn(`Failed to persist resolved logo for ${ticker}:`, error);
-    }
-  }
-
-  return logoUrl;
+  return cachedLogo;
 }
 
 export async function GET(
@@ -60,7 +34,7 @@ export async function GET(
     return new NextResponse('Logo not found', {
       status: 404,
       headers: {
-        'Cache-Control': 'public, max-age=300, stale-while-revalidate=3600',
+        'Cache-Control': 'public, max-age=60, stale-while-revalidate=300',
       },
     });
   }

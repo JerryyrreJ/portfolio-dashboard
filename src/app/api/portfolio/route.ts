@@ -81,7 +81,10 @@ export async function PATCH(request: NextRequest) {
     // 如果没有传 id，fallback 到旧行为（取第一个）
     const existing = id
       ? await perf.time('portfolio.findUnique', () => prisma.portfolio.findUnique({ where: { id } }))
-      : await perf.time('portfolio.findFirst', () => prisma.portfolio.findFirst({ where: { userId: user.id } }));
+      : await perf.time('portfolio.findFirst', () => prisma.portfolio.findFirst({
+          where: { userId: user.id },
+          orderBy: { createdAt: 'asc' },
+        }));
 
     if (!existing || existing.userId !== user.id) {
       return NextResponse.json({ error: 'Portfolio not found' }, { status: 404 });

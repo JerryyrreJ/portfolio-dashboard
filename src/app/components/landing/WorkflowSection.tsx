@@ -5,24 +5,24 @@ import { motion } from "framer-motion";
 const workflowSteps = [
   {
     step: "01",
-    title: "Log your trades",
-    description: "Input your buy and sell transactions manually. No need to hand over your broker credentials. You maintain absolute control over your transaction history.",
+    title: "Record trades cleanly",
+    description: "Log buys, sells, fees, and notes without importing a noisy broker interface or giving up control of your history.",
   },
   {
     step: "02",
-    title: "Automatic dividend tracking",
-    description: "Folio automatically scans your holdings and highlights any upcoming or pending ex-dividend dates, ensuring you never miss a payout again.",
+    title: "Review dividends and reinvestment",
+    description: "Surface pending dividend events, confirm cash payouts, or convert them into reinvested shares when that matches how the income was used.",
   },
   {
     step: "03",
-    title: "Uncover true performance",
-    description: "Most brokers lie to you by hiding the impact of dividends and fees. Folio recalculates your true Cost Basis so you can see your real net gain.",
+    title: "See net return clearly",
+    description: "Understand the effect of fees, dividends, realized gains, and current holdings in one place instead of stitching the answer together yourself.",
   },
 ];
 
 export default function WorkflowSection() {
   return (
-    <section className="relative w-full bg-page px-6 py-24 md:px-12 md:py-48">
+    <section id="workflow" className="relative w-full bg-page px-6 py-24 md:px-12 md:py-48">
       {/* 
         This is the absolute core of the sticky effect.
         By setting the parent flex container and giving the left column a 'sticky' 
@@ -44,11 +44,11 @@ export default function WorkflowSection() {
               How it works
             </span>
             <h2 className="text-4xl font-bold tracking-tight text-primary md:text-5xl lg:text-6xl">
-              From trade <br />
-              <span className="text-secondary">to true insight.</span>
+              From trade entry <br />
+              <span className="text-secondary">to actual return.</span>
             </h2>
             <p className="mt-6 max-w-sm text-lg font-medium text-secondary">
-              A frictionless workflow designed to drop the noise of real-time trading so you can focus on long-term signals.
+              A simple workflow for investors who want a reliable record first and a cleaner performance view second.
             </p>
           </motion.div>
         </div>

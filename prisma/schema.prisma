@@ -20,6 +20,8 @@ model Portfolio {
   settingsUpdatedAt DateTime?
   transactions      Transaction[]
   pendingDividends  PendingDividend[]
+
+  @@index([userId, createdAt])
 }
 
 model Asset {
@@ -87,6 +89,9 @@ model Transaction {
   notes        String?
   asset        Asset     @relation(fields: [assetId], references: [id])
   portfolio    Portfolio @relation(fields: [portfolioId], references: [id], onDelete: Cascade)
+
+  @@index([portfolioId, date])
+  @@index([assetId, date])
 }
 
 model PendingDividend {

@@ -58,13 +58,19 @@ const cancelIdleTask: IdleCanceler = (handle) => {
 
 interface UsePreferencesOptions {
   initialPortfolios?: PortfolioClientRecord[];
+  cloudSync?: boolean;
 }
 
 export function usePreferences(options?: UsePreferencesOptions) {
   const [prefs, setPrefs] = useState<Preferences>(() => loadLocal());
   const initialPortfolios = options?.initialPortfolios;
+  const cloudSync = options?.cloudSync ?? true;
 
   useEffect(() => {
+    if (!cloudSync) {
+      return;
+    }
+
     // 云端同步（仅登录用户）
     const sync = async () => {
       try {
@@ -113,7 +119,7 @@ export function usePreferences(options?: UsePreferencesOptions) {
     return () => {
       cancelIdleTask(handle);
     };
-  }, [initialPortfolios]);
+  }, [cloudSync, initialPortfolios]);
 
   // 监听其他 tab 的变更
   useEffect(() => {
@@ -142,6 +148,10 @@ export function usePreferences(options?: UsePreferencesOptions) {
     setPrefs(updated);
 
     // 3. 上传云端（fire and forget）
+    if (!cloudSync) {
+      return;
+    }
+
     const pid = new URLSearchParams(window.location.search).get('pid') ?? '';
     const idParam = pid ? `?id=${pid}` : '';
     fetch(`/api/portfolio${idParam}`, {
@@ -151,7 +161,7 @@ export function usePreferences(options?: UsePreferencesOptions) {
     })
       .then(() => invalidatePortfolioListCache())
       .catch(() => {});
-  }, []);
+  }, [cloudSync]);
 
   // 根据 colorScheme 派生出具体颜色值，方便组件直接使用
   const colors = {

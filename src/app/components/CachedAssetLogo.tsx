@@ -18,6 +18,7 @@ function buildProxyImageUrl(ticker: string) {
 
 const CachedAssetLogo = memo(function CachedAssetLogo({
   ticker,
+  logoUrl,
   size,
   alt,
   className,
@@ -28,8 +29,8 @@ const CachedAssetLogo = memo(function CachedAssetLogo({
   const hasError = failedTicker === ticker;
 
   const proxiedSrc = useMemo(
-    () => (ticker && !hasError ? buildProxyImageUrl(ticker) : null),
-    [hasError, ticker]
+    () => (ticker && logoUrl && !hasError ? buildProxyImageUrl(ticker) : null),
+    [hasError, logoUrl, ticker]
   );
 
   if (!proxiedSrc) {

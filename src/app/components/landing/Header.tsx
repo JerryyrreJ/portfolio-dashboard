@@ -37,8 +37,8 @@ export default function Header() {
                 </Link>
               </li>
               <li>
-                <Link href="#updates" className="transition-colors hover:text-primary">
-                  Updates
+                <Link href="#workflow" className="transition-colors hover:text-primary">
+                  Workflow
                 </Link>
               </li>
             </ul>
@@ -59,7 +59,7 @@ export default function Header() {
               whileTap={{ scale: 0.98 }}
               className="rounded-full bg-primary px-5 py-2.5 text-[13px] font-bold tracking-wide text-on-primary shadow-[0_1px_3px_rgba(0,0,0,0.3)] hover:opacity-90 transition-opacity"
             >
-              Get Started
+              Open Dashboard
             </motion.button>
           </Link>
         </div>

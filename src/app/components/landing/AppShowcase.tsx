@@ -22,7 +22,11 @@ export default function AppShowcase() {
   const y = useTransform(scrollYProgress, [0, 1], [100, 0]);
 
   return (
-    <section ref={containerRef} className="relative w-full px-4 pt-16 pb-32 md:pb-48 md:pt-24 flex justify-center perspective-[2000px] overflow-hidden">
+    <section
+      id="preview"
+      ref={containerRef}
+      className="relative w-full px-4 pt-16 pb-32 md:pb-48 md:pt-24 flex justify-center perspective-[2000px] overflow-hidden"
+    >
       
       {/* Glow Effect behind the dashboard */}
       <motion.div
@@ -31,15 +35,27 @@ export default function AppShowcase() {
       />
 
       <motion.div
-        style={{ 
-          rotateX, 
-          scale, 
+        style={{
+          rotateX,
+          scale,
           opacity,
           y,
-          transformStyle: "preserve-3d" 
+          transformStyle: "preserve-3d"
         }}
         className="relative w-full max-w-[1200px]"
       >
+        <div className="mb-8 text-center">
+          <p className="mb-3 inline-flex rounded-full border border-border bg-card/60 px-3 py-1 text-[11px] font-bold uppercase tracking-[0.18em] text-secondary backdrop-blur-xl">
+            Product Preview
+          </p>
+          <h2 className="text-3xl font-bold tracking-tight text-primary sm:text-4xl md:text-5xl">
+            A workspace that stays readable
+          </h2>
+          <p className="mx-auto mt-4 max-w-2xl text-[15px] font-medium leading-relaxed text-secondary sm:text-[17px]">
+            Portfolio review should feel calm and legible. Folio keeps the important numbers close and the decorative noise out of the way.
+          </p>
+        </div>
+
         {/* Outer Frame to give it a "Hardware" or "Window" feel */}
         <div className="rounded-[clamp(1rem,3vw,2rem)] border border-border/60 bg-card/40 p-2 shadow-[0_0_50px_rgba(0,0,0,0.1)] backdrop-blur-2xl ring-1 ring-white/10 dark:shadow-[0_0_80px_rgba(0,0,0,0.4)] sm:p-4">
           
@@ -68,8 +84,8 @@ export default function AppShowcase() {
                   <svg className="w-12 h-12 mb-4 opacity-50" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
                   </svg>
-                  <p className="font-medium text-sm">Please place your 1:1 Dashboard Screenshot here</p>
-                  <p className="text-xs mt-1">Suggested resolution: 2560x1600 (16:10 or 16:9)</p>
+                  <p className="font-medium text-sm">Dashboard preview goes here</p>
+                  <p className="text-xs mt-1">Recommended: a clean portfolio overview screenshot</p>
                   <code className="mt-4 px-2 py-1 bg-black/20 rounded text-[11px] font-mono">
                     src=&quot;/dashboard-preview.png&quot;
                   </code>
