@@ -5,6 +5,27 @@
 
 const API_KEY = process.env.ALPHAVANTAGE_API_KEY || '';
 const BASE_URL = 'https://www.alphavantage.co/query';
+const DIVIDEND_REQUEST_INTERVAL_MS = 1100;
+
+type AlphaVantageDividendState = 'missing' | 'available' | 'rate_limited';
+
+let dividendState: AlphaVantageDividendState = API_KEY ? 'available' : 'missing';
+let nextDividendRequestAt = 0;
+
+function sleep(ms: number) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+function isDividendRateLimitMessage(message?: string) {
+  if (!message) {
+    return false;
+  }
+
+  return message.includes('1 request per second')
+    || message.includes('25 requests per day')
+    || message.includes('premium plans')
+    || message.includes('Please consider spreading out your free API requests');
+}
 
 export interface AlphaVantageDividendData {
   symbol: string;
@@ -31,6 +52,19 @@ async function fetchAlphaVantage(params: Record<string, string>) {
     return null;
   }
 
+  if (params.function === 'DIVIDENDS') {
+    if (dividendState === 'rate_limited') {
+      return null;
+    }
+
+    const now = Date.now();
+    const waitMs = nextDividendRequestAt - now;
+    if (waitMs > 0) {
+      await sleep(waitMs);
+    }
+    nextDividendRequestAt = Date.now() + DIVIDEND_REQUEST_INTERVAL_MS;
+  }
+
   const url = new URL(BASE_URL);
   url.searchParams.append('apikey', API_KEY);
   Object.entries(params).forEach(([key, value]) => {
@@ -48,16 +82,26 @@ async function fetchAlphaVantage(params: Record<string, string>) {
     clearTimeout(timeoutId);
 
     if (!response.ok) {
+      if (params.function === 'DIVIDENDS' && response.status === 429) {
+        dividendState = 'rate_limited';
+      }
       console.warn(`Alpha Vantage API error: ${response.status} ${response.statusText} for ${params.function}`);
       return null;
     }
 
     const data = await response.json() as AlphaVantageDividendResponse;
     if (data.Information || data.Note || data.ErrorMessage) {
+      if (params.function === 'DIVIDENDS' && isDividendRateLimitMessage(data.Information || data.Note || data.ErrorMessage)) {
+        dividendState = 'rate_limited';
+      }
       console.warn(
         `Alpha Vantage API error: ${data.Information || data.Note || data.ErrorMessage} for ${params.function}`
       );
       return null;
+    }
+
+    if (params.function === 'DIVIDENDS') {
+      dividendState = 'available';
     }
 
     return data;
@@ -67,6 +111,10 @@ async function fetchAlphaVantage(params: Record<string, string>) {
     console.warn(`Alpha Vantage fetch exception for ${params.function}:`, message);
     return null;
   }
+}
+
+export function getDividendProviderState() {
+  return dividendState;
 }
 
 export async function getDividends(

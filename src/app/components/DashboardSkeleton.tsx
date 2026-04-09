@@ -46,14 +46,14 @@ export default function DashboardSkeleton() {
       </header>
 
       <main className="flex-1 max-w-[1400px] w-full mx-auto px-6 py-6 animate-pulse">
-        <div className="flex justify-between items-center mb-6">
-          <div className="flex items-center space-x-3">
-            <Block className="h-10 w-40 sm:w-52 rounded-xl" />
+        <div className="flex justify-between items-center mb-6 gap-4">
+          <div className="flex items-center space-x-3 min-w-0">
+            <Block className="h-9 sm:h-10 w-28 sm:w-52 rounded-xl shrink-0" />
             <Block className="hidden sm:inline-block h-6 w-20 rounded-md" />
           </div>
-          <div className="flex items-center space-x-2.5">
+          <div className="flex items-center space-x-2 sm:space-x-2.5 shrink-0">
             <Block className="h-9 w-9 rounded-xl" />
-            <Block className="h-9 w-28 rounded-xl" />
+            <Block className="h-9 w-9 sm:w-28 rounded-xl" />
           </div>
         </div>
 

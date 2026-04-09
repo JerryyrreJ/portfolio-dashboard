@@ -40,6 +40,8 @@ const iconInputClass = `${filledInputClass} pl-11 pr-4 py-3.5`;
 const numericInputClass = `${iconInputClass} text-[15px] font-bold tabular-nums [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none`;
 const plainTextInputClass = `${filledInputClass} px-4 py-3.5 text-[13px] font-medium`;
 const inputTriggerClass = 'w-full h-[50px] rounded-[18px] bg-element hover:bg-element-hover transition-colors';
+const errorInputClass = 'ring-2 ring-rose-200 bg-rose-50/70';
+const errorLabelClass = 'text-rose-600';
 
 interface AddTransactionModalProps {
   isOpen: boolean;
@@ -57,6 +59,17 @@ interface SearchResult {
   type: string;
 }
 
+interface FormErrors {
+  ticker?: string;
+  shares?: string;
+  price?: string;
+}
+
+interface RippleOrigin {
+  x: number;
+  y: number;
+}
+
 export default function AddTransactionModal({
   isOpen,
   onClose,
@@ -69,6 +82,11 @@ export default function AddTransactionModal({
   const locale = useLocale();
   const { searchStock, getQuote, getHistoricalPrice, isLoading } = useStock();
   const calendarRef = useRef<HTMLDivElement>(null);
+  const tickerInputRef = useRef<HTMLInputElement>(null);
+  const sharesInputRef = useRef<HTMLInputElement>(null);
+  const priceInputRef = useRef<HTMLInputElement>(null);
+  const submitButtonRef = useRef<HTMLButtonElement>(null);
+  const successTimeoutsRef = useRef<number[]>([]);
   const monthYearFormatter = new Intl.DateTimeFormat(locale, {
     month: 'long',
     year: 'numeric',
@@ -171,73 +189,25 @@ export default function AddTransactionModal({
     return () => clearTimeout(timer);
   }, [searchQuery, searchStock, selectedStock]);
 
-  const handleSelectStock = useCallback(async (stock: SearchResult) => {
-    setSelectedStock(stock);
-    setSearchQuery(stock.symbol);
-    setIsSearchFocused(false);
+  const [submitStatus, setSubmitStatus] = useState<'idle' | 'loading' | 'success' | 'error'>('idle');
+  const [submitError, setSubmitError] = useState<string>('');
+  const [fieldErrors, setFieldErrors] = useState<FormErrors>({});
+  const [successRippleOrigin, setSuccessRippleOrigin] = useState<RippleOrigin | null>(null);
+  const [isClosingAfterSuccess, setIsClosingAfterSuccess] = useState(false);
 
-    setIsFetchingPrice(true);
-    const today = new Date().toISOString().split('T')[0];
+  const clearScheduledSuccessTimeouts = useCallback(() => {
+    successTimeoutsRef.current.forEach((timeoutId) => window.clearTimeout(timeoutId));
+    successTimeoutsRef.current = [];
+  }, []);
 
-    // 并行：获取价格 + 自动检测货币
-    const pricePromise = (async () => {
-      if (txTypeRef.current === 'DIVIDEND') return; // Do not fetch market price for dividends
+  useEffect(() => {
+    return () => {
+      clearScheduledSuccessTimeouts();
+    };
+  }, [clearScheduledSuccessTimeouts]);
 
-      if (purchaseDate && purchaseDate !== today) {
-        const historical = await getHistoricalPrice(stock.symbol, purchaseDate);
-        if (historical && historical.price > 0) {
-          setPrice(historical.price.toFixed(2));
-          setPriceSource('api');
-          return;
-        }
-      }
-      const quote = await getQuote(stock.symbol);
-      if (quote && quote.c > 0) {
-        setPrice(quote.c.toFixed(2));
-        setPriceSource('api');
-      }
-    })();
-
-    const currencyPromise = (async () => {
-      // 先查 DB 缓存
-      const lookupRes = await fetch(`/api/assets/lookup?ticker=${encodeURIComponent(stock.symbol)}`);
-      if (lookupRes.ok) {
-        const data = await lookupRes.json();
-        if (data.logo) setTxLogo(data.logo);
-        if (data.currency && data.currency !== 'USD') { setTxCurrency(data.currency); return; }
-      }
-      // 从 Twelve Data / Finnhub 获取货币和Logo
-      const profileRes = await fetch(`/api/stock/profile?symbol=${encodeURIComponent(stock.symbol)}`);
-      if (profileRes.ok) {
-        const data = await profileRes.json();
-        if (data.logo) setTxLogo(data.logo);
-        if (data.currency) { setTxCurrency(data.currency); return; }
-      }
-      // 最终 fallback：根据交易所后缀推断（适用于 API 不支持的非美股）
-      setTxCurrency(inferCurrencyFromTicker(stock.symbol));
-    })();
-
-    await Promise.all([pricePromise, currencyPromise]);
-    setIsFetchingPrice(false);
-  }, [purchaseDate, getQuote, getHistoricalPrice]);
-
-  const handleDateSelect = useCallback(async (date: Date) => {
-    const dateStr = format(date, 'yyyy-MM-dd');
-    setPurchaseDate(dateStr);
-    setShowCalendar(false);
-
-    if (selectedStock && txTypeRef.current !== 'DIVIDEND') {
-      setIsFetchingPrice(true);
-      const historical = await getHistoricalPrice(selectedStock.symbol, dateStr);
-      if (historical && historical.price > 0) {
-        setPrice(historical.price.toFixed(2));
-        setPriceSource('api');
-      }
-      setIsFetchingPrice(false);
-    }
-  }, [selectedStock, getHistoricalPrice]);
-
-  const handleReset = () => {
+  const handleReset = useCallback(() => {
+    clearScheduledSuccessTimeouts();
     setSearchQuery('');
     setSelectedStock(null);
     setSearchResults([]);
@@ -250,25 +220,190 @@ export default function AddTransactionModal({
     setShowCurrencyPicker(false);
     setTxLogo(null);
     setSubmitStatus('idle');
-  };
+    setSubmitError('');
+    setFieldErrors({});
+    setSuccessRippleOrigin(null);
+    setIsClosingAfterSuccess(false);
+  }, [clearScheduledSuccessTimeouts]);
 
-  const handleClose = () => {
+  const handleClose = useCallback(() => {
     handleReset();
     onClose();
-  };
+  }, [handleReset, onClose]);
 
-  const [submitStatus, setSubmitStatus] = useState<'idle' | 'loading' | 'success' | 'error'>('idle');
-  const [submitError, setSubmitError] = useState<string>('');
+  const clearFieldError = useCallback((field: keyof FormErrors) => {
+    setFieldErrors((current) => {
+      if (!current[field]) {
+        return current;
+      }
+      return { ...current, [field]: undefined };
+    });
+  }, []);
+
+  const clearSubmissionError = useCallback(() => {
+    if (submitStatus === 'error') {
+      setSubmitStatus('idle');
+      setSubmitError('');
+    }
+  }, [submitStatus]);
+
+  const resolveSuccessRippleOrigin = useCallback((): RippleOrigin => {
+    if (successRippleOrigin) {
+      return successRippleOrigin;
+    }
+
+    const button = submitButtonRef.current;
+    if (!button) {
+      return { x: 0, y: 0 };
+    }
+
+    return {
+      x: button.clientWidth / 2,
+      y: button.clientHeight / 2,
+    };
+  }, [successRippleOrigin]);
+
+  const queueSuccessClose = useCallback((afterClose?: () => void) => {
+    clearScheduledSuccessTimeouts();
+    setSubmitError('');
+    setSubmitStatus('success');
+    setSuccessRippleOrigin(resolveSuccessRippleOrigin());
+
+    const exitTimeout = window.setTimeout(() => {
+      setIsClosingAfterSuccess(true);
+    }, 520);
+
+    const finishTimeout = window.setTimeout(() => {
+      handleClose();
+      afterClose?.();
+    }, 760);
+
+    successTimeoutsRef.current = [exitTimeout, finishTimeout];
+  }, [clearScheduledSuccessTimeouts, handleClose, resolveSuccessRippleOrigin]);
+
+  const handleSelectStock = useCallback(async (stock: SearchResult) => {
+    setSelectedStock(stock);
+    setSearchQuery(stock.symbol);
+    setIsSearchFocused(false);
+
+    setIsFetchingPrice(true);
+    const today = new Date().toISOString().split('T')[0];
+
+    const pricePromise = (async () => {
+      if (txTypeRef.current === 'DIVIDEND') return;
+
+      if (purchaseDate && purchaseDate !== today) {
+        const historical = await getHistoricalPrice(stock.symbol, purchaseDate);
+        if (historical && historical.price > 0) {
+          setPrice(historical.price.toFixed(2));
+          clearFieldError('price');
+          setPriceSource('api');
+          return;
+        }
+      }
+
+      const quote = await getQuote(stock.symbol);
+      if (quote && quote.c > 0) {
+        setPrice(quote.c.toFixed(2));
+        clearFieldError('price');
+        setPriceSource('api');
+      }
+    })();
+
+    const currencyPromise = (async () => {
+      const lookupRes = await fetch(`/api/assets/lookup?ticker=${encodeURIComponent(stock.symbol)}`);
+      if (lookupRes.ok) {
+        const data = await lookupRes.json();
+        if (data.logo) setTxLogo(data.logo);
+        if (data.currency && data.currency !== 'USD') { setTxCurrency(data.currency); return; }
+      }
+
+      const profileRes = await fetch(`/api/stock/profile?symbol=${encodeURIComponent(stock.symbol)}`);
+      if (profileRes.ok) {
+        const data = await profileRes.json();
+        if (data.logo) setTxLogo(data.logo);
+        if (data.currency) { setTxCurrency(data.currency); return; }
+      }
+
+      setTxCurrency(inferCurrencyFromTicker(stock.symbol));
+    })();
+
+    await Promise.all([pricePromise, currencyPromise]);
+    setIsFetchingPrice(false);
+  }, [clearFieldError, purchaseDate, getQuote, getHistoricalPrice]);
+
+  const handleDateSelect = useCallback(async (date: Date) => {
+    const dateStr = format(date, 'yyyy-MM-dd');
+    setPurchaseDate(dateStr);
+    setShowCalendar(false);
+
+    if (selectedStock && txTypeRef.current !== 'DIVIDEND') {
+      setIsFetchingPrice(true);
+      const historical = await getHistoricalPrice(selectedStock.symbol, dateStr);
+      if (historical && historical.price > 0) {
+        setPrice(historical.price.toFixed(2));
+        clearFieldError('price');
+        setPriceSource('api');
+      }
+      setIsFetchingPrice(false);
+    }
+  }, [clearFieldError, selectedStock, getHistoricalPrice]);
+
+  const focusField = useCallback((field: keyof FormErrors) => {
+    if (field === 'ticker') tickerInputRef.current?.focus();
+    if (field === 'shares') sharesInputRef.current?.focus();
+    if (field === 'price') priceInputRef.current?.focus();
+  }, []);
+
+  const validateForm = useCallback(() => {
+    const nextErrors: FormErrors = {};
+
+    if (!selectedStock) {
+      nextErrors.ticker = t('tickerRequired');
+    }
+
+    if (transactionType !== 'DIVIDEND') {
+      const shareValue = parseFloat(shares);
+      if (!shares.trim()) {
+        nextErrors.shares = t('sharesRequired');
+      } else if (!Number.isFinite(shareValue) || shareValue <= 0) {
+        nextErrors.shares = t('sharesPositive');
+      }
+    }
+
+    const priceValue = parseFloat(price);
+    if (!price.trim()) {
+      nextErrors.price = transactionType === 'DIVIDEND' ? t('payoutRequired') : t('unitPriceRequired');
+    } else if (!Number.isFinite(priceValue) || priceValue <= 0) {
+      nextErrors.price = transactionType === 'DIVIDEND' ? t('payoutPositive') : t('unitPricePositive');
+    }
+
+    setFieldErrors(nextErrors);
+    const firstInvalidField = (['ticker', 'shares', 'price'] as Array<keyof FormErrors>).find((field) => nextErrors[field]);
+    if (firstInvalidField) {
+      focusField(firstInvalidField);
+      return false;
+    }
+
+    return true;
+  }, [focusField, price, selectedStock, shares, t, transactionType]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!selectedStock) return;
+    clearSubmissionError();
+
+    if (!validateForm() || !selectedStock) {
+      return;
+    }
 
     if (transactionType === 'SELL') {
       const available = getAvailableShares(selectedStock.symbol);
       if (parseFloat(shares) > available) {
-        setSubmitStatus('error');
-        setSubmitError(t('insufficientShares', { available: available.toFixed(4) }));
+        setFieldErrors((current) => ({
+          ...current,
+          shares: t('insufficientShares', { available: available.toFixed(4) }),
+        }));
+        focusField('shares');
         return;
       }
     }
@@ -310,9 +445,8 @@ export default function AddTransactionModal({
 
         // 5. 触发自定义事件，通知 DashboardClient 重新加载本地数据
         window.dispatchEvent(new Event('localTransactionsUpdated'));
-        
-        setSubmitStatus('success');
-        setTimeout(() => { handleClose(); }, 1000);
+
+        queueSuccessClose();
         return;
       }
 
@@ -355,8 +489,7 @@ export default function AddTransactionModal({
       });
 
       if (!response.ok) throw new Error(t('submissionFailed'));
-      setSubmitStatus('success');
-      setTimeout(() => { handleClose(); window.location.reload(); }, 1000);
+      queueSuccessClose(() => window.location.reload());
     } catch {
       setSubmitStatus('error');
       setSubmitError(t('recordFailed'));
@@ -459,8 +592,8 @@ export default function AddTransactionModal({
   if (!isOpen) return null;
 
   return (
-    <div className="fixed inset-0 z-[100] flex items-center justify-center bg-primary/40 backdrop-blur-md transition-all p-4">
-      <div className="relative w-full max-w-[500px] bg-card rounded-[28px] sm:rounded-[32px] shadow-[0_20px_70px_-10px_rgba(0,0,0,0.15)] border border-border overflow-y-auto max-h-[90vh] flex flex-col animate-in fade-in zoom-in duration-200">
+    <div className={`fixed inset-0 z-[100] flex items-center justify-center bg-primary/40 backdrop-blur-md transition-all duration-300 p-4 ${isClosingAfterSuccess ? 'opacity-0' : 'opacity-100'}`}>
+      <div className={`relative w-full max-w-[500px] bg-card rounded-[28px] sm:rounded-[32px] shadow-[0_20px_70px_-10px_rgba(0,0,0,0.15)] border border-border overflow-y-auto max-h-[90vh] flex flex-col animate-in fade-in zoom-in duration-200 transition-all duration-300 ${isClosingAfterSuccess ? 'scale-[0.97] opacity-0 translate-y-2' : 'scale-100 opacity-100 translate-y-0'}`}>
         
         {/* Header - Apple Style */}
         <div className="px-6 pt-6 sm:px-8 sm:pt-8 pb-4 flex items-center justify-between sticky top-0 bg-card/90 backdrop-blur-sm z-20">
@@ -488,17 +621,32 @@ export default function AddTransactionModal({
             <div className="flex h-full relative z-10">
               <button 
                 type="button" 
-                onClick={() => { setTransactionType('BUY'); if (transactionType === 'DIVIDEND') setPrice(''); }} 
+                onClick={() => {
+                  clearSubmissionError();
+                  setFieldErrors({});
+                  setTransactionType('BUY');
+                  if (transactionType === 'DIVIDEND') setPrice('');
+                }} 
                 className={`flex-1 text-[14px] font-bold transition-colors duration-200 ${transactionType === 'BUY' ? 'text-on-primary' : 'text-secondary hover:text-secondary'}`}
               >{t('buy')}</button>
               <button 
                 type="button" 
-                onClick={() => { setTransactionType('SELL'); if (transactionType === 'DIVIDEND') setPrice(''); }} 
+                onClick={() => {
+                  clearSubmissionError();
+                  setFieldErrors({});
+                  setTransactionType('SELL');
+                  if (transactionType === 'DIVIDEND') setPrice('');
+                }} 
                 className={`flex-1 text-[14px] font-bold transition-colors duration-200 ${transactionType === 'SELL' ? 'text-on-primary' : 'text-secondary hover:text-secondary'}`}
               >{t('sell')}</button>
               <button 
                 type="button" 
-                onClick={() => { setTransactionType('DIVIDEND'); setPrice(''); }} 
+                onClick={() => {
+                  clearSubmissionError();
+                  setFieldErrors({});
+                  setTransactionType('DIVIDEND');
+                  setPrice('');
+                }} 
                 className={`flex-1 text-[14px] font-bold transition-colors duration-200 ${transactionType === 'DIVIDEND' ? 'text-on-primary' : 'text-secondary hover:text-secondary'}`}
               >{t('dividend')}</button>
             </div>
@@ -506,21 +654,31 @@ export default function AddTransactionModal({
 
           {/* Search Box */}
           <div className="relative group">
-            <label className="text-[11px] font-bold text-secondary uppercase tracking-widest mb-2 block px-1">{t('tickerLabel')}</label>
+            <label className={`text-[11px] font-bold uppercase tracking-widest mb-2 block px-1 ${fieldErrors.ticker ? errorLabelClass : 'text-secondary'}`}>{t('tickerLabel')}</label>
             <div className="relative">
               <SearchIcon className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-secondary group-focus-within:text-primary transition-colors" />
               <input
+                ref={tickerInputRef}
                 type="text"
                 value={searchQuery}
                 onFocus={() => setIsSearchFocused(true)}
                 onBlur={() => setTimeout(() => setIsSearchFocused(false), 200)}
-                onChange={(e) => { setSearchQuery(e.target.value); if (selectedStock) setSelectedStock(null); }}
+                onChange={(e) => {
+                  clearSubmissionError();
+                  clearFieldError('ticker');
+                  setSearchQuery(e.target.value);
+                  if (selectedStock) setSelectedStock(null);
+                }}
                 placeholder={t('tickerPlaceholder')}
-                className="w-full pl-11 pr-10 py-3.5 bg-element border-none rounded-[18px] text-[15px] font-semibold focus:ring-2 focus:ring-black/5 focus:bg-card transition-all outline-none"
+                aria-invalid={!!fieldErrors.ticker}
+                className={`w-full pl-11 pr-10 py-3.5 border-none rounded-[18px] text-[15px] font-semibold focus:ring-2 focus:ring-black/5 focus:bg-card transition-all outline-none ${fieldErrors.ticker ? errorInputClass : 'bg-element'}`}
                 autoComplete="off"
               />
               {isLoading && <Loader2 className="absolute right-4 top-1/2 -translate-y-1/2 w-4 h-4 animate-spin text-secondary" />}
             </div>
+            {fieldErrors.ticker && (
+              <p className="mt-2 px-1 text-[12px] font-medium text-rose-600">{fieldErrors.ticker}</p>
+            )}
 
             {/* Suggestions & Quick Select */}
             {isSearchFocused && !selectedStock && (
@@ -533,7 +691,11 @@ export default function AddTransactionModal({
                       <button 
                         key={h.ticker} 
                         type="button" 
-                        onClick={() => handleSelectStock({ symbol: h.ticker, displaySymbol: h.ticker, description: h.name, type: t('commonStock') })} 
+                        onClick={() => {
+                          clearSubmissionError();
+                          clearFieldError('ticker');
+                          handleSelectStock({ symbol: h.ticker, displaySymbol: h.ticker, description: h.name, type: t('commonStock') });
+                        }} 
                         className="w-full p-2 text-left hover:bg-element rounded-xl flex items-center justify-between group transition-colors"
                       >
                         <div className="flex-1 min-w-0 pr-3">
@@ -551,7 +713,11 @@ export default function AddTransactionModal({
                 )}
 
                 {searchQuery !== '' && searchResults.length > 0 && searchResults.map((stock) => (
-                  <button key={stock.symbol} type="button" onClick={() => handleSelectStock(stock)} className="w-full p-3 text-left hover:bg-element rounded-xl flex items-center justify-between group transition-colors">
+                  <button key={stock.symbol} type="button" onClick={() => {
+                    clearSubmissionError();
+                    clearFieldError('ticker');
+                    handleSelectStock(stock);
+                  }} className="w-full p-3 text-left hover:bg-element rounded-xl flex items-center justify-between group transition-colors">
                     <div>
                       <span className="font-bold text-primary">{stock.symbol}</span>
                       <p className="text-[11px] text-secondary font-medium truncate max-w-[200px] mt-0.5">{stock.description}</p>
@@ -674,22 +840,31 @@ export default function AddTransactionModal({
             {transactionType !== 'DIVIDEND' ? (
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-5 sm:gap-6">
                 <div className="space-y-2">
-                  <label className="text-[11px] font-bold text-secondary uppercase tracking-widest px-1">{t('shares')}</label>
+                  <label className={`text-[11px] font-bold uppercase tracking-widest px-1 ${fieldErrors.shares ? errorLabelClass : 'text-secondary'}`}>{t('shares')}</label>
                   <div className="relative">
                     <Hash className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-secondary" />
                     <input 
+                      ref={sharesInputRef}
                       type="number" 
                       step="0.0001" 
                       value={shares} 
-                      onChange={(e) => setShares(e.target.value)} 
+                      onChange={(e) => {
+                        clearSubmissionError();
+                        clearFieldError('shares');
+                        setShares(e.target.value);
+                      }} 
                       onWheel={(e) => (e.target as HTMLInputElement).blur()}
                       placeholder="0.00" 
-                      className={numericInputClass}
+                      aria-invalid={!!fieldErrors.shares}
+                      className={`${numericInputClass} ${fieldErrors.shares ? errorInputClass : ''}`}
                     />
                   </div>
+                  {fieldErrors.shares && (
+                    <p className="px-1 text-[12px] font-medium text-rose-600">{fieldErrors.shares}</p>
+                  )}
                 </div>
                 <div className="space-y-2">
-                  <label className="text-[11px] font-bold text-secondary uppercase tracking-widest px-1 flex items-center gap-1.5">
+                  <label className={`text-[11px] font-bold uppercase tracking-widest px-1 flex items-center gap-1.5 ${fieldErrors.price ? errorLabelClass : 'text-secondary'}`}>
                     {t('unitPrice')}
                     <span className="text-secondary">·</span>
                     <span>{getCurrencySymbol(txCurrency)}</span>
@@ -697,21 +872,31 @@ export default function AddTransactionModal({
                   <div className="relative">
                     <DollarSign className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-secondary" />
                     <input 
+                      ref={priceInputRef}
                       type="number" 
                       step="0.01" 
                       value={price} 
-                      onChange={(e) => { setPrice(e.target.value); setPriceSource('manual'); }} 
+                      onChange={(e) => {
+                        clearSubmissionError();
+                        clearFieldError('price');
+                        setPrice(e.target.value);
+                        setPriceSource('manual');
+                      }} 
                       onWheel={(e) => (e.target as HTMLInputElement).blur()}
                       placeholder="0.00" 
-                      className={`${numericInputClass} transition-colors ${priceSource === 'api' ? 'bg-blue-50/50 text-blue-900 ring-1 ring-blue-100' : 'bg-element text-primary'}`}
+                      aria-invalid={!!fieldErrors.price}
+                      className={`${numericInputClass} transition-colors ${fieldErrors.price ? errorInputClass : (priceSource === 'api' ? 'bg-blue-50/50 text-blue-900 ring-1 ring-blue-100' : 'bg-element text-primary')}`}
                     />
                   </div>
+                  {fieldErrors.price && (
+                    <p className="px-1 text-[12px] font-medium text-rose-600">{fieldErrors.price}</p>
+                  )}
                 </div>
               </div>
             ) : (
               <div className="grid grid-cols-1 gap-5">
                 <div className="space-y-2">
-                  <label className="text-[11px] font-bold text-secondary uppercase tracking-widest px-1 flex items-center gap-1.5">
+                  <label className={`text-[11px] font-bold uppercase tracking-widest px-1 flex items-center gap-1.5 ${fieldErrors.price ? errorLabelClass : 'text-secondary'}`}>
                     {t('totalPayoutAmount')}
                     <span className="text-secondary">·</span>
                     <span>{getCurrencySymbol(txCurrency)}</span>
@@ -719,15 +904,25 @@ export default function AddTransactionModal({
                   <div className="relative">
                     <DollarSign className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-secondary" />
                     <input 
+                      ref={priceInputRef}
                       type="number" 
                       step="0.01" 
                       value={price} 
-                      onChange={(e) => { setPrice(e.target.value); setPriceSource('manual'); }} 
+                      onChange={(e) => {
+                        clearSubmissionError();
+                        clearFieldError('price');
+                        setPrice(e.target.value);
+                        setPriceSource('manual');
+                      }} 
                       onWheel={(e) => (e.target as HTMLInputElement).blur()}
                       placeholder="0.00" 
-                      className={`${numericInputClass} transition-colors text-primary`}
+                      aria-invalid={!!fieldErrors.price}
+                      className={`${numericInputClass} transition-colors text-primary ${fieldErrors.price ? errorInputClass : ''}`}
                     />
                   </div>
+                  {fieldErrors.price && (
+                    <p className="px-1 text-[12px] font-medium text-rose-600">{fieldErrors.price}</p>
+                  )}
                 </div>
               </div>
             )}
@@ -761,13 +956,6 @@ export default function AddTransactionModal({
             </div>
           </div>
 
-          {/* Submission Feedback */}
-          {submitStatus === 'success' && (
-            <div className="p-4 bg-emerald-50 rounded-2xl border border-emerald-100 flex items-center gap-3 animate-in slide-in-from-top-2">
-              <CheckCircle className="w-5 h-5 text-emerald-600" />
-              <p className="text-[14px] font-bold text-emerald-900">{t('success')}</p>
-            </div>
-          )}
           {submitStatus === 'error' && (
             <div className="p-4 bg-rose-50 rounded-2xl border border-rose-100 flex items-start gap-3 animate-in shake-1 duration-300">
               <AlertCircle className="w-5 h-5 text-rose-600 shrink-0 mt-0.5" />
@@ -778,11 +966,46 @@ export default function AddTransactionModal({
           {/* CTA Button */}
           <div className="pt-2">
             <button
+              ref={submitButtonRef}
               type="submit"
-              disabled={!selectedStock || !price || (transactionType !== 'DIVIDEND' && !shares) || submitStatus !== 'idle'}
-              className="w-full py-4 bg-primary text-on-primary text-[16px] font-bold rounded-[20px] shadow-lg shadow-black/10 hover:bg-primary-hover active:scale-[0.98] disabled:bg-gray-200 disabled:shadow-none transition-all flex items-center justify-center gap-2"
+              onPointerDown={(event) => {
+                const rect = event.currentTarget.getBoundingClientRect();
+                setSuccessRippleOrigin({
+                  x: event.clientX - rect.left,
+                  y: event.clientY - rect.top,
+                });
+              }}
+              disabled={submitStatus === 'loading' || submitStatus === 'success'}
+              className={`relative w-full py-4 text-[16px] font-bold rounded-[20px] shadow-lg shadow-black/10 transition-all flex items-center justify-center gap-2 overflow-hidden disabled:shadow-none ${
+                submitStatus === 'success'
+                  ? 'bg-emerald-500 text-white'
+                  : 'bg-primary text-on-primary hover:bg-primary-hover active:scale-[0.98] disabled:bg-gray-200'
+              }`}
             >
-              {submitStatus === 'loading' ? <Loader2 className="w-5 h-5 animate-spin" /> : <span>{t('confirm')}</span>}
+              {submitStatus === 'success' && successRippleOrigin && (
+                <span
+                  className="pointer-events-none absolute rounded-full bg-emerald-400/70 transition-transform duration-500 ease-out scale-[20] sm:scale-[24]"
+                  style={{
+                    left: successRippleOrigin.x,
+                    top: successRippleOrigin.y,
+                    width: 14,
+                    height: 14,
+                    transform: 'translate(-50%, -50%) scale(1)',
+                  }}
+                />
+              )}
+              <span className="relative z-10 flex items-center justify-center gap-2">
+                {submitStatus === 'loading' ? (
+                  <Loader2 className="w-5 h-5 animate-spin" />
+                ) : submitStatus === 'success' ? (
+                  <>
+                    <CheckCircle className="w-5 h-5" />
+                    <span>{t('success')}</span>
+                  </>
+                ) : (
+                  <span>{t('confirm')}</span>
+                )}
+              </span>
             </button>
           </div>
         </form>

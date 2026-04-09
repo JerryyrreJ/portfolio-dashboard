@@ -14,6 +14,7 @@ import CachedAssetLogo from '@/app/components/CachedAssetLogo';
 import { useCurrency } from '@/lib/useCurrency';
 import { getCurrencySymbol } from '@/lib/currency';
 import { usePreferences } from '@/lib/usePreferences';
+import type { PortfolioClientRecord } from '@/lib/portfolio-client';
 
 interface TransactionWithAsset {
   id: string;
@@ -108,6 +109,7 @@ interface TransactionsClientProps {
   limit: number;
   portfolioId: string;
   portfolioName: string;
+  initialPortfolios: PortfolioClientRecord[];
   logoMap: Record<string, string | null>;
   searchTicker?: string;
   searchType?: string;
@@ -145,14 +147,17 @@ function formatExportAmount(num: number, locale: string, decimals: number = 2): 
 
 export default function TransactionsClient({
   transactions: initialTransactions, total, totalPages, currentPage, limit,
-  portfolioId, portfolioName, logoMap, searchTicker, searchType,
+  portfolioId, portfolioName, initialPortfolios, logoMap, searchTicker, searchType,
   buyCount, sellCount, totalVolume, userDisplayName = '',
 }: TransactionsClientProps) {
   const router = useRouter();
   const t = useTranslations('transactions');
   const locale = useLocale();
   const { fmt, convert, symbol } = useCurrency();
-  const { colors } = usePreferences();
+  const { colors } = usePreferences({
+    initialPortfolios,
+    cloudSync: !!portfolioId,
+  });
   const [transactions, setTransactions] = useState(initialTransactions);
   const pidParam = portfolioId ? `&pid=${portfolioId}` : '';
   const [confirmingId, setConfirmingId] = useState<string | null>(null);
@@ -276,9 +281,7 @@ export default function TransactionsClient({
     try {
       const res = await fetch(`/api/transactions/${tx.id}`, { method: 'DELETE' });
       if (!res.ok) throw new Error();
-      if (isManaged) {
-        startTransition(() => router.refresh());
-      }
+      startTransition(() => router.refresh());
     } catch {
       setTransactions(prev);
     }

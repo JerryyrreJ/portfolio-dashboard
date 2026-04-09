@@ -104,6 +104,13 @@
     "confirm": "确认交易",
     "submissionFailed": "提交失败",
     "recordFailed": "记录交易失败",
+    "tickerRequired": "请先选择股票代码后再确认。",
+    "sharesRequired": "请输入股数。",
+    "sharesPositive": "股数必须大于 0。",
+    "unitPriceRequired": "请输入单价。",
+    "unitPricePositive": "单价必须大于 0。",
+    "payoutRequired": "请输入股息金额。",
+    "payoutPositive": "股息金额必须大于 0。",
     "insufficientShares": "可用股数不足。你当前可用 {available}。",
     "commonStock": "普通股",
     "weekdays": {

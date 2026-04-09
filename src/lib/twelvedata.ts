@@ -6,6 +6,9 @@
 const API_KEY = process.env.TWELVEDATA_API_KEY || '';
 const BASE_URL = 'https://api.twelvedata.com';
 
+type TwelveDataDividendSupport = 'missing' | 'unknown' | 'supported' | 'unsupported';
+let dividendSupport: TwelveDataDividendSupport = API_KEY ? 'unknown' : 'missing';
+
 // Finnhub resolution → Twelve Data interval
 const RESOLUTION_MAP: Record<string, string> = {
   '1': '1min',
@@ -306,6 +309,10 @@ export interface DividendData {
   currency?: string;
 }
 
+export function getDividendProviderSupportStatus() {
+  return dividendSupport;
+}
+
 /**
  * 获取股票分红数据
  * @param symbol 股票代码
@@ -317,6 +324,10 @@ export async function getDividends(
   startDate?: string,
   endDate?: string
 ): Promise<DividendData[]> {
+  if (!API_KEY || dividendSupport === 'missing' || dividendSupport === 'unsupported') {
+    return [];
+  }
+
   const params: Record<string, string> = {
     symbol: symbol.toUpperCase(),
   };
@@ -324,17 +335,60 @@ export async function getDividends(
   if (startDate) params.start_date = startDate;
   if (endDate) params.end_date = endDate;
 
-  const data = await fetchTwelveData<TDDividendsResponse>('/dividends', params);
+  const url = new URL(`${BASE_URL}/dividends`);
+  url.searchParams.append('apikey', API_KEY);
+  Object.entries(params).forEach(([key, value]) => url.searchParams.append(key, value));
 
-  if (!data || !data.dividends || data.dividends.length === 0) {
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), 8000);
+
+  try {
+    const response = await fetch(url.toString(), {
+      next: { revalidate: 60 },
+      signal: controller.signal,
+    });
+    clearTimeout(timeoutId);
+
+    const data = await response.json() as {
+      status?: string;
+      code?: number;
+      message?: string;
+    } & TDDividendsResponse;
+
+    const message = data.message ?? '';
+    if (
+      response.status === 403
+      || message.includes('available exclusively with grow or pro')
+    ) {
+      if (dividendSupport !== 'unsupported') {
+        console.info('Twelve Data dividends disabled: current API plan does not include /dividends.');
+      }
+      dividendSupport = 'unsupported';
+      return [];
+    }
+
+    if (!response.ok || data.status === 'error' || data.code === 429) {
+      console.warn(`Twelve Data API error: ${message || `${response.status} ${response.statusText}`} for /dividends`);
+      return [];
+    }
+
+    dividendSupport = 'supported';
+
+    if (!data.dividends || data.dividends.length === 0) {
+      return [];
+    }
+
+    return data.dividends.map((d) => ({
+      symbol: data.symbol || symbol.toUpperCase(),
+      ex_date: d.ex_date,
+      payment_date: d.payment_date,
+      amount: parseFloat(d.amount),
+      currency: data.currency,
+    }));
+  } catch (error: unknown) {
+    clearTimeout(timeoutId);
+    const message = error instanceof Error ? error.message : String(error);
+    console.warn(`Twelve Data fetch exception for /dividends:`, message);
     return [];
   }
-
-  return data.dividends.map((d) => ({
-    symbol: data.symbol || symbol.toUpperCase(),
-    ex_date: d.ex_date,
-    payment_date: d.payment_date,
-    amount: parseFloat(d.amount),
-    currency: data.currency,
-  }));
 }

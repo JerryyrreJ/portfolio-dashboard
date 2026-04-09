@@ -63,18 +63,18 @@ export default function PortfolioSwitcher({ portfolios, currentId, variant = 'he
       onClick={() => setOpen(o => !o)}
       className={`group flex items-center gap-2 transition-all outline-none rounded-xl ${
         isTitle 
-          ? 'px-2 py-1 -ml-2' 
+          ? 'px-2 py-1 -ml-2 text-left' 
           : 'px-2.5 py-1 rounded-md'
       } ${open ? 'bg-black/5 ring-4 ring-black/5' : 'hover:bg-black/5'}`}
     >
       <span className={isTitle 
-        ? 'text-[28px] font-bold text-primary tracking-tight leading-none' 
+        ? 'text-[24px] sm:text-[28px] font-bold text-primary tracking-tight leading-tight' 
         : 'text-[13px] font-semibold text-secondary group-hover:text-primary max-w-[140px] truncate'
       }>
         {current?.name ?? t('fallback')}
       </span>
       <ChevronDown className={`${
-        isTitle ? 'w-5 h-5 text-secondary' : 'w-3.5 h-3.5 text-secondary'
+        isTitle ? 'w-5 h-5 text-secondary shrink-0' : 'w-3.5 h-3.5 text-secondary shrink-0'
       } transition-transform duration-300 ${open ? 'rotate-180 text-primary' : 'group-hover:text-primary'}`} />
     </button>
   );

@@ -1,8 +1,17 @@
 import { NextRequest, NextResponse } from 'next/server';
 import prisma from '@/lib/prisma';
-import { getDividends as getAlphaVantageDividends } from '@/lib/alphavantage';
-import { getDividends as getTwelveDataDividends } from '@/lib/twelvedata';
-import { getDividends as getFinnhubDividends } from '@/lib/finnhub';
+import {
+  getDividends as getAlphaVantageDividends,
+  getDividendProviderState as getAlphaVantageDividendProviderState,
+} from '@/lib/alphavantage';
+import {
+  getDividends as getTwelveDataDividends,
+  getDividendProviderSupportStatus as getTwelveDataDividendSupportStatus,
+} from '@/lib/twelvedata';
+import {
+  getDividends as getFinnhubDividends,
+  getDividendProviderSupportStatus as getFinnhubDividendSupportStatus,
+} from '@/lib/finnhub';
 import { findOwnedPortfolio, requireAuthenticatedUser } from '@/lib/ownership';
 
 const AUTO_SYNC_THROTTLE_MS = 6 * 60 * 60 * 1000;
@@ -161,6 +170,9 @@ export async function POST(request: NextRequest) {
     const endDate = toDateString(oneMonthLater);
 
     let syncedCount = 0;
+    let skipAlphaVantage = getAlphaVantageDividendProviderState() === 'rate_limited';
+    let skipTwelveData = getTwelveDataDividendSupportStatus() === 'unsupported';
+    let skipFinnhub = getFinnhubDividendSupportStatus() === 'unsupported';
 
     /** 处理单个 ticker 的分红同步，返回新增数量 */
     async function syncTicker(ticker: string): Promise<number> {
@@ -172,16 +184,28 @@ export async function POST(request: NextRequest) {
       );
 
       // 优先使用 Alpha Vantage
-      let dividends = await getAlphaVantageDividends(ticker, startDate, endDate);
+      let dividends = skipAlphaVantage
+        ? []
+        : await getAlphaVantageDividends(ticker, startDate, endDate);
+
+      if (getAlphaVantageDividendProviderState() === 'rate_limited') {
+        skipAlphaVantage = true;
+      }
 
       // Fallback to TwelveData
-      if (!dividends || dividends.length === 0) {
+      if ((!dividends || dividends.length === 0) && !skipTwelveData) {
         dividends = await getTwelveDataDividends(ticker, startDate, endDate);
+        if (getTwelveDataDividendSupportStatus() === 'unsupported') {
+          skipTwelveData = true;
+        }
       }
 
       // Fallback to Finnhub
-      if (!dividends || dividends.length === 0) {
+      if ((!dividends || dividends.length === 0) && !skipFinnhub) {
         const finnhubDividends = await getFinnhubDividends(ticker, startDate, endDate);
+        if (getFinnhubDividendSupportStatus() === 'unsupported') {
+          skipFinnhub = true;
+        }
         dividends = finnhubDividends.map(d => ({
           symbol: d.symbol,
           ex_date: d.date,
@@ -254,17 +278,11 @@ export async function POST(request: NextRequest) {
       return newCount;
     }
 
-    // 有限并发：每批最多 3 个 ticker 同时请求，避免触发 API rate limit
-    const CONCURRENCY = 3;
-    for (let i = 0; i < candidateTickers.length; i += CONCURRENCY) {
-      const batch = candidateTickers.slice(i, i + CONCURRENCY);
-      const results = await Promise.allSettled(batch.map(ticker => syncTicker(ticker)));
-      for (const result of results) {
-        if (result.status === 'fulfilled') {
-          syncedCount += result.value;
-        } else {
-          console.error('Failed to sync dividends for ticker in batch:', result.reason);
-        }
+    for (const ticker of candidateTickers) {
+      try {
+        syncedCount += await syncTicker(ticker);
+      } catch (error) {
+        console.error(`Failed to sync dividends for ${ticker}:`, error);
       }
     }
 

@@ -6,6 +6,9 @@
 const API_KEY = process.env.FINNHUB_API_KEY || '';
 const BASE_URL = 'https://finnhub.io/api/v1';
 
+type FinnhubDividendSupport = 'missing' | 'unknown' | 'supported' | 'unsupported';
+let dividendSupport: FinnhubDividendSupport = API_KEY ? 'unknown' : 'missing';
+
 // 速率限制追踪
 let isRateLimited = false;
 
@@ -215,6 +218,10 @@ export interface DividendInfo {
   payDate?: string;
 }
 
+export function getDividendProviderSupportStatus() {
+  return dividendSupport;
+}
+
 /**
  * 获取股票分红历史
  * @param symbol 股票代码
@@ -226,10 +233,46 @@ export async function getDividends(
   from: string,
   to: string
 ): Promise<DividendInfo[]> {
-  const data = await fetchFinnhub('/stock/dividend', {
-    symbol: symbol.toUpperCase(),
-    from,
-    to,
-  });
-  return data || [];
+  if (!API_KEY || dividendSupport === 'missing' || dividendSupport === 'unsupported') {
+    return [];
+  }
+
+  const url = new URL(`${BASE_URL}/stock/dividend`);
+  url.searchParams.append('token', API_KEY);
+  url.searchParams.append('symbol', symbol.toUpperCase());
+  url.searchParams.append('from', from);
+  url.searchParams.append('to', to);
+
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), 4000);
+
+  try {
+    const response = await fetch(url.toString(), {
+      next: { revalidate: 60 },
+      signal: controller.signal,
+    });
+    clearTimeout(timeoutId);
+
+    if (response.status === 403) {
+      if (dividendSupport !== 'unsupported') {
+        console.info('Finnhub dividends disabled: current API key cannot access /stock/dividend.');
+      }
+      dividendSupport = 'unsupported';
+      return [];
+    }
+
+    if (!response.ok) {
+      console.warn(`Finnhub API error: ${response.status} ${response.statusText} for /stock/dividend`);
+      return [];
+    }
+
+    dividendSupport = 'supported';
+    const data = await response.json() as DividendInfo[];
+    return data || [];
+  } catch (error: unknown) {
+    clearTimeout(timeoutId);
+    const message = error instanceof Error ? error.message : String(error);
+    console.warn(`Finnhub fetch exception for /stock/dividend:`, message);
+    return [];
+  }
 }

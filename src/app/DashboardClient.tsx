@@ -793,8 +793,8 @@ export default function DashboardClient({
       <main className="flex-1 max-w-[1400px] w-full mx-auto px-6 py-6">
         
         {/* 标题 & 操作按钮 - 紧凑布局 */}
-        <div className="flex justify-between items-center mb-6">
-          <div className="flex items-center space-x-3">
+        <div className="flex justify-between items-center mb-6 gap-4">
+          <div className="flex items-center space-x-3 min-w-0">
             {portfolios.length > 1 ? (
               <PortfolioSwitcher
                 portfolios={portfolios}
@@ -802,14 +802,15 @@ export default function DashboardClient({
                 variant="title"
               />
             ) : (
-              <h1 className="text-[28px] font-bold text-primary tracking-tight leading-none">
+              <h1 className="text-[24px] sm:text-[28px] font-bold text-primary tracking-tight leading-tight">
                 {portfolioName || t('header.portfolioFallback')}
               </h1>
             )}
-            <span className={`hidden sm:inline-block text-[13px] font-medium px-2 py-0.5 rounded-md transition-colors ${isRateLimited ? 'text-rose-500 bg-rose-50/50' : 'text-secondary bg-element-hover'}`}>
+            <span className={`hidden sm:inline-block text-[13px] font-medium px-2 py-0.5 rounded-md transition-colors shrink-0 ${isRateLimited ? 'text-rose-500 bg-rose-50/50' : 'text-secondary bg-element-hover'}`}>
               {isRateLimited ? t('header.apiLimitReached') : t('header.realTime')}
             </span>
-            </div>          <div className="flex items-center space-x-2.5">
+          </div>
+          <div className="flex items-center space-x-2 sm:space-x-2.5 shrink-0">
             <button
               onClick={handleRefresh}
               disabled={isRefreshing}
@@ -820,10 +821,10 @@ export default function DashboardClient({
             </button>
             <button
               onClick={() => setIsModalOpen(true)}
-              className="h-9 px-4 bg-primary text-on-primary text-[13px] font-bold rounded-xl hover:bg-primary-hover transition-all active:scale-95 shadow-sm flex items-center space-x-2"
+              className="h-9 px-2.5 sm:px-4 bg-primary text-on-primary text-[13px] font-bold rounded-xl hover:bg-primary-hover transition-all active:scale-95 shadow-sm flex items-center space-x-0 sm:space-x-2"
             >
               <Plus className="w-4 h-4" />
-              <span>{t('header.addTrade')}</span>
+              <span className="hidden sm:inline-block">{t('header.addTrade')}</span>
             </button>
           </div>
         </div>

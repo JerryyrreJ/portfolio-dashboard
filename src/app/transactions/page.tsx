@@ -2,6 +2,7 @@ import type { Prisma } from '@prisma/client';
 import { getCompanyProfile } from '@/lib/finnhub';
 import { getLogo as getTwelveDataLogo } from '@/lib/twelvedata';
 import { createServerProfiler } from '@/lib/perf';
+import type { PortfolioClientRecord } from '@/lib/portfolio-client';
 import { getUser } from '@/lib/supabase-server';
 import prisma, { withRetry } from '@/lib/prisma';
 import TransactionsClient from './TransactionsClient';
@@ -31,54 +32,32 @@ interface TransactionWithAsset {
 
 
 async function getPortfolioWithTransactions(
-  userId: string,
+  portfolioId: string,
   searchParams: { [key: string]: string | undefined }
-): Promise<{ portfolioId: string; portfolioName: string; transactions: TransactionWithAsset[]; total: number }> {
-  const perf = createServerProfiler('transactions/data', searchParams.pid ? `pid=${searchParams.pid}` : undefined);
+): Promise<{ transactions: TransactionWithAsset[]; total: number }> {
+  const perf = createServerProfiler('transactions/data', `pid=${portfolioId}`);
   const page = parseInt(searchParams.page || '1');
   const limit = parseInt(searchParams.limit || '20');
   const ticker = searchParams.ticker;
   const type = searchParams.type;
-  const pid = searchParams.pid;
 
-  // 按 pid 查找，找不到则 fallback 到第一个
-  const portfolio = pid
-    ? await perf.time('portfolio.findFirstByPid', () => withRetry(() => prisma.portfolio.findFirst({
-        where: { id: pid, userId },
-        select: { id: true, name: true },
-      })))
-    : null;
-
-  const resolvedPortfolio = portfolio ?? await perf.time('portfolio.findFirstFallback', () => withRetry(() => prisma.portfolio.findFirst({
-    where: { userId },
-    select: { id: true, name: true },
-    orderBy: { createdAt: 'asc' },
-  })));
-
-  if (!resolvedPortfolio) {
-    perf.flush('no-portfolio');
-    return { portfolioId: '', portfolioName: 'Portfolio', transactions: [], total: 0 };
-  }
-
-  const where: Prisma.TransactionWhereInput = { portfolioId: resolvedPortfolio.id };
+  const where: Prisma.TransactionWhereInput = { portfolioId };
   if (ticker) where.asset = { ticker: { contains: ticker, mode: 'insensitive' } };
   if (type && ['BUY', 'SELL'].includes(type)) where.type = type;
 
   const [transactions, total] = await perf.time('transactions.findMany+count', () => Promise.all([
-    prisma.transaction.findMany({
+    withRetry(() => prisma.transaction.findMany({
       where,
       include: { asset: true },
       orderBy: { date: 'desc' },
       skip: (page - 1) * limit,
       take: limit,
-    }),
-    prisma.transaction.count({ where }),
+    })),
+    withRetry(() => prisma.transaction.count({ where })),
   ]));
 
-  perf.flush(`portfolio=${resolvedPortfolio.id} rows=${transactions.length} total=${total}`);
+  perf.flush(`portfolio=${portfolioId} rows=${transactions.length} total=${total}`);
   return {
-    portfolioId: resolvedPortfolio.id,
-    portfolioName: resolvedPortfolio.name,
     transactions: transactions.map((transaction) => ({
       id: transaction.id,
       type: transaction.type,
@@ -118,16 +97,42 @@ export default async function TransactionsPage(props: {
 
   let portfolioId = '';
   let portfolioName = 'Portfolio';
+  let initialPortfolios: PortfolioClientRecord[] = [];
   let transactions: TransactionWithAsset[] = [];
   let total = 0;
 
   if (isLoggedIn) {
     try {
-      const data = await perf.time('getPortfolioWithTransactions', () => getPortfolioWithTransactions(user!.id, searchParams));
-      portfolioId = data.portfolioId;
-      portfolioName = data.portfolioName;
-      transactions = data.transactions;
-      total = data.total;
+      const portfolios = await perf.time('portfolio.findMany', () => withRetry(() => prisma.portfolio.findMany({
+        where: { userId: user!.id },
+        orderBy: { createdAt: 'asc' },
+        select: {
+          id: true,
+          name: true,
+          currency: true,
+          preferences: true,
+          settingsUpdatedAt: true,
+        },
+      })));
+      initialPortfolios = portfolios.map((portfolio) => ({
+        id: portfolio.id,
+        name: portfolio.name,
+        currency: portfolio.currency,
+        preferences: portfolio.preferences,
+        settingsUpdatedAt: portfolio.settingsUpdatedAt?.toISOString() ?? null,
+      }));
+
+      const resolvedPortfolio = searchParams.pid
+        ? initialPortfolios.find((portfolio) => portfolio.id === searchParams.pid) ?? initialPortfolios[0]
+        : initialPortfolios[0];
+
+      if (resolvedPortfolio) {
+        portfolioId = resolvedPortfolio.id;
+        portfolioName = resolvedPortfolio.name ?? 'Portfolio';
+        const data = await perf.time('getPortfolioWithTransactions', () => getPortfolioWithTransactions(resolvedPortfolio.id, searchParams));
+        transactions = data.transactions;
+        total = data.total;
+      }
     } catch {
       // DB unreachable — leave transactions empty
     }
@@ -187,6 +192,7 @@ export default async function TransactionsPage(props: {
       limit={limit}
       portfolioId={portfolioId}
       portfolioName={portfolioName}
+      initialPortfolios={initialPortfolios}
       logoMap={logoMap}
       searchTicker={searchParams.ticker}
       searchType={searchParams.type}

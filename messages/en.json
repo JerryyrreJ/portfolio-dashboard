@@ -104,6 +104,13 @@
     "confirm": "Confirm Transaction",
     "submissionFailed": "Submission failed",
     "recordFailed": "Failed to record transaction",
+    "tickerRequired": "Please select a ticker before confirming.",
+    "sharesRequired": "Please enter the number of shares.",
+    "sharesPositive": "Shares must be greater than 0.",
+    "unitPriceRequired": "Please enter the unit price.",
+    "unitPricePositive": "Unit price must be greater than 0.",
+    "payoutRequired": "Please enter the dividend amount.",
+    "payoutPositive": "Dividend amount must be greater than 0.",
     "insufficientShares": "Insufficient shares. You have {available} available.",
     "commonStock": "Common Stock",
     "weekdays": {

@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { revalidatePath } from 'next/cache';
 
 import { getPriceUSD } from '@/lib/exchange-rate';
 import prisma from '@/lib/prisma';
@@ -304,6 +305,8 @@ export async function DELETE(
         },
       });
 
+      revalidatePath('/transactions');
+
       return NextResponse.json({
         success: true,
         linked: true,
@@ -316,6 +319,8 @@ export async function DELETE(
     await prisma.transaction.delete({
       where: { id },
     });
+
+    revalidatePath('/transactions');
 
     return NextResponse.json({
       success: true,
