@@ -3,8 +3,7 @@ import type { Metadata } from "next";
 import { Prisma } from "@prisma/client";
 import { getLocale, getMessages } from "next-intl/server";
 import DashboardPageShell from './DashboardPageShell'
-import { getCompanyProfile } from '@/lib/finnhub'
-import { get12MonthHistory, getIndexHistory, getLogo as getTwelveDataLogo } from '@/lib/twelvedata'
+import { get12MonthHistory, getIndexHistory } from '@/lib/twelvedata'
 import { getUser } from '@/lib/supabase-server'
 import prisma, { withRetry } from '@/lib/prisma'
 import { getPriceOnOrBefore } from '@/lib/portfolio-chart'
@@ -260,39 +259,20 @@ export default async function Page({ searchParams }: { searchParams: Promise<{ p
   // 3. 计算当前市值和盈亏 (并发获取实时数据)
   let totalValue = 0;
   let totalCostBase = 0;
+  const assetsWithLogo = Array.from(holdingsMap.values()).map(h => h.asset);
+  const logoMap: Record<string, string | null> = {};
 
   // --- 核心改动：不再在此处 await fetchBatchQuotes ---
   // 我们直接使用数据库中缓存的价格进行首屏渲染
-  const logoMap: Record<string, string | null> = {};
-  const assetsWithLogo = Array.from(holdingsMap.values()).map(h => h.asset);
-  
-  // 提取需要更新的资源，后台触发，不 await
-  const missingLogos = assetsWithLogo.filter(a => !a.logo);
   const assetsNeedingHistorySync = assetsWithLogo.filter(
     a => !a.historyLastUpdated || a.historyLastUpdated < new Date(Date.now() - 24 * 60 * 60 * 1000)
   );
   const indexPriceHistory = getIndexPriceHistoryDelegate();
 
-  if (missingLogos.length > 0 || assetsNeedingHistorySync.length > 0) {
+  if (assetsNeedingHistorySync.length > 0) {
     // 异步闭包，在后台运行
     (async () => {
       try {
-        const CONCURRENCY = 5;
-        for (let i = 0; i < missingLogos.length; i += CONCURRENCY) {
-          const batch = missingLogos.slice(i, i + CONCURRENCY);
-          await Promise.allSettled(batch.map(async (asset) => {
-            // Finnhub first
-            const profile = await getCompanyProfile(asset.ticker);
-            let logoUrl = profile?.logo || null;
-            // Twelve Data fallback
-            if (!logoUrl) {
-              logoUrl = await getTwelveDataLogo(asset.ticker);
-            }
-            if (logoUrl) {
-              await prisma.asset.update({ where: { id: asset.id }, data: { logo: logoUrl } });
-            }
-          }));
-        }
         for (const asset of assetsNeedingHistorySync) {
           const history = await get12MonthHistory(asset.ticker);
           if (history && history.length > 0) {

@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import type { Prisma } from '@prisma/client';
 import prisma from '@/lib/prisma';
 import { getCompanyProfile, getBasicFinancials, isFinnhubRateLimited, resetFinnhubRateLimit } from '@/lib/finnhub';
-import { getLogo as getTwelveDataLogo, isTwelveDataRateLimited, resetTwelveDataRateLimit } from '@/lib/twelvedata';
+import { isTwelveDataRateLimited, resetTwelveDataRateLimit } from '@/lib/twelvedata';
 import { getQuote as getTDQuote, get12MonthHistory } from '@/lib/twelvedata';
 import { getQuote as getFinnhubQuote } from '@/lib/finnhub';
 
@@ -32,7 +32,7 @@ export async function POST(
 
     const needsQuoteSync = !asset.lastPriceUpdated || asset.lastPriceUpdated < oneHourAgo;
     const needsHistorySync = !asset.historyLastUpdated || asset.historyLastUpdated < twentyFourHoursAgo;
-    const needsProfileSync = !asset.profile;
+    const needsProfileSync = !asset.profile || !asset.logo;
 
     const updateData: Prisma.AssetUpdateInput = {};
     const currentTime = new Date();
@@ -76,16 +76,11 @@ export async function POST(
       }
     }
 
-    // 2. Profile (Finnhub only)
+    // 2. Profile/logo (Finnhub only)
     if (needsProfileSync) {
       const p = await getCompanyProfile(decodedTicker);
       if (p?.name) {
-        let logoUrl = p.logo || asset.logo;
-        // Twelve Data fallback for logo
-        if (!logoUrl) {
-          logoUrl = await getTwelveDataLogo(decodedTicker);
-        }
-        updateData.logo = logoUrl || asset.logo;
+        updateData.logo = p.logo || null;
         updateData.profile = JSON.stringify({
           finnhubIndustry: p.finnhubIndustry,
           country: p.country,

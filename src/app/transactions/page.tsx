@@ -1,6 +1,4 @@
 import type { Prisma } from '@prisma/client';
-import { getCompanyProfile } from '@/lib/finnhub';
-import { getLogo as getTwelveDataLogo } from '@/lib/twelvedata';
 import { createServerProfiler } from '@/lib/perf';
 import type { PortfolioClientRecord } from '@/lib/portfolio-client';
 import { getUser } from '@/lib/supabase-server';
@@ -140,32 +138,6 @@ export default async function TransactionsPage(props: {
 
   const uniqueAssets = Array.from(new Map(transactions.map(t => [t.asset.ticker, t.asset])).values());
   const logoMap: Record<string, string | null> = {};
-
-  const missingLogos = uniqueAssets.filter(a => !a.logo);
-  if (missingLogos.length > 0) {
-    (async () => {
-      const CONCURRENCY = 5;
-      for (let i = 0; i < missingLogos.length; i += CONCURRENCY) {
-        const batch = missingLogos.slice(i, i + CONCURRENCY);
-        await Promise.allSettled(batch.map(async (asset) => {
-          try {
-            // Finnhub first
-            const profile = await getCompanyProfile(asset.ticker);
-            let logoUrl = profile?.logo || null;
-            // Twelve Data fallback
-            if (!logoUrl) {
-              logoUrl = await getTwelveDataLogo(asset.ticker);
-            }
-            if (logoUrl) {
-              await prisma.asset.update({ where: { id: asset.id }, data: { logo: logoUrl } });
-            }
-          } catch (err) {
-            console.warn(`Failed to cache logo for ${asset.ticker}:`, err);
-          }
-        }));
-      }
-    })();
-  }
 
   for (const asset of uniqueAssets) {
     logoMap[asset.ticker] = asset.logo || null;

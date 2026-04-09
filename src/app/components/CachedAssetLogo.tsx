@@ -12,8 +12,15 @@ type CachedAssetLogoProps = {
   loading?: 'eager' | 'lazy';
 };
 
-function buildProxyImageUrl(ticker: string) {
-  return `/api/assets/${encodeURIComponent(ticker)}/logo`;
+function buildProxyImageUrl(ticker: string, logoUrl?: string | null) {
+  const searchParams = new URLSearchParams();
+
+  if (logoUrl) {
+    searchParams.set('v', logoUrl);
+  }
+
+  const query = searchParams.toString();
+  return `/api/assets/${encodeURIComponent(ticker)}/logo${query ? `?${query}` : ''}`;
 }
 
 const CachedAssetLogo = memo(function CachedAssetLogo({
@@ -29,7 +36,7 @@ const CachedAssetLogo = memo(function CachedAssetLogo({
   const hasError = failedTicker === ticker;
 
   const proxiedSrc = useMemo(
-    () => (ticker && logoUrl && !hasError ? buildProxyImageUrl(ticker) : null),
+    () => (ticker && logoUrl && !hasError ? buildProxyImageUrl(ticker, logoUrl) : null),
     [hasError, logoUrl, ticker]
   );
 

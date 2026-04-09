@@ -8,7 +8,7 @@ import prisma, { withRetry } from '@/lib/prisma'
 import { createEmptyPersonalPosition } from '@/lib/stock-personal-data'
 import type { CompanyProfile as FinnhubCompanyProfile, StockQuote } from '@/lib/finnhub'
 import { getQuote, getCompanyProfile } from '@/lib/finnhub'
-import { get12MonthHistory, getLogo as getTwelveDataLogo } from '@/lib/twelvedata'
+import { get12MonthHistory } from '@/lib/twelvedata'
 import { absoluteUrl, getStockPageJsonLd, siteConfig } from '@/lib/site'
 
 interface PageProps {
@@ -47,7 +47,7 @@ async function buildFallbackStockData(
     profile: {
       name: companyProfile?.name || decodedTicker,
       exchange: companyProfile?.exchange || '',
-      logo: companyProfile?.logo || (await getTwelveDataLogo(decodedTicker)) || '',
+      logo: companyProfile?.logo || '',
       finnhubIndustry: companyProfile?.finnhubIndustry || '',
       country: companyProfile?.country || '',
       currency: companyProfile?.currency || 'USD',
@@ -260,10 +260,7 @@ export default async function StockDetailPage(props: PageProps) {
     chartData = remoteHistory
   }
 
-  const profile = parseCachedProfile(
-    asset,
-    asset.logo || (await getTwelveDataLogo(decodedTicker)) || ''
-  )
+  const profile = parseCachedProfile(asset, asset.logo || '')
   const metrics = parseCachedMetrics(asset.metrics)
 
   // 3. Public market metrics based on cached current price
