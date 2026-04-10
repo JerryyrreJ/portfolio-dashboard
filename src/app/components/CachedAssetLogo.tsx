@@ -12,7 +12,7 @@ type CachedAssetLogoProps = {
   loading?: 'eager' | 'lazy';
 };
 
-function buildProxyImageUrl(ticker: string, logoUrl?: string | null) {
+export function buildProxyImageUrl(ticker: string, logoUrl?: string | null) {
   const searchParams = new URLSearchParams();
 
   if (logoUrl) {

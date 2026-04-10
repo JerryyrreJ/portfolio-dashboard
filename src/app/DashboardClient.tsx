@@ -249,6 +249,7 @@ export default function DashboardClient({
   const [isSwitching, setIsSwitching] = useState(false);
   const isFirstRender = useRef(true);
   const fetchedPricesForPortfolioRef = useRef<string | null>(null);
+  const refreshedProfileLogosForPortfolioRef = useRef<string | null>(null);
 
   useEffect(() => {
     if (isFirstRender.current) {
@@ -269,6 +270,46 @@ export default function DashboardClient({
       cancelAnimationFrame(closeFrame);
     };
   }, [chartData, holdingsData, portfolioId, summary]);
+
+  useEffect(() => {
+    if (!portfolioId || portfolioId === 'local-portfolio') return;
+    if (refreshedProfileLogosForPortfolioRef.current === portfolioId) return;
+
+    const tickers = [
+      ...new Set(
+        localHoldings.flatMap((group) => group.holdings.map((holding) => holding.ticker)).filter(Boolean)
+      ),
+    ];
+
+    if (tickers.length === 0) return;
+
+    refreshedProfileLogosForPortfolioRef.current = portfolioId;
+    let cancelled = false;
+
+    const refreshVisibleAssetProfiles = async () => {
+      const results = await Promise.allSettled(
+        tickers.map((ticker) => fetch(`/api/assets/${encodeURIComponent(ticker)}/sync?force=profile`, {
+          method: 'POST',
+        }))
+      );
+
+      if (cancelled) return;
+
+      const hasSuccessfulRefresh = results.some(
+        (result) => result.status === 'fulfilled' && result.value.ok
+      );
+
+      if (hasSuccessfulRefresh) {
+        router.refresh();
+      }
+    };
+
+    void refreshVisibleAssetProfiles();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [localHoldings, portfolioId, router]);
 
   const formatYTick = (value: number) => {
     if (chartMode === 'return') return `${value > 0 ? '+' : ''}${value.toFixed(1)}%`;

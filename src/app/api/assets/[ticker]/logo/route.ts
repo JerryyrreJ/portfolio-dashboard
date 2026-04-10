@@ -1,9 +1,23 @@
-import { NextResponse } from 'next/server';
+import { NextRequest, NextResponse } from 'next/server';
 
 import prisma, { withRetry } from '@/lib/prisma';
 
 interface RouteContext {
   params: Promise<{ ticker: string }>;
+}
+
+function sanitizeLogoUrl(value: string | null) {
+  if (!value) return null;
+
+  try {
+    const parsed = new URL(value);
+    if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') {
+      return null;
+    }
+    return parsed.toString();
+  } catch {
+    return null;
+  }
 }
 
 async function resolveLogoUrl(ticker: string) {
@@ -23,12 +37,23 @@ async function resolveLogoUrl(ticker: string) {
 }
 
 export async function GET(
-  _request: Request,
+  request: NextRequest,
   { params }: RouteContext
 ) {
   const { ticker } = await params;
   const decodedTicker = decodeURIComponent(ticker).toUpperCase();
-  const logoUrl = await resolveLogoUrl(decodedTicker);
+  const cachedLogoUrl = await resolveLogoUrl(decodedTicker);
+  const requestedLogoUrl = sanitizeLogoUrl(request.nextUrl.searchParams.get('v'));
+  const logoUrl = requestedLogoUrl ?? cachedLogoUrl;
+
+  if (requestedLogoUrl && requestedLogoUrl !== cachedLogoUrl) {
+    void withRetry(() => prisma.asset.update({
+      where: { ticker: decodedTicker },
+      data: { logo: requestedLogoUrl },
+    })).catch((error) => {
+      console.warn(`Failed to persist requested logo for ${decodedTicker}:`, error);
+    });
+  }
 
   if (!logoUrl) {
     return new NextResponse('Logo not found', {

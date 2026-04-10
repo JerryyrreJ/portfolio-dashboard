@@ -13,6 +13,8 @@ export async function POST(
   try {
     const { ticker } = await params;
     const decodedTicker = decodeURIComponent(ticker).toUpperCase();
+    const forceMode = request.nextUrl.searchParams.get('force');
+    const forceProfileSync = forceMode === '1' || forceMode === 'true' || forceMode === 'profile';
 
     // Reset rate limit trackers for this request
     resetFinnhubRateLimit();
@@ -32,7 +34,7 @@ export async function POST(
 
     const needsQuoteSync = !asset.lastPriceUpdated || asset.lastPriceUpdated < oneHourAgo;
     const needsHistorySync = !asset.historyLastUpdated || asset.historyLastUpdated < twentyFourHoursAgo;
-    const needsProfileSync = !asset.profile || !asset.logo;
+    const needsProfileSync = forceProfileSync || !asset.profile || !asset.logo;
 
     const updateData: Prisma.AssetUpdateInput = {};
     const currentTime = new Date();
@@ -80,7 +82,6 @@ export async function POST(
     if (needsProfileSync) {
       const p = await getCompanyProfile(decodedTicker);
       if (p?.name) {
-        updateData.logo = p.logo || null;
         updateData.profile = JSON.stringify({
           finnhubIndustry: p.finnhubIndustry,
           country: p.country,
@@ -91,6 +92,10 @@ export async function POST(
           name: p.name,
           exchange: p.exchange,
         });
+
+        if (typeof p.logo === 'string' && p.logo.trim()) {
+          updateData.logo = p.logo.trim();
+        }
       }
     }
 

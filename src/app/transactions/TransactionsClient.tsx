@@ -1,6 +1,6 @@
 'use client';
 
-import React, { startTransition, useState } from 'react';
+import React, { startTransition, useEffect, useRef, useState } from 'react';
 import { format } from 'date-fns';
 import { useLocale, useTranslations } from 'next-intl';
 import Link from 'next/link';
@@ -159,6 +159,7 @@ export default function TransactionsClient({
     cloudSync: !!portfolioId,
   });
   const [transactions, setTransactions] = useState(initialTransactions);
+  const refreshedProfileLogosForPortfolioRef = useRef<string | null>(null);
   const pidParam = portfolioId ? `&pid=${portfolioId}` : '';
   const [confirmingId, setConfirmingId] = useState<string | null>(null);
   const [editingId, setEditingId] = useState<string | null>(null);
@@ -179,6 +180,41 @@ export default function TransactionsClient({
     day: '2-digit',
     year: 'numeric',
   });
+
+  useEffect(() => {
+    if (!portfolioId || portfolioId === 'local-portfolio') return;
+    if (refreshedProfileLogosForPortfolioRef.current === portfolioId) return;
+
+    const tickers = [...new Set(transactions.map((transaction) => transaction.asset.ticker).filter(Boolean))];
+    if (tickers.length === 0) return;
+
+    refreshedProfileLogosForPortfolioRef.current = portfolioId;
+    let cancelled = false;
+
+    const refreshVisibleAssetProfiles = async () => {
+      const results = await Promise.allSettled(
+        tickers.map((ticker) => fetch(`/api/assets/${encodeURIComponent(ticker)}/sync?force=profile`, {
+          method: 'POST',
+        }))
+      );
+
+      if (cancelled) return;
+
+      const hasSuccessfulRefresh = results.some(
+        (result) => result.status === 'fulfilled' && result.value.ok
+      );
+
+      if (hasSuccessfulRefresh) {
+        startTransition(() => router.refresh());
+      }
+    };
+
+    void refreshVisibleAssetProfiles();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [portfolioId, router, transactions]);
 
   const getTransactionTypeLabel = (type: string) => {
     if (type === 'BUY') return t('types.buy');
