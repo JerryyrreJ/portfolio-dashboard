@@ -3,7 +3,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { getCurrencySymbol, convertAmount, formatCurrency, USD_RATES } from './currency';
 
-type IdleCallbackHandle = number;
+type IdleCallbackHandle = number | ReturnType<typeof globalThis.setTimeout>;
 
 interface ExchangeRates {
   base: string;
@@ -29,15 +29,15 @@ function scheduleIdleRefresh(callback: () => void, timeout = 1500): IdleCallback
   if (typeof window !== 'undefined' && 'requestIdleCallback' in window) {
     return window.requestIdleCallback(() => callback(), { timeout });
   }
-  return window.setTimeout(callback, timeout);
+  return globalThis.setTimeout(callback, timeout);
 }
 
 function cancelIdleRefresh(handle: IdleCallbackHandle) {
   if (typeof window !== 'undefined' && 'cancelIdleCallback' in window) {
-    window.cancelIdleCallback(handle);
+    window.cancelIdleCallback(Number(handle));
     return;
   }
-  window.clearTimeout(handle);
+  globalThis.clearTimeout(handle);
 }
 
 export function useCurrency(): UseCurrencyReturn {

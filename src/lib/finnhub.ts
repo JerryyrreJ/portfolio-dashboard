@@ -110,7 +110,9 @@ export async function getBatchQuotes(
   for (const symbol of symbols) {
     try {
       const quote = await getQuote(symbol);
-      results[symbol] = quote;
+      if (quote) {
+        results[symbol] = quote;
+      }
     } catch (error) {
       console.error(`Failed to get quote for ${symbol}:`, error);
     }
@@ -254,9 +256,7 @@ export async function getDividends(
     clearTimeout(timeoutId);
 
     if (response.status === 403) {
-      if (dividendSupport !== 'unsupported') {
-        console.info('Finnhub dividends disabled: current API key cannot access /stock/dividend.');
-      }
+      console.info('Finnhub dividends disabled: current API key cannot access /stock/dividend.');
       dividendSupport = 'unsupported';
       return [];
     }

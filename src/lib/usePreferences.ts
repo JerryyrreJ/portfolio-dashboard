@@ -3,7 +3,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { fetchPortfolioList, invalidatePortfolioListCache, type PortfolioClientRecord } from '@/lib/portfolio-client';
 
-type IdleCallbackHandle = number;
+type IdleCallbackHandle = number | ReturnType<typeof globalThis.setTimeout>;
 type IdleScheduler = (callback: () => void, timeout?: number) => IdleCallbackHandle;
 type IdleCanceler = (handle: IdleCallbackHandle) => void;
 
@@ -45,15 +45,15 @@ const scheduleIdleTask: IdleScheduler = (callback, timeout = 500) => {
   if (typeof window !== 'undefined' && 'requestIdleCallback' in window) {
     return window.requestIdleCallback(() => callback(), { timeout });
   }
-  return window.setTimeout(callback, timeout);
+  return globalThis.setTimeout(callback, timeout);
 };
 
 const cancelIdleTask: IdleCanceler = (handle) => {
   if (typeof window !== 'undefined' && 'cancelIdleCallback' in window) {
-    window.cancelIdleCallback(handle);
+    window.cancelIdleCallback(Number(handle));
     return;
   }
-  window.clearTimeout(handle);
+  globalThis.clearTimeout(handle);
 };
 
 interface UsePreferencesOptions {

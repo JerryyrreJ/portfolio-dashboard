@@ -235,8 +235,9 @@ export async function getPriceOnDate(symbol: string, date: string | Date): Promi
     outputsize: '10',
   });
 
-  if (data?.values?.length > 0) {
-    return parseFloat(data.values[0].close); // 最新在前
+  const latestValue = data?.values?.[0];
+  if (latestValue) {
+    return parseFloat(latestValue.close); // 最新在前
   }
   return null;
 }
@@ -360,9 +361,7 @@ export async function getDividends(
       response.status === 403
       || message.includes('available exclusively with grow or pro')
     ) {
-      if (dividendSupport !== 'unsupported') {
-        console.info('Twelve Data dividends disabled: current API plan does not include /dividends.');
-      }
+      console.info('Twelve Data dividends disabled: current API plan does not include /dividends.');
       dividendSupport = 'unsupported';
       return [];
     }

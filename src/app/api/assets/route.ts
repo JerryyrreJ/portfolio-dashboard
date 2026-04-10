@@ -67,12 +67,14 @@ export async function POST(request: NextRequest) {
       );
     }
 
+    const ticker = body.ticker.toUpperCase();
+
     // 检查是否已存在相同 ticker 的资产 (case-insensitive)
     const allAssets = await prisma.asset.findMany({
       select: { id: true, ticker: true, name: true },
     });
     const existingAsset = allAssets.find(
-      (a) => a.ticker.toLowerCase() === body.ticker.toLowerCase()
+      (a) => a.ticker.toLowerCase() === ticker.toLowerCase()
     );
 
     if (existingAsset) {
@@ -92,7 +94,7 @@ export async function POST(request: NextRequest) {
     // 创建新资产
     const asset = await prisma.asset.create({
       data: {
-        ticker: body.ticker.toUpperCase(),
+        ticker,
         name: body.name,
         market: body.market || 'US',
         currency: body.currency || 'USD',

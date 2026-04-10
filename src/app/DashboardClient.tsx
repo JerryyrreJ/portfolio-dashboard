@@ -1295,7 +1295,10 @@ export default function DashboardClient({
         portfolioId={portfolioId}
         onConfirmed={() => {
           // Refresh the page to show updated dividend income
-          setPendingDividendCount(0);
+          setPendingDividendCountOverride({
+            portfolioId,
+            count: 0,
+          });
           window.location.reload();
         }}
       />

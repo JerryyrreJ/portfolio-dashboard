@@ -19,12 +19,16 @@ export default async function SettingsPage() {
         },
       })))
     : [];
+  const serializedPortfolios = initialPortfolios.map((portfolio) => ({
+    ...portfolio,
+    settingsUpdatedAt: portfolio.settingsUpdatedAt?.toISOString() ?? null,
+  }));
 
-  perf.flush(user ? `user=${user.id} rows=${initialPortfolios.length}` : 'guest');
+  perf.flush(user ? `user=${user.id} rows=${serializedPortfolios.length}` : 'guest');
   return (
     <SettingsClient
       initialUser={user}
-      initialPortfolios={initialPortfolios}
+      initialPortfolios={serializedPortfolios}
     />
   );
 }
