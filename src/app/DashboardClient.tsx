@@ -1106,7 +1106,7 @@ export default function DashboardClient({
                             if (isNaN(d.getTime())) return dateStr;
                             return d.toLocaleDateString(locale, { month: 'short', day: 'numeric', year: 'numeric' });
                           }}
-                          formatter={(value: number | string | undefined, name: string) => {
+                          formatter={(value: number | string | undefined, name?: string) => {
                             const numVal = Number(value ?? 0);
                             if (name === 'SPY') return [`${numVal >= 0 ? '+' : ''}${numVal.toFixed(2)}%`, 'S&P 500'];
                             if (name === 'QQQ') return [`${numVal >= 0 ? '+' : ''}${numVal.toFixed(2)}%`, 'NASDAQ'];
