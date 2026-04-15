@@ -289,53 +289,62 @@ export default async function Page({ searchParams }: { searchParams: Promise<{ p
           }
         }
 
-        // Sync index price history (SPY, QQQ) - incremental
-        if (!indexPriceHistory) {
-          console.warn('[Dashboard] Prisma client is missing indexPriceHistory. Run `prisma generate` and restart `next dev`.')
-        } else {
-          try {
-            const INDEX_TICKERS = ['SPY', 'QQQ'];
-            for (const indexTicker of INDEX_TICKERS) {
-              const latest = await withRetry(() => indexPriceHistory.findFirst({
-                where: { ticker: indexTicker },
-                orderBy: { date: 'desc' },
-                select: { date: true },
-              }));
-
-              const fromDate = latest
-                ? new Date(latest.date.getTime() + 86400000).toISOString().split('T')[0]
-                : null;
-
-              const yesterday = new Date();
-              yesterday.setDate(yesterday.getDate() - 1);
-              if (latest && latest.date >= yesterday) continue;
-
-              if (!fromDate) continue; // No seed data yet, skip incremental sync
-
-              const history = await getIndexHistory(indexTicker, fromDate);
-              if (history && history.length > 0) {
-                const values = history.map(p => `('${indexTicker}', '${p.date}'::date, ${p.price})`).join(',');
-                await withRetry(() => prisma.$executeRawUnsafe(`
-                  INSERT INTO "IndexPriceHistory" (ticker, date, close)
-                  VALUES ${values}
-                  ON CONFLICT (ticker, date) DO UPDATE SET close = EXCLUDED.close
-                `));
-              }
-            }
-          } catch (e) {
-            if (isIndexPriceHistoryUnavailable(e)) {
-              console.warn('[Dashboard] IndexPriceHistory table is not available yet. Apply the latest Prisma migration.')
-            } else if (isDatabaseConnectionIssue(e)) {
-              console.warn('[Dashboard] Skipping background index sync because the database connection is temporarily unavailable.')
-            } else {
-              throw e;
-            }
-          }
-        }
       } catch (e) {
         console.error("Background cache update failed silently:", e);
       }
     })();
+  }
+
+  if (indexPriceHistory) {
+    const firstChartSyncDate = (() => {
+      const oneYearAgoDate = new Date();
+      oneYearAgoDate.setFullYear(oneYearAgoDate.getFullYear() - 1);
+      return oneYearAgoDate.toISOString().split('T')[0];
+    })();
+
+    (async () => {
+      try {
+        const INDEX_TICKERS = ['SPY', 'QQQ'] as const;
+        for (const indexTicker of INDEX_TICKERS) {
+          const latest = await withRetry(() => indexPriceHistory.findFirst({
+            where: { ticker: indexTicker },
+            orderBy: { date: 'desc' },
+            select: { date: true },
+          }));
+
+          const yesterday = new Date();
+          yesterday.setDate(yesterday.getDate() - 1);
+          if (latest && latest.date >= yesterday) continue;
+
+          const fromDate = latest
+            ? new Date(latest.date.getTime() + 86400000).toISOString().split('T')[0]
+            : firstChartSyncDate;
+
+          const history = await getIndexHistory(indexTicker, fromDate);
+          if (history.length === 0) {
+            console.warn(`[Dashboard] No benchmark history returned for ${indexTicker} starting ${fromDate}.`);
+            continue;
+          }
+
+          const values = history.map(p => `('${indexTicker}', '${p.date}'::date, ${p.price})`).join(',');
+          await withRetry(() => prisma.$executeRawUnsafe(`
+            INSERT INTO "IndexPriceHistory" (ticker, date, close)
+            VALUES ${values}
+            ON CONFLICT (ticker, date) DO UPDATE SET close = EXCLUDED.close
+          `));
+        }
+      } catch (e) {
+        if (isIndexPriceHistoryUnavailable(e)) {
+          console.warn('[Dashboard] IndexPriceHistory table is not available yet. Apply the latest Prisma migration.')
+        } else if (isDatabaseConnectionIssue(e)) {
+          console.warn('[Dashboard] Skipping background index sync because the database connection is temporarily unavailable.')
+        } else {
+          console.error('[Dashboard] Background benchmark sync failed silently:', e);
+        }
+      }
+    })();
+  } else {
+    console.warn('[Dashboard] Prisma client is missing indexPriceHistory. Run `prisma generate` and restart `next dev`.')
   }
 
   for (const asset of assetsWithLogo) {
@@ -507,43 +516,55 @@ export default async function Page({ searchParams }: { searchParams: Promise<{ p
     };
   }).filter(p => p.Total > 0);
 
-  // Compute index cumulative returns over the same date range
+  // Compute index cumulative returns over the same visible portfolio history range
   const INDEX_TICKERS = ['SPY', 'QQQ'] as const;
-  const indexReturnFactors: Record<string, number> = { SPY: 1.0, QQQ: 1.0 };
-  const indexReturns: Record<string, number[]> = { SPY: [], QQQ: [] };
+  const indexReturnFactors: Record<string, number | null> = { SPY: null, QQQ: null };
+  const indexReturnsByDate = new Map<string, { SPY: number | null; QQQ: number | null }>();
 
-  for (let i = 0; i < allDateLabels.length; i++) {
-    const dateLabel = allDateLabels[i];
+  for (let i = 0; i < historicalChartData.length; i++) {
+    const dateLabel = historicalChartData[i].date;
+    const pointReturns: { SPY: number | null; QQQ: number | null } = { SPY: null, QQQ: null };
+
     for (const idx of INDEX_TICKERS) {
       const prices = indexPriceHistories[idx];
       if (!prices || prices.length === 0) {
-        indexReturns[idx].push(0);
         continue;
       }
+
+      const todayPrice = getPriceOnOrBefore(prices, dateLabel);
+      if (todayPrice == null || todayPrice <= 0) {
+        pointReturns[idx] = indexReturnFactors[idx] != null
+          ? Math.round((indexReturnFactors[idx] - 1) * 10000) / 100
+          : null;
+        continue;
+      }
+
+      if (indexReturnFactors[idx] == null) {
+        indexReturnFactors[idx] = 1.0;
+        pointReturns[idx] = 0;
+        continue;
+      }
+
       if (i > 0) {
-        const prevLabel = allDateLabels[i - 1];
-        const todayPrice = getPriceOnOrBefore(prices, dateLabel);
+        const prevLabel = historicalChartData[i - 1].date;
         const prevPrice = getPriceOnOrBefore(prices, prevLabel);
-        if (todayPrice != null && prevPrice != null && prevPrice > 0) {
+        if (prevPrice != null && prevPrice > 0) {
           indexReturnFactors[idx] *= todayPrice / prevPrice;
         }
       }
-      indexReturns[idx].push(Math.round((indexReturnFactors[idx] - 1) * 10000) / 100);
+
+      pointReturns[idx] = Math.round((indexReturnFactors[idx] - 1) * 10000) / 100;
     }
+
+    indexReturnsByDate.set(dateLabel, pointReturns);
   }
 
-  // Merge index returns into historical chart data points
-  // We need to align by allDateLabels index, but historicalChartData is filtered (p.Total > 0)
-  // Build a map from dateLabel → allDateLabels index for alignment
-  const dateLabelIndexMap = new Map<string, number>();
-  allDateLabels.forEach((d, i) => dateLabelIndexMap.set(d, i));
-
   const historicalChartDataWithIndex = historicalChartData.map((point) => {
-    const i = dateLabelIndexMap.get(point.date);
+    const pointReturns = indexReturnsByDate.get(point.date);
     return {
       ...point,
-      SPY: i != null ? (indexReturns['SPY'][i] ?? null) : null,
-      QQQ: i != null ? (indexReturns['QQQ'][i] ?? null) : null,
+      SPY: pointReturns?.SPY ?? null,
+      QQQ: pointReturns?.QQQ ?? null,
     };
   });
 
@@ -575,7 +596,7 @@ export default async function Page({ searchParams }: { searchParams: Promise<{ p
   // Index returns for Today point — carry forward the last historical value
   const todayIndexReturns: Record<string, number | null> = { SPY: null, QQQ: null };
   for (const idx of INDEX_TICKERS) {
-    const lastVal = indexReturns[idx][indexReturns[idx].length - 1];
+    const lastVal = historicalChartDataWithIndex[historicalChartDataWithIndex.length - 1]?.[idx] ?? null;
     if (lastVal != null) todayIndexReturns[idx] = lastVal;
   }
 

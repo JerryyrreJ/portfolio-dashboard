@@ -175,6 +175,35 @@ function calcYTicks(data: ChartPoint[], key: keyof ChartPoint, tickCount = 5): n
   return ticks;
 }
 
+function calcYTicksForKeys(data: ChartPoint[], keys: (keyof ChartPoint)[], tickCount = 5): number[] {
+  const values = data.flatMap((point) =>
+    keys
+      .map((key) => point[key])
+      .filter((value): value is number => typeof value === 'number' && isFinite(value))
+  );
+
+  if (values.length === 0) return [];
+
+  const min = Math.min(...values);
+  const max = Math.max(...values);
+  if (min === max) return [min];
+
+  const range = max - min;
+  const rawStep = range / (tickCount - 1);
+  const magnitude = Math.pow(10, Math.floor(Math.log10(rawStep)));
+  const step = Math.ceil(rawStep / magnitude) * magnitude;
+  const start = Math.floor(min / step) * step;
+  const ticks: number[] = [];
+
+  for (let i = 0; ticks.length < tickCount + 1; i++) {
+    const v = start + i * step;
+    ticks.push(v);
+    if (v >= max) break;
+  }
+
+  return ticks;
+}
+
 const CustomXAxisTick = (props: XAxisTickProps) => {
   const { x, y, payload, visibleTicksCount = 0, index, locale = 'en', todayLabel = 'Today' } = props;
   
@@ -611,6 +640,10 @@ export default function DashboardClient({
 
     const baselinePoint = filteredChartData.find((point: ChartPoint) => point.date !== 'Today') ?? filteredChartData[0];
     const baselineFactor = 1 + ((baselinePoint?.Return ?? 0) / 100);
+    const benchmarkBaselineFactors = {
+      SPY: baselinePoint?.SPY != null ? 1 + (baselinePoint.SPY / 100) : null,
+      QQQ: baselinePoint?.QQQ != null ? 1 + (baselinePoint.QQQ / 100) : null,
+    };
 
     return filteredChartData.map((point: ChartPoint) => {
       const currentFactor = 1 + ((point.Return ?? 0) / 100);
@@ -618,11 +651,11 @@ export default function DashboardClient({
         ? ((currentFactor / baselineFactor) - 1) * 100
         : (point.Return ?? 0) - (baselinePoint?.Return ?? 0);
 
-      const rebasedSPY = point.SPY != null && baselineFactor > 0
-        ? ((1 + point.SPY / 100) / baselineFactor - 1) * 100
+      const rebasedSPY = point.SPY != null && benchmarkBaselineFactors.SPY != null && benchmarkBaselineFactors.SPY > 0
+        ? ((1 + point.SPY / 100) / benchmarkBaselineFactors.SPY - 1) * 100
         : point.SPY;
-      const rebasedQQQ = point.QQQ != null && baselineFactor > 0
-        ? ((1 + point.QQQ / 100) / baselineFactor - 1) * 100
+      const rebasedQQQ = point.QQQ != null && benchmarkBaselineFactors.QQQ != null && benchmarkBaselineFactors.QQQ > 0
+        ? ((1 + point.QQQ / 100) / benchmarkBaselineFactors.QQQ - 1) * 100
         : point.QQQ;
 
       return {
@@ -729,9 +762,15 @@ export default function DashboardClient({
   }, [chartDisplayData, chartMode, chartRangeMeta, chartTimeRange, colors.gain.tailwind.text, colors.loss.tailwind.text, locale, t]);
 
   const yTicks = useMemo(() => {
-    const key = chartMode === 'return' ? 'Return' : portfolioId === 'local-portfolio' ? 'Local' : 'Total';
+    if (chartMode === 'return') {
+      const keys: (keyof ChartPoint)[] = ['Return'];
+      if (benchmark) keys.push(benchmark);
+      return calcYTicksForKeys(chartDisplayData, keys);
+    }
+
+    const key = portfolioId === 'local-portfolio' ? 'Local' : 'Total';
     return calcYTicks(chartDisplayData, key);
-  }, [chartDisplayData, chartMode, portfolioId]);
+  }, [benchmark, chartDisplayData, chartMode, portfolioId]);
 
   const handleRefresh = async () => {
     setIsRefreshing(true);
@@ -1047,7 +1086,7 @@ export default function DashboardClient({
                             : 'bg-element border-border text-secondary hover:text-primary'
                         }`}
                       >
-                        {idx === 'SPY' ? 'S&P 500' : 'NASDAQ'}
+                        {idx === 'SPY' ? 'S&P 500' : 'NASDAQ 100'}
                       </button>
                     ))}
                   </div>
@@ -1109,7 +1148,7 @@ export default function DashboardClient({
                           formatter={(value: number | string | undefined, name?: string) => {
                             const numVal = Number(value ?? 0);
                             if (name === 'SPY') return [`${numVal >= 0 ? '+' : ''}${numVal.toFixed(2)}%`, 'S&P 500'];
-                            if (name === 'QQQ') return [`${numVal >= 0 ? '+' : ''}${numVal.toFixed(2)}%`, 'NASDAQ'];
+                            if (name === 'QQQ') return [`${numVal >= 0 ? '+' : ''}${numVal.toFixed(2)}%`, 'NASDAQ 100'];
                             return chartMode === 'return'
                               ? [`${numVal >= 0 ? '+' : ''}${numVal.toFixed(2)}%`, t('chart.returnPercent')]
                               : [`${fmt(numVal)}`, t('chart.value')];
