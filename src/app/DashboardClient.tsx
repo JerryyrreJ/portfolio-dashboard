@@ -71,6 +71,7 @@ interface Asset {
   price: number;
   qty: number;
   value: number;
+  totalCost: number;
   capGain: number;
   return: number;
   market: string;
@@ -352,9 +353,10 @@ export default function DashboardClient({
     if (fetchedPricesForPortfolioRef.current === portfolioId) return;
     fetchedPricesForPortfolioRef.current = portfolioId;
 
-    // 收集所有需要获取价格的 ticker
+    // 直接用服务端传下来的 holdingsData 作为 source of truth，避免从
+    // localHoldings 读（那会在 effect 自身的 setState 后再触发一次读到自己的脏输出）。
     const tickers = new Set<string>();
-    localHoldings.forEach(group => {
+    holdingsData.forEach(group => {
       group.holdings.forEach(h => tickers.add(h.ticker));
     });
 
@@ -364,7 +366,7 @@ export default function DashboardClient({
       try {
         const symbolParam = Array.from(tickers).join(',');
         const res = await fetch(`/api/stock/batch-quote?symbols=${symbolParam}`);
-        
+
         if (res.headers.get('X-RateLimit-Exhausted') === 'true' || res.status === 429) {
           setIsRateLimited(true);
         }
@@ -372,47 +374,42 @@ export default function DashboardClient({
         if (!res.ok) return;
 
         const livePrices: Record<string, number> = await res.json();
-        
-        if (Object.keys(livePrices).length > 0) {
-          // 重新计算 holdings 和 summary
-          let newTotalValue = 0;
-          let newTotalCost = 0;
 
-          const updatedHoldings = localHoldings.map(group => ({
-            ...group,
-            holdings: group.holdings.map(h => {
-              const livePrice = livePrices[h.ticker];
-              if (livePrice && livePrice > 0) {
-                // 如果后端价格大于0说明有成本
-                const costBasis = h.price > 0 && h.qty > 0 ? (h.value - h.capGain) : 0; 
-                // 由于我们没有把原始 cost 直接传过来，只能反推： cost = value - capGain
-                
-                const newValue = livePrice * h.qty;
-                const newCapGain = costBasis > 0 ? newValue - costBasis : newValue;
-                const newReturnPct = costBasis > 0 ? (newCapGain / costBasis) * 100 : 0;
-                
-                newTotalValue += newValue;
-                newTotalCost += costBasis;
+        if (Object.keys(livePrices).length === 0) return;
 
-                return { ...h, price: livePrice, value: newValue, capGain: newCapGain, return: newReturnPct };
-              }
-              // 如果没有获取到新价格，保持原样
-              newTotalValue += h.value;
-              // 反推成本
-              newTotalCost += (h.value - h.capGain);
-              return h;
-            })
-          }));
+        // 服务端已直接传下 totalCost，不再反推 costBasis
+        let newTotalValue = 0;
+        let newTotalCost = 0;
 
-          setLocalHoldings(updatedHoldings);
-          setLocalSummary(prev => ({
-            totalValue: newTotalValue,
-            totalCapGain: newTotalValue - newTotalCost,
-            totalCapGainPercentage: newTotalCost > 0 ? ((newTotalValue - newTotalCost) / newTotalCost) * 100 : 0,
-            totalRealizedGain: prev.totalRealizedGain,
-            totalDividendIncome: prev.totalDividendIncome,
-          }));
-        }
+        const updatedHoldings = holdingsData.map(group => ({
+          ...group,
+          holdings: group.holdings.map(h => {
+            const costBasis = h.totalCost;
+            const livePrice = livePrices[h.ticker];
+            if (livePrice && livePrice > 0) {
+              const newValue = livePrice * h.qty;
+              const newCapGain = newValue - costBasis;
+              const newReturnPct = costBasis > 0 ? (newCapGain / costBasis) * 100 : 0;
+
+              newTotalValue += newValue;
+              newTotalCost += costBasis;
+
+              return { ...h, price: livePrice, value: newValue, capGain: newCapGain, return: newReturnPct };
+            }
+            newTotalValue += h.value;
+            newTotalCost += costBasis;
+            return h;
+          })
+        }));
+
+        setLocalHoldings(updatedHoldings);
+        setLocalSummary(prev => ({
+          totalValue: newTotalValue,
+          totalCapGain: newTotalValue - newTotalCost,
+          totalCapGainPercentage: newTotalCost > 0 ? ((newTotalValue - newTotalCost) / newTotalCost) * 100 : 0,
+          totalRealizedGain: prev.totalRealizedGain,
+          totalDividendIncome: prev.totalDividendIncome,
+        }));
       } catch (err) {
         console.error("Failed to fetch live prices silently:", err);
       }
@@ -425,7 +422,7 @@ export default function DashboardClient({
     return () => {
       window.clearTimeout(timer);
     };
-  }, [localHoldings, portfolioId]);
+  }, [portfolioId, holdingsData]);
 
   // 获取待确认分红数量
   const pendingDividendCount = pendingDividendCountOverride?.portfolioId === portfolioId
@@ -565,6 +562,7 @@ export default function DashboardClient({
             price: h.price,
             qty: h.qty,
             value: value,
+            totalCost: h.cost,
             capGain: capGain,
             return: h.cost > 0 ? (capGain / h.cost) * 100 : 0,
             logo: null

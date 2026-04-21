@@ -13,10 +13,11 @@ export async function POST(request: NextRequest) {
 
     const body = await request.json();
 
-    // 验证必填字段
+    // 验证必填字段（注意：数字 0 不算缺失，由下面的范围校验去处理）
     const requiredFields = ['portfolioId', 'assetId', 'type', 'quantity', 'price', 'date'];
     for (const field of requiredFields) {
-      if (!body[field]) {
+      const value = body[field];
+      if (value === undefined || value === null || value === '') {
         return NextResponse.json(
           { error: `Missing required field: ${field}` },
           { status: 400 }

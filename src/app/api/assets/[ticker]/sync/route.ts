@@ -99,8 +99,12 @@ export async function POST(
           exchange: p.exchange,
         });
 
+        // Finnhub 有 profile 但 logo 为空：明确写入 null 来清掉旧缓存，
+        // 而不是去 fallback 到别的 provider——避免跨 provider 的 logo 抖动
         if (typeof p.logo === 'string' && p.logo.trim()) {
           updateData.logo = p.logo.trim();
+        } else {
+          updateData.logo = null;
         }
       }
     }
@@ -121,28 +125,24 @@ export async function POST(
       }
     }
 
-    // 4. History (Twelve Data) - bulk upsert
+    // 4. History (Twelve Data) - 先准备好要插入的行，到事务里再执行
     let historyUpserted = 0;
+    let historyRows: Prisma.Sql[] = [];
     if (needsHistorySync) {
       const hv = await get12MonthHistory(decodedTicker);
       const sanitizedRows = hv.filter(
         (p) => /^\d{4}-\d{2}-\d{2}$/.test(p.date) && Number.isFinite(p.price)
       );
       if (sanitizedRows.length > 0) {
-        const rows = sanitizedRows.map(
+        historyRows = sanitizedRows.map(
           (p) => Prisma.sql`(${decodedTicker}, ${p.date}::date, ${p.price})`
         );
-        await prisma.$executeRaw`
-          INSERT INTO "AssetPriceHistory" (ticker, date, close)
-          VALUES ${Prisma.join(rows)}
-          ON CONFLICT (ticker, date) DO UPDATE SET close = EXCLUDED.close
-        `;
         updateData.historyLastUpdated = currentTime;
         historyUpserted = sanitizedRows.length;
       }
     }
 
-    if (Object.keys(updateData).length === 0) {
+    if (historyRows.length === 0 && Object.keys(updateData).length === 0) {
       return NextResponse.json({
         success: true,
         message: 'No new data to update',
@@ -150,9 +150,21 @@ export async function POST(
       });
     }
 
-    await prisma.asset.update({
-      where: { ticker: decodedTicker },
-      data: updateData,
+    // 历史价格 + 元数据 update 同成功或同失败，避免 historyLastUpdated 与真实行脱节
+    await prisma.$transaction(async (tx) => {
+      if (historyRows.length > 0) {
+        await tx.$executeRaw`
+          INSERT INTO "AssetPriceHistory" (ticker, date, close)
+          VALUES ${Prisma.join(historyRows)}
+          ON CONFLICT (ticker, date) DO UPDATE SET close = EXCLUDED.close
+        `;
+      }
+      if (Object.keys(updateData).length > 0) {
+        await tx.asset.update({
+          where: { ticker: decodedTicker },
+          data: updateData,
+        });
+      }
     });
 
     const nextResponse = NextResponse.json({

@@ -1,6 +1,7 @@
 import type React from "react";
 import type { Metadata } from "next";
 import { Prisma } from "@prisma/client";
+import { after } from "next/server";
 import { getLocale, getMessages } from "next-intl/server";
 import DashboardPageShell from './DashboardPageShell'
 import { get12MonthHistory, getIndexHistory } from '@/lib/twelvedata'
@@ -95,6 +96,108 @@ function isDatabaseConnectionIssue(error: unknown) {
     || message.includes("Can't reach database server")
     || message.includes('Connection closed')
     || message.includes('fetch failed')
+}
+
+// 进程内去重：serverless 实例重用时，多个并发请求看到同一只 ticker 需要同步，
+// 不重复启动后台任务。后台任务完成后从 Map 里移除。
+const inflightAssetSync = new Map<string, Promise<void>>()
+const inflightIndexSync = new Map<string, Promise<void>>()
+
+type IndexPriceHistoryDelegate = NonNullable<ReturnType<typeof getIndexPriceHistoryDelegate>>
+
+async function runAssetHistorySync(asset: { id: string; ticker: string }): Promise<void> {
+  const existing = inflightAssetSync.get(asset.ticker)
+  if (existing) return existing
+
+  const work = (async () => {
+    try {
+      const history = await get12MonthHistory(asset.ticker)
+      const sanitized = history.filter(
+        (p) => /^\d{4}-\d{2}-\d{2}$/.test(p.date) && Number.isFinite(p.price)
+      )
+      if (sanitized.length === 0) return
+
+      const rows = sanitized.map(
+        (p) => Prisma.sql`(${asset.ticker}, ${p.date}::date, ${p.price})`
+      )
+      await prisma.$executeRaw`
+        INSERT INTO "AssetPriceHistory" (ticker, date, close)
+        VALUES ${Prisma.join(rows)}
+        ON CONFLICT (ticker, date) DO UPDATE SET close = EXCLUDED.close
+      `
+      await prisma.asset.update({
+        where: { id: asset.id },
+        data: { historyLastUpdated: new Date() },
+      })
+    } catch (e) {
+      console.error(`[Dashboard] Background asset cache update failed for ${asset.ticker}:`, e)
+    } finally {
+      inflightAssetSync.delete(asset.ticker)
+    }
+  })()
+
+  inflightAssetSync.set(asset.ticker, work)
+  return work
+}
+
+async function runIndexHistorySync(
+  indexTicker: string,
+  firstChartSyncDate: string,
+  indexPriceHistory: IndexPriceHistoryDelegate,
+): Promise<void> {
+  const existing = inflightIndexSync.get(indexTicker)
+  if (existing) return existing
+
+  const work = (async () => {
+    try {
+      const latest = await withRetry(() => indexPriceHistory.findFirst({
+        where: { ticker: indexTicker },
+        orderBy: { date: 'desc' },
+        select: { date: true },
+      }))
+
+      const yesterday = new Date()
+      yesterday.setDate(yesterday.getDate() - 1)
+      if (latest && latest.date >= yesterday) return
+
+      const fromDate = latest
+        ? new Date(latest.date.getTime() + 86400000).toISOString().split('T')[0]
+        : firstChartSyncDate
+
+      const history = await getIndexHistory(indexTicker, fromDate)
+      if (history.length === 0) {
+        console.warn(`[Dashboard] No benchmark history returned for ${indexTicker} starting ${fromDate}.`)
+        return
+      }
+
+      const sanitized = history.filter(
+        (p) => /^\d{4}-\d{2}-\d{2}$/.test(p.date) && Number.isFinite(p.price)
+      )
+      if (sanitized.length === 0) return
+
+      const rows = sanitized.map(
+        (p) => Prisma.sql`(${indexTicker}, ${p.date}::date, ${p.price})`
+      )
+      await withRetry(() => prisma.$executeRaw`
+        INSERT INTO "IndexPriceHistory" (ticker, date, close)
+        VALUES ${Prisma.join(rows)}
+        ON CONFLICT (ticker, date) DO UPDATE SET close = EXCLUDED.close
+      `)
+    } catch (e) {
+      if (isIndexPriceHistoryUnavailable(e)) {
+        console.warn('[Dashboard] IndexPriceHistory table is not available yet. Apply the latest Prisma migration.')
+      } else if (isDatabaseConnectionIssue(e)) {
+        console.warn('[Dashboard] Skipping background index sync because the database connection is temporarily unavailable.')
+      } else {
+        console.error(`[Dashboard] Background benchmark sync failed for ${indexTicker}:`, e)
+      }
+    } finally {
+      inflightIndexSync.delete(indexTicker)
+    }
+  })()
+
+  inflightIndexSync.set(indexTicker, work)
+  return work
 }
 
 export default async function Page({ searchParams }: { searchParams: Promise<{ pid?: string }> }) {
@@ -271,34 +374,14 @@ export default async function Page({ searchParams }: { searchParams: Promise<{ p
   const indexPriceHistory = getIndexPriceHistoryDelegate();
 
   if (assetsNeedingHistorySync.length > 0) {
-    // 异步闭包，在后台运行
-    (async () => {
-      try {
-        for (const asset of assetsNeedingHistorySync) {
-          const history = await get12MonthHistory(asset.ticker);
-          const sanitized = history.filter(
-            (p) => /^\d{4}-\d{2}-\d{2}$/.test(p.date) && Number.isFinite(p.price)
-          );
-          if (sanitized.length > 0) {
-            const rows = sanitized.map(
-              (p) => Prisma.sql`(${asset.ticker}, ${p.date}::date, ${p.price})`
-            );
-            await prisma.$executeRaw`
-              INSERT INTO "AssetPriceHistory" (ticker, date, close)
-              VALUES ${Prisma.join(rows)}
-              ON CONFLICT (ticker, date) DO UPDATE SET close = EXCLUDED.close
-            `;
-            await prisma.asset.update({
-              where: { id: asset.id },
-              data: { historyLastUpdated: new Date() }
-            });
-          }
-        }
-
-      } catch (e) {
-        console.error("Background cache update failed silently:", e);
-      }
-    })();
+    // 响应发出后再继续拉取历史价格写库；同一实例内的并发请求通过 inflight Map 去重
+    after(async () => {
+      await Promise.all(
+        assetsNeedingHistorySync.map((asset) =>
+          runAssetHistorySync({ id: asset.id, ticker: asset.ticker })
+        )
+      )
+    })
   }
 
   if (indexPriceHistory) {
@@ -308,54 +391,15 @@ export default async function Page({ searchParams }: { searchParams: Promise<{ p
       return oneYearAgoDate.toISOString().split('T')[0];
     })();
 
-    (async () => {
-      try {
-        const INDEX_TICKERS = ['SPY', 'QQQ'] as const;
-        for (const indexTicker of INDEX_TICKERS) {
-          const latest = await withRetry(() => indexPriceHistory.findFirst({
-            where: { ticker: indexTicker },
-            orderBy: { date: 'desc' },
-            select: { date: true },
-          }));
-
-          const yesterday = new Date();
-          yesterday.setDate(yesterday.getDate() - 1);
-          if (latest && latest.date >= yesterday) continue;
-
-          const fromDate = latest
-            ? new Date(latest.date.getTime() + 86400000).toISOString().split('T')[0]
-            : firstChartSyncDate;
-
-          const history = await getIndexHistory(indexTicker, fromDate);
-          if (history.length === 0) {
-            console.warn(`[Dashboard] No benchmark history returned for ${indexTicker} starting ${fromDate}.`);
-            continue;
-          }
-
-          const sanitized = history.filter(
-            (p) => /^\d{4}-\d{2}-\d{2}$/.test(p.date) && Number.isFinite(p.price)
-          );
-          if (sanitized.length === 0) continue;
-
-          const rows = sanitized.map(
-            (p) => Prisma.sql`(${indexTicker}, ${p.date}::date, ${p.price})`
-          );
-          await withRetry(() => prisma.$executeRaw`
-            INSERT INTO "IndexPriceHistory" (ticker, date, close)
-            VALUES ${Prisma.join(rows)}
-            ON CONFLICT (ticker, date) DO UPDATE SET close = EXCLUDED.close
-          `);
-        }
-      } catch (e) {
-        if (isIndexPriceHistoryUnavailable(e)) {
-          console.warn('[Dashboard] IndexPriceHistory table is not available yet. Apply the latest Prisma migration.')
-        } else if (isDatabaseConnectionIssue(e)) {
-          console.warn('[Dashboard] Skipping background index sync because the database connection is temporarily unavailable.')
-        } else {
-          console.error('[Dashboard] Background benchmark sync failed silently:', e);
-        }
-      }
-    })();
+    const indexDelegate = indexPriceHistory;
+    after(async () => {
+      const INDEX_TICKERS = ['SPY', 'QQQ'] as const;
+      await Promise.all(
+        INDEX_TICKERS.map((indexTicker) =>
+          runIndexHistorySync(indexTicker, firstChartSyncDate, indexDelegate)
+        )
+      );
+    });
   } else {
     console.warn('[Dashboard] Prisma client is missing indexPriceHistory. Run `prisma generate` and restart `next dev`.')
   }
@@ -380,6 +424,7 @@ export default async function Page({ searchParams }: { searchParams: Promise<{ p
       price: currentPrice,
       qty: h.totalQty,
       value: value,
+      totalCost: h.totalCost,
       capGain: capGain,
       return: returnPct,
       dividendIncome: h.dividendIncome,

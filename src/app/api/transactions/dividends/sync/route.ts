@@ -183,39 +183,61 @@ export async function POST(request: NextRequest) {
         getTickerSyncStartDate(earliestTradeDate, latestKnownExDate)
       );
 
-      // 优先使用 Alpha Vantage
-      let dividends = skipAlphaVantage
-        ? []
-        : await getAlphaVantageDividends(ticker, startDate, endDate);
+      type UnifiedDividend = {
+        symbol: string;
+        ex_date: string;
+        payment_date?: string;
+        amount: number;
+        currency?: string;
+      };
 
-      if (getAlphaVantageDividendProviderState() === 'rate_limited') {
-        skipAlphaVantage = true;
+      let dividends: UnifiedDividend[] = [];
+      let providerSucceeded = false;
+
+      // 优先使用 Alpha Vantage。只有当 provider 明确失败（ok=false）时才 fallback，
+      // "ok=true 但 data 为空"意味着这只票真的没分红，不应继续浪费下一个 provider 的配额。
+      if (!skipAlphaVantage) {
+        const result = await getAlphaVantageDividends(ticker, startDate, endDate);
+        if (getAlphaVantageDividendProviderState() === 'rate_limited') {
+          skipAlphaVantage = true;
+        }
+        if (result.ok) {
+          providerSucceeded = true;
+          dividends = result.data;
+        }
       }
 
       // Fallback to TwelveData
-      if ((!dividends || dividends.length === 0) && !skipTwelveData) {
-        dividends = await getTwelveDataDividends(ticker, startDate, endDate);
+      if (!providerSucceeded && !skipTwelveData) {
+        const result = await getTwelveDataDividends(ticker, startDate, endDate);
         if (getTwelveDataDividendSupportStatus() === 'unsupported') {
           skipTwelveData = true;
+        }
+        if (result.ok) {
+          providerSucceeded = true;
+          dividends = result.data;
         }
       }
 
       // Fallback to Finnhub
-      if ((!dividends || dividends.length === 0) && !skipFinnhub) {
-        const finnhubDividends = await getFinnhubDividends(ticker, startDate, endDate);
+      if (!providerSucceeded && !skipFinnhub) {
+        const result = await getFinnhubDividends(ticker, startDate, endDate);
         if (getFinnhubDividendSupportStatus() === 'unsupported') {
           skipFinnhub = true;
         }
-        dividends = finnhubDividends.map(d => ({
-          symbol: d.symbol,
-          ex_date: d.date,
-          payment_date: d.payDate,
-          amount: d.amount,
-          currency: d.currency || 'USD',
-        }));
+        if (result.ok) {
+          providerSucceeded = true;
+          dividends = result.data.map(d => ({
+            symbol: d.symbol,
+            ex_date: d.date,
+            payment_date: d.payDate,
+            amount: d.amount,
+            currency: d.currency || 'USD',
+          }));
+        }
       }
 
-      if (!dividends || dividends.length === 0) return 0;
+      if (dividends.length === 0) return 0;
 
       let newCount = 0;
 
@@ -226,7 +248,8 @@ export async function POST(request: NextRequest) {
 
         let sharesOnExDate = 0;
         for (const tx of tickerTransactions) {
-          if (toDateOnlyString(tx.date) > exDateStr) break;
+          // 除息日当天及之后的交易不计入（T+1 结算：当天买入的股票不享有这次分红）
+          if (toDateOnlyString(tx.date) >= exDateStr) break;
           if (tx.type === 'BUY') sharesOnExDate += tx.quantity;
           else if (tx.type === 'SELL') sharesOnExDate -= tx.quantity;
         }

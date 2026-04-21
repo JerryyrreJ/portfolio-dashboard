@@ -5,9 +5,16 @@
 
 const API_KEY = process.env.TWELVEDATA_API_KEY || '';
 const BASE_URL = 'https://api.twelvedata.com';
+const RATE_LIMIT_TTL_MS = 5 * 60 * 1000;
+const UNSUPPORTED_TTL_MS = 30 * 60 * 1000;
 
 type TwelveDataDividendSupport = 'missing' | 'unknown' | 'supported' | 'unsupported';
-let dividendSupport: TwelveDataDividendSupport = API_KEY ? 'unknown' : 'missing';
+
+// 基线状态仅反映 API key 是否配置；unsupported（403/"grow or pro" 提示）与
+// rate-limit（429）都通过 TTL 表达，避免单次错误被模块级状态永久粘住。
+let baseDividendSupport: 'missing' | 'unknown' | 'supported' = API_KEY ? 'unknown' : 'missing';
+let unsupportedUntil = 0;
+let rateLimitedUntil = 0;
 
 // Finnhub resolution → Twelve Data interval
 const RESOLUTION_MAP: Record<string, string> = {
@@ -76,14 +83,12 @@ export interface HistoricalCandle {
 }
 
 // 速率限制追踪
-let isRateLimited = false;
-
 export function isTwelveDataRateLimited() {
-  return isRateLimited;
+  return Date.now() < rateLimitedUntil;
 }
 
 export function resetTwelveDataRateLimit() {
-  isRateLimited = false;
+  rateLimitedUntil = 0;
 }
 
 async function fetchTwelveData<T>(endpoint: string, params: Record<string, string> = {}): Promise<T | null> {
@@ -102,7 +107,7 @@ async function fetchTwelveData<T>(endpoint: string, params: Record<string, strin
     clearTimeout(timeoutId);
 
     if (response.status === 429) {
-      isRateLimited = true;
+      rateLimitedUntil = Date.now() + RATE_LIMIT_TTL_MS;
     }
 
     if (!response.ok) {
@@ -118,7 +123,7 @@ async function fetchTwelveData<T>(endpoint: string, params: Record<string, strin
 
     if (data.status === 'error' || data.code === 429) {
       if (data.code === 429 || data.message?.includes('rate limit')) {
-        isRateLimited = true;
+        rateLimitedUntil = Date.now() + RATE_LIMIT_TTL_MS;
       }
       console.warn(`Twelve Data API error: ${data.message} for ${endpoint}`);
       return null;
@@ -310,8 +315,10 @@ export interface DividendData {
   currency?: string;
 }
 
-export function getDividendProviderSupportStatus() {
-  return dividendSupport;
+export function getDividendProviderSupportStatus(): TwelveDataDividendSupport {
+  if (baseDividendSupport === 'missing') return 'missing';
+  if (Date.now() < unsupportedUntil) return 'unsupported';
+  return baseDividendSupport;
 }
 
 /**
@@ -324,9 +331,10 @@ export async function getDividends(
   symbol: string,
   startDate?: string,
   endDate?: string
-): Promise<DividendData[]> {
-  if (!API_KEY || dividendSupport === 'missing' || dividendSupport === 'unsupported') {
-    return [];
+): Promise<{ ok: boolean; data: DividendData[] }> {
+  const supportStatus = getDividendProviderSupportStatus();
+  if (supportStatus === 'missing' || supportStatus === 'unsupported') {
+    return { ok: false, data: [] };
   }
 
   const params: Record<string, string> = {
@@ -362,32 +370,40 @@ export async function getDividends(
       || message.includes('available exclusively with grow or pro')
     ) {
       console.info('Twelve Data dividends disabled: current API plan does not include /dividends.');
-      dividendSupport = 'unsupported';
-      return [];
+      unsupportedUntil = Date.now() + UNSUPPORTED_TTL_MS;
+      return { ok: false, data: [] };
+    }
+
+    if (response.status === 429 || data.code === 429) {
+      rateLimitedUntil = Date.now() + RATE_LIMIT_TTL_MS;
     }
 
     if (!response.ok || data.status === 'error' || data.code === 429) {
       console.warn(`Twelve Data API error: ${message || `${response.status} ${response.statusText}`} for /dividends`);
-      return [];
+      return { ok: false, data: [] };
     }
 
-    dividendSupport = 'supported';
+    baseDividendSupport = 'supported';
+    unsupportedUntil = 0;
 
     if (!data.dividends || data.dividends.length === 0) {
-      return [];
+      return { ok: true, data: [] };
     }
 
-    return data.dividends.map((d) => ({
-      symbol: data.symbol || symbol.toUpperCase(),
-      ex_date: d.ex_date,
-      payment_date: d.payment_date,
-      amount: parseFloat(d.amount),
-      currency: data.currency,
-    }));
+    return {
+      ok: true,
+      data: data.dividends.map((d) => ({
+        symbol: data.symbol || symbol.toUpperCase(),
+        ex_date: d.ex_date,
+        payment_date: d.payment_date,
+        amount: parseFloat(d.amount),
+        currency: data.currency,
+      })),
+    };
   } catch (error: unknown) {
     clearTimeout(timeoutId);
     const message = error instanceof Error ? error.message : String(error);
     console.warn(`Twelve Data fetch exception for /dividends:`, message);
-    return [];
+    return { ok: false, data: [] };
   }
 }

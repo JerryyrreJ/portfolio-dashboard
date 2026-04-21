@@ -6,11 +6,24 @@
 const API_KEY = process.env.ALPHAVANTAGE_API_KEY || '';
 const BASE_URL = 'https://www.alphavantage.co/query';
 const DIVIDEND_REQUEST_INTERVAL_MS = 1100;
+const RATE_LIMIT_TTL_MS = 5 * 60 * 1000;
 
 type AlphaVantageDividendState = 'missing' | 'available' | 'rate_limited';
 
-let dividendState: AlphaVantageDividendState = API_KEY ? 'available' : 'missing';
+// 基线状态只表达 "是否配置了 API key"；rate-limit 通过 TTL 表达，
+// 避免单次 429 永久把整个 serverless 实例的其他用户也堵死。
+type AlphaVantageBaseState = 'missing' | 'available';
+const baseState: AlphaVantageBaseState = API_KEY ? 'available' : 'missing';
+let rateLimitedUntil = 0;
 let nextDividendRequestAt = 0;
+
+function markRateLimited() {
+  rateLimitedUntil = Date.now() + RATE_LIMIT_TTL_MS;
+}
+
+function isRateLimited() {
+  return Date.now() < rateLimitedUntil;
+}
 
 function sleep(ms: number) {
   return new Promise((resolve) => setTimeout(resolve, ms));
@@ -53,7 +66,7 @@ async function fetchAlphaVantage(params: Record<string, string>) {
   }
 
   if (params.function === 'DIVIDENDS') {
-    if (dividendState === 'rate_limited') {
+    if (isRateLimited()) {
       return null;
     }
 
@@ -83,7 +96,7 @@ async function fetchAlphaVantage(params: Record<string, string>) {
 
     if (!response.ok) {
       if (params.function === 'DIVIDENDS' && response.status === 429) {
-        dividendState = 'rate_limited';
+        markRateLimited();
       }
       console.warn(`Alpha Vantage API error: ${response.status} ${response.statusText} for ${params.function}`);
       return null;
@@ -92,7 +105,7 @@ async function fetchAlphaVantage(params: Record<string, string>) {
     const data = await response.json() as AlphaVantageDividendResponse;
     if (data.Information || data.Note || data.ErrorMessage) {
       if (params.function === 'DIVIDENDS' && isDividendRateLimitMessage(data.Information || data.Note || data.ErrorMessage)) {
-        dividendState = 'rate_limited';
+        markRateLimited();
       }
       console.warn(
         `Alpha Vantage API error: ${data.Information || data.Note || data.ErrorMessage} for ${params.function}`
@@ -101,7 +114,7 @@ async function fetchAlphaVantage(params: Record<string, string>) {
     }
 
     if (params.function === 'DIVIDENDS') {
-      dividendState = 'available';
+      rateLimitedUntil = 0;
     }
 
     return data;
@@ -113,25 +126,33 @@ async function fetchAlphaVantage(params: Record<string, string>) {
   }
 }
 
-export function getDividendProviderState() {
-  return dividendState;
+export function getDividendProviderState(): AlphaVantageDividendState {
+  if (baseState === 'missing') return 'missing';
+  if (isRateLimited()) return 'rate_limited';
+  return 'available';
 }
 
 export async function getDividends(
   symbol: string,
   startDate?: string,
   endDate?: string
-): Promise<AlphaVantageDividendData[]> {
+): Promise<{ ok: boolean; data: AlphaVantageDividendData[] }> {
   const data = await fetchAlphaVantage({
     function: 'DIVIDENDS',
     symbol: symbol.toUpperCase(),
   });
 
-  if (!data?.data?.length) {
-    return [];
+  // fetchAlphaVantage 返回 null 代表调用失败 / 限流 / API key 缺失；
+  // 返回对象代表调用成功（此时 data.data 为空仅意味着这只票在范围内无分红）
+  if (!data) {
+    return { ok: false, data: [] };
   }
 
-  return data.data
+  if (!data.data?.length) {
+    return { ok: true, data: [] };
+  }
+
+  const filtered = data.data
     .filter((dividend) => {
       if (!dividend.ex_dividend_date || !dividend.amount) {
         return false;
@@ -156,4 +177,6 @@ export async function getDividends(
           : undefined,
       amount: parseFloat(dividend.amount as string),
     }));
+
+  return { ok: true, data: filtered };
 }

@@ -5,19 +5,23 @@
 
 const API_KEY = process.env.FINNHUB_API_KEY || '';
 const BASE_URL = 'https://finnhub.io/api/v1';
+const RATE_LIMIT_TTL_MS = 5 * 60 * 1000;
+const UNSUPPORTED_TTL_MS = 30 * 60 * 1000;
 
 type FinnhubDividendSupport = 'missing' | 'unknown' | 'supported' | 'unsupported';
-let dividendSupport: FinnhubDividendSupport = API_KEY ? 'unknown' : 'missing';
 
-// 速率限制追踪
-let isRateLimited = false;
+// 基线状态仅反映 API key 是否配置；unsupported（403 等"套餐不支持"）与
+// rate-limit（429）都通过 TTL 表达，避免单次错误被模块级状态永久粘住。
+let baseDividendSupport: 'missing' | 'unknown' | 'supported' = API_KEY ? 'unknown' : 'missing';
+let unsupportedUntil = 0;
+let rateLimitedUntil = 0;
 
 export function isFinnhubRateLimited() {
-  return isRateLimited;
+  return Date.now() < rateLimitedUntil;
 }
 
 export function resetFinnhubRateLimit() {
-  isRateLimited = false;
+  rateLimitedUntil = 0;
 }
 
 // 统一的请求函数
@@ -37,11 +41,11 @@ async function fetchFinnhub<T>(endpoint: string, params: Record<string, string> 
       next: { revalidate: 60 }, // 缓存 60 秒
       signal: controller.signal
     });
-    
+
     clearTimeout(timeoutId);
 
     if (response.status === 429) {
-      isRateLimited = true;
+      rateLimitedUntil = Date.now() + RATE_LIMIT_TTL_MS;
     }
 
     if (!response.ok) {
@@ -220,8 +224,10 @@ export interface DividendInfo {
   payDate?: string;
 }
 
-export function getDividendProviderSupportStatus() {
-  return dividendSupport;
+export function getDividendProviderSupportStatus(): FinnhubDividendSupport {
+  if (baseDividendSupport === 'missing') return 'missing';
+  if (Date.now() < unsupportedUntil) return 'unsupported';
+  return baseDividendSupport;
 }
 
 /**
@@ -234,9 +240,10 @@ export async function getDividends(
   symbol: string,
   from: string,
   to: string
-): Promise<DividendInfo[]> {
-  if (!API_KEY || dividendSupport === 'missing' || dividendSupport === 'unsupported') {
-    return [];
+): Promise<{ ok: boolean; data: DividendInfo[] }> {
+  const supportStatus = getDividendProviderSupportStatus();
+  if (supportStatus === 'missing' || supportStatus === 'unsupported') {
+    return { ok: false, data: [] };
   }
 
   const url = new URL(`${BASE_URL}/stock/dividend`);
@@ -257,22 +264,27 @@ export async function getDividends(
 
     if (response.status === 403) {
       console.info('Finnhub dividends disabled: current API key cannot access /stock/dividend.');
-      dividendSupport = 'unsupported';
-      return [];
+      unsupportedUntil = Date.now() + UNSUPPORTED_TTL_MS;
+      return { ok: false, data: [] };
+    }
+
+    if (response.status === 429) {
+      rateLimitedUntil = Date.now() + RATE_LIMIT_TTL_MS;
     }
 
     if (!response.ok) {
       console.warn(`Finnhub API error: ${response.status} ${response.statusText} for /stock/dividend`);
-      return [];
+      return { ok: false, data: [] };
     }
 
-    dividendSupport = 'supported';
+    baseDividendSupport = 'supported';
+    unsupportedUntil = 0;
     const data = await response.json() as DividendInfo[];
-    return data || [];
+    return { ok: true, data: data || [] };
   } catch (error: unknown) {
     clearTimeout(timeoutId);
     const message = error instanceof Error ? error.message : String(error);
     console.warn(`Finnhub fetch exception for /stock/dividend:`, message);
-    return [];
+    return { ok: false, data: [] };
   }
 }
