@@ -141,6 +141,26 @@ export async function POST(request: NextRequest) {
       );
     }
 
+    // 对于 DRIP 再投资，预先在事务外完成汇率查询（外部 HTTP），避免 DB 事务
+    // 在汇率 API 慢时长时间持锁。reinvest 模式下 ids 必然为 1。
+    const reinvestFxByDividendId = new Map<
+      string,
+      { priceUSD: number; exchangeRate: number; currency: string }
+    >();
+    if (requestedMode === 'reinvest') {
+      for (const { dividend, reinvestPrice: normalizedReinvestPrice } of normalizedDividends) {
+        if (normalizedReinvestPrice === null) continue;
+        const asset = assetByTicker.get(dividend.ticker)!;
+        const reinvestCurrency = asset.currency || dividend.currency || 'USD';
+        const fx = await getPriceUSD(normalizedReinvestPrice, reinvestCurrency);
+        reinvestFxByDividendId.set(dividend.id, {
+          priceUSD: fx.priceUSD,
+          exchangeRate: fx.exchangeRate,
+          currency: reinvestCurrency,
+        });
+      }
+    }
+
     const results = await prisma.$transaction(async (tx) => {
       const confirmedResults = [];
 
@@ -184,12 +204,11 @@ export async function POST(request: NextRequest) {
         let reinvestmentQuantity: number | null = null;
 
         if (mode === 'reinvest' && normalizedReinvestPrice) {
+          const reinvestFx = reinvestFxByDividendId.get(dividend.id);
+          if (!reinvestFx) {
+            throw new Error(`Missing reinvest fx for dividend ${dividend.id}`);
+          }
           const quantity = amount / normalizedReinvestPrice;
-          const reinvestCurrency = asset.currency || dividend.currency || 'USD';
-          const {
-            priceUSD: reinvestPriceUSD,
-            exchangeRate: reinvestExchangeRate,
-          } = await getPriceUSD(normalizedReinvestPrice, reinvestCurrency);
 
           const reinvestmentTransaction = await tx.transaction.create({
             data: {
@@ -202,10 +221,10 @@ export async function POST(request: NextRequest) {
               isSystemGenerated: true,
               quantity,
               price: normalizedReinvestPrice,
-              priceUSD: reinvestPriceUSD,
-              exchangeRate: reinvestExchangeRate,
+              priceUSD: reinvestFx.priceUSD,
+              exchangeRate: reinvestFx.exchangeRate,
               fee: 0,
-              currency: reinvestCurrency,
+              currency: reinvestFx.currency,
               date: normalizedReinvestDate || dividend.payDate || dividend.exDate,
               notes: `Dividend reinvestment from ${amount.toFixed(2)} ${dividend.currency}`,
             },

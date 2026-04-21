@@ -1,16 +1,22 @@
 import { NextRequest, NextResponse } from 'next/server';
-import type { Prisma } from '@prisma/client';
+import { Prisma } from '@prisma/client';
 import prisma from '@/lib/prisma';
 import { getCompanyProfile, getBasicFinancials, isFinnhubRateLimited, resetFinnhubRateLimit } from '@/lib/finnhub';
 import { isTwelveDataRateLimited, resetTwelveDataRateLimit } from '@/lib/twelvedata';
 import { getQuote as getTDQuote, get12MonthHistory } from '@/lib/twelvedata';
 import { getQuote as getFinnhubQuote } from '@/lib/finnhub';
+import { requireAuthenticatedUser } from '@/lib/ownership';
 
 export async function POST(
   request: NextRequest,
   { params }: { params: Promise<{ ticker: string }> }
 ) {
   try {
+    const user = await requireAuthenticatedUser();
+    if (!user) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
+
     const { ticker } = await params;
     const decodedTicker = decodeURIComponent(ticker).toUpperCase();
     const forceMode = request.nextUrl.searchParams.get('force');
@@ -119,15 +125,20 @@ export async function POST(
     let historyUpserted = 0;
     if (needsHistorySync) {
       const hv = await get12MonthHistory(decodedTicker);
-      if (hv.length > 0) {
-        const values = hv.map(p => `('${decodedTicker}', '${p.date}'::date, ${p.price})`).join(',');
-        await prisma.$executeRawUnsafe(`
+      const sanitizedRows = hv.filter(
+        (p) => /^\d{4}-\d{2}-\d{2}$/.test(p.date) && Number.isFinite(p.price)
+      );
+      if (sanitizedRows.length > 0) {
+        const rows = sanitizedRows.map(
+          (p) => Prisma.sql`(${decodedTicker}, ${p.date}::date, ${p.price})`
+        );
+        await prisma.$executeRaw`
           INSERT INTO "AssetPriceHistory" (ticker, date, close)
-          VALUES ${values}
+          VALUES ${Prisma.join(rows)}
           ON CONFLICT (ticker, date) DO UPDATE SET close = EXCLUDED.close
-        `);
+        `;
         updateData.historyLastUpdated = currentTime;
-        historyUpserted = hv.length;
+        historyUpserted = sanitizedRows.length;
       }
     }
 

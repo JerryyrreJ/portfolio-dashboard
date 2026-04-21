@@ -510,6 +510,7 @@ export default function DashboardClient({
 
         if (t.type === 'BUY') {
           const qty = Number(t.quantity);
+          if (qty <= 0) continue;
           const unitCost = Number(t.price) + Number(t.fee) / qty;
           current.qty += qty;
           current.cost += qty * unitCost;

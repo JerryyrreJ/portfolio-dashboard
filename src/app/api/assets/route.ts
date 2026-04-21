@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import type { Prisma } from '@prisma/client';
 import prisma from '@/lib/prisma';
+import { requireAuthenticatedUser } from '@/lib/ownership';
 
 interface CreateAssetRequest {
   ticker?: string;
@@ -57,6 +58,11 @@ export async function GET(request: NextRequest) {
 // 创建新资产
 export async function POST(request: NextRequest) {
   try {
+    const user = await requireAuthenticatedUser();
+    if (!user) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
+
     const body: CreateAssetRequest = await request.json();
 
     // 验证必填字段
@@ -69,23 +75,17 @@ export async function POST(request: NextRequest) {
 
     const ticker = body.ticker.toUpperCase();
 
-    // 检查是否已存在相同 ticker 的资产 (case-insensitive)
-    const allAssets = await prisma.asset.findMany({
+    // 检查是否已存在相同 ticker 的资产
+    const existingAsset = await prisma.asset.findUnique({
+      where: { ticker },
       select: { id: true, ticker: true, name: true },
     });
-    const existingAsset = allAssets.find(
-      (a) => a.ticker.toLowerCase() === ticker.toLowerCase()
-    );
 
     if (existingAsset) {
       return NextResponse.json(
         {
           error: 'Asset with this ticker already exists',
-          existingAsset: {
-            id: existingAsset.id,
-            ticker: existingAsset.ticker,
-            name: existingAsset.name,
-          }
+          existingAsset,
         },
         { status: 409 }
       );
@@ -114,10 +114,8 @@ export async function POST(request: NextRequest) {
 
   } catch (error) {
     console.error('Failed to create asset:', error);
-    const errorMessage = error instanceof Error ? error.message : 'Unknown error';
-    const errorStack = error instanceof Error ? error.stack : undefined;
     return NextResponse.json(
-      { error: 'Failed to create asset', details: errorMessage, stack: errorStack },
+      { error: 'Failed to create asset' },
       { status: 500 }
     );
   }

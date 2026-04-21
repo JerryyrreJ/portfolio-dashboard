@@ -209,6 +209,7 @@ export default async function Page({ searchParams }: { searchParams: Promise<{ p
 
     if (t.type === 'BUY') {
       const qty = Number(t.quantity);
+      if (qty <= 0) continue;
       const unitCost = Number(t.price) + Number(t.fee) / qty;
       current.totalQty += qty;
       current.totalCost += qty * unitCost;
@@ -275,13 +276,18 @@ export default async function Page({ searchParams }: { searchParams: Promise<{ p
       try {
         for (const asset of assetsNeedingHistorySync) {
           const history = await get12MonthHistory(asset.ticker);
-          if (history && history.length > 0) {
-            const values = history.map(p => `('${asset.ticker}', '${p.date}'::date, ${p.price})`).join(',');
-            await prisma.$executeRawUnsafe(`
+          const sanitized = history.filter(
+            (p) => /^\d{4}-\d{2}-\d{2}$/.test(p.date) && Number.isFinite(p.price)
+          );
+          if (sanitized.length > 0) {
+            const rows = sanitized.map(
+              (p) => Prisma.sql`(${asset.ticker}, ${p.date}::date, ${p.price})`
+            );
+            await prisma.$executeRaw`
               INSERT INTO "AssetPriceHistory" (ticker, date, close)
-              VALUES ${values}
+              VALUES ${Prisma.join(rows)}
               ON CONFLICT (ticker, date) DO UPDATE SET close = EXCLUDED.close
-            `);
+            `;
             await prisma.asset.update({
               where: { id: asset.id },
               data: { historyLastUpdated: new Date() }
@@ -326,12 +332,19 @@ export default async function Page({ searchParams }: { searchParams: Promise<{ p
             continue;
           }
 
-          const values = history.map(p => `('${indexTicker}', '${p.date}'::date, ${p.price})`).join(',');
-          await withRetry(() => prisma.$executeRawUnsafe(`
+          const sanitized = history.filter(
+            (p) => /^\d{4}-\d{2}-\d{2}$/.test(p.date) && Number.isFinite(p.price)
+          );
+          if (sanitized.length === 0) continue;
+
+          const rows = sanitized.map(
+            (p) => Prisma.sql`(${indexTicker}, ${p.date}::date, ${p.price})`
+          );
+          await withRetry(() => prisma.$executeRaw`
             INSERT INTO "IndexPriceHistory" (ticker, date, close)
-            VALUES ${values}
+            VALUES ${Prisma.join(rows)}
             ON CONFLICT (ticker, date) DO UPDATE SET close = EXCLUDED.close
-          `));
+          `);
         }
       } catch (e) {
         if (isIndexPriceHistoryUnavailable(e)) {
@@ -516,44 +529,40 @@ export default async function Page({ searchParams }: { searchParams: Promise<{ p
     };
   }).filter(p => p.Total > 0);
 
-  // Compute index cumulative returns over the same visible portfolio history range
+  // Compute index cumulative returns over the same visible portfolio history range.
+  // Anchor every benchmark to the portfolio's first chart day (falling back to the
+  // earliest available index price) so the comparison line starts at 0% on the same
+  // date as the portfolio line, no matter when index history happens to begin.
   const INDEX_TICKERS = ['SPY', 'QQQ'] as const;
-  const indexReturnFactors: Record<string, number | null> = { SPY: null, QQQ: null };
   const indexReturnsByDate = new Map<string, { SPY: number | null; QQQ: number | null }>();
+
+  const firstChartLabel = historicalChartData[0]?.date;
+  const indexBaselinePrices: Record<string, number | null> = { SPY: null, QQQ: null };
+
+  if (firstChartLabel) {
+    for (const idx of INDEX_TICKERS) {
+      const prices = indexPriceHistories[idx];
+      if (!prices || prices.length === 0) continue;
+      const baseline = getPriceOnOrBefore(prices, firstChartLabel) ?? prices[0]?.price ?? null;
+      if (baseline != null && baseline > 0) {
+        indexBaselinePrices[idx] = baseline;
+      }
+    }
+  }
 
   for (let i = 0; i < historicalChartData.length; i++) {
     const dateLabel = historicalChartData[i].date;
     const pointReturns: { SPY: number | null; QQQ: number | null } = { SPY: null, QQQ: null };
 
     for (const idx of INDEX_TICKERS) {
+      const baseline = indexBaselinePrices[idx];
       const prices = indexPriceHistories[idx];
-      if (!prices || prices.length === 0) {
-        continue;
-      }
+      if (baseline == null || !prices || prices.length === 0) continue;
 
       const todayPrice = getPriceOnOrBefore(prices, dateLabel);
-      if (todayPrice == null || todayPrice <= 0) {
-        pointReturns[idx] = indexReturnFactors[idx] != null
-          ? Math.round((indexReturnFactors[idx] - 1) * 10000) / 100
-          : null;
-        continue;
-      }
+      if (todayPrice == null || todayPrice <= 0) continue;
 
-      if (indexReturnFactors[idx] == null) {
-        indexReturnFactors[idx] = 1.0;
-        pointReturns[idx] = 0;
-        continue;
-      }
-
-      if (i > 0) {
-        const prevLabel = historicalChartData[i - 1].date;
-        const prevPrice = getPriceOnOrBefore(prices, prevLabel);
-        if (prevPrice != null && prevPrice > 0) {
-          indexReturnFactors[idx] *= todayPrice / prevPrice;
-        }
-      }
-
-      pointReturns[idx] = Math.round((indexReturnFactors[idx] - 1) * 10000) / 100;
+      pointReturns[idx] = Math.round((todayPrice / baseline - 1) * 10000) / 100;
     }
 
     indexReturnsByDate.set(dateLabel, pointReturns);

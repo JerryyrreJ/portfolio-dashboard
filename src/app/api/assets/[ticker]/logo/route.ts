@@ -6,56 +6,52 @@ interface RouteContext {
   params: Promise<{ ticker: string }>;
 }
 
-function sanitizeLogoUrl(value: string | null) {
-  if (!value) return null;
+const BLOCKED_HOSTNAMES = new Set([
+  'localhost',
+  '127.0.0.1',
+  '0.0.0.0',
+  '::1',
+  '169.254.169.254',
+  'metadata.google.internal',
+]);
 
+function isSafeHttpsUrl(value: string | null): value is string {
+  if (!value) return false;
   try {
     const parsed = new URL(value);
-    if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') {
-      return null;
-    }
-    return parsed.toString();
+    if (parsed.protocol !== 'https:') return false;
+    const host = parsed.hostname.toLowerCase();
+    if (BLOCKED_HOSTNAMES.has(host)) return false;
+    if (/^10\./.test(host) || /^192\.168\./.test(host)) return false;
+    if (/^172\.(1[6-9]|2\d|3[01])\./.test(host)) return false;
+    return true;
   } catch {
-    return null;
+    return false;
   }
 }
 
 async function resolveLogoUrl(ticker: string) {
-  let cachedLogo: string | null = null;
-
   try {
     const asset = await withRetry(() => prisma.asset.findUnique({
       where: { ticker },
       select: { logo: true },
     }));
-    cachedLogo = asset?.logo ?? null;
+    return asset?.logo ?? null;
   } catch (error) {
     console.warn(`Failed to read cached logo for ${ticker}:`, error);
+    return null;
   }
-
-  return cachedLogo;
 }
 
 export async function GET(
-  request: NextRequest,
+  _request: NextRequest,
   { params }: RouteContext
 ) {
   const { ticker } = await params;
   const decodedTicker = decodeURIComponent(ticker).toUpperCase();
-  const cachedLogoUrl = await resolveLogoUrl(decodedTicker);
-  const requestedLogoUrl = sanitizeLogoUrl(request.nextUrl.searchParams.get('v'));
-  const logoUrl = requestedLogoUrl ?? cachedLogoUrl;
+  const storedLogoUrl = await resolveLogoUrl(decodedTicker);
 
-  if (requestedLogoUrl && requestedLogoUrl !== cachedLogoUrl) {
-    void withRetry(() => prisma.asset.update({
-      where: { ticker: decodedTicker },
-      data: { logo: requestedLogoUrl },
-    })).catch((error) => {
-      console.warn(`Failed to persist requested logo for ${decodedTicker}:`, error);
-    });
-  }
-
-  if (!logoUrl) {
+  if (!isSafeHttpsUrl(storedLogoUrl)) {
     return new NextResponse('Logo not found', {
       status: 404,
       headers: {
@@ -65,7 +61,7 @@ export async function GET(
   }
 
   try {
-    const response = await fetch(logoUrl, {
+    const response = await fetch(storedLogoUrl, {
       next: { revalidate: 86400 },
     });
 
@@ -73,12 +69,16 @@ export async function GET(
       throw new Error(`Failed to fetch image: ${response.status} ${response.statusText}`);
     }
 
-    const contentType = response.headers.get('content-type');
+    const contentType = response.headers.get('content-type') ?? '';
+    if (!contentType.startsWith('image/')) {
+      throw new Error(`Unexpected content-type: ${contentType}`);
+    }
+
     const buffer = await response.arrayBuffer();
 
     return new NextResponse(buffer, {
       headers: {
-        'Content-Type': contentType || 'image/png',
+        'Content-Type': contentType,
         'Cache-Control': 'public, max-age=3600, s-maxage=86400, stale-while-revalidate=604800',
       },
     });

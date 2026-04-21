@@ -1,9 +1,16 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { requireAuthenticatedUser } from '@/lib/ownership';
 
 const FINNHUB_API_KEY = process.env.FINNHUB_API_KEY;
 const BASE_URL = 'https://finnhub.io/api/v1';
+const MAX_SYMBOLS_PER_REQUEST = 50;
 
 export async function GET(request: NextRequest) {
+  const user = await requireAuthenticatedUser();
+  if (!user) {
+    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  }
+
   const searchParams = request.nextUrl.searchParams;
   const symbolsParam = searchParams.get('symbols');
 
@@ -16,9 +23,16 @@ export async function GET(request: NextRequest) {
   }
 
   const symbols = symbolsParam.split(',').map(s => s.trim().toUpperCase()).filter(Boolean);
-  
+
   if (symbols.length === 0) {
     return NextResponse.json({});
+  }
+
+  if (symbols.length > MAX_SYMBOLS_PER_REQUEST) {
+    return NextResponse.json(
+      { error: `Too many symbols (max ${MAX_SYMBOLS_PER_REQUEST})` },
+      { status: 400 }
+    );
   }
 
   const prices: Record<string, number> = {};
