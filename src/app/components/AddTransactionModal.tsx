@@ -497,6 +497,10 @@ export default function AddTransactionModal({
   };
 
   const [showYearPicker, setShowYearPicker] = useState(false);
+  const showHoldingsSuggestions = searchQuery === '' && holdings.length > 0;
+  const showSearchResults = searchQuery !== '' && searchResults.length > 0;
+  const showNoResults = searchQuery !== '' && searchResults.length === 0 && !isLoading;
+  const shouldShowSearchPanel = isSearchFocused && !selectedStock && (showHoldingsSuggestions || showSearchResults || showNoResults);
 
   // Calendar Components Logic
   const renderCalendar = () => {
@@ -681,10 +685,10 @@ export default function AddTransactionModal({
             )}
 
             {/* Suggestions & Quick Select */}
-            {isSearchFocused && !selectedStock && (
+            {shouldShowSearchPanel && (
               <div className="absolute z-50 w-full mt-2 bg-card/95 backdrop-blur-xl border border-border rounded-2xl shadow-[0_10px_40px_-10px_rgba(0,0,0,0.1)] max-h-60 overflow-y-auto p-2">
                 
-                {searchQuery === '' && holdings.length > 0 && (
+                {showHoldingsSuggestions && (
                   <div className="mb-1 px-1 pt-1 pb-1">
                     <p className="text-[10px] font-bold text-secondary uppercase tracking-widest mb-2 px-2">{t('currentHoldings')}</p>
                     {holdings.map((h) => (
@@ -712,7 +716,7 @@ export default function AddTransactionModal({
                   </div>
                 )}
 
-                {searchQuery !== '' && searchResults.length > 0 && searchResults.map((stock) => (
+                {showSearchResults && searchResults.map((stock) => (
                   <button key={stock.symbol} type="button" onClick={() => {
                     clearSubmissionError();
                     clearFieldError('ticker');
@@ -726,7 +730,7 @@ export default function AddTransactionModal({
                   </button>
                 ))}
 
-                {searchQuery !== '' && searchResults.length === 0 && !isLoading && (
+                {showNoResults && (
                   <div className="p-4 text-center text-secondary text-[13px] font-medium">{t('noResults', { query: searchQuery })}</div>
                 )}
               </div>
