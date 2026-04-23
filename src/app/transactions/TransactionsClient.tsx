@@ -15,6 +15,12 @@ import { useCurrency } from '@/lib/useCurrency';
 import { getCurrencySymbol } from '@/lib/currency';
 import { usePreferences } from '@/lib/usePreferences';
 import type { PortfolioClientRecord } from '@/lib/portfolio-client';
+import {
+  buildTransactionExportFilename,
+  downloadTextFile,
+  getLocalTransactionExportPayload,
+  serializeTransactionExportCsv,
+} from '@/lib/local-transaction-export';
 
 interface TransactionWithAsset {
   id: string;
@@ -172,6 +178,7 @@ export default function TransactionsClient({
   const [isExportOpen, setIsExportOpen] = useState(false);
   const [filterType, setFilterType] = useState(searchType || 'ALL');
   const [filterTicker, setFilterTicker] = useState(searchTicker || '');
+  const isLocalPortfolio = !portfolioId || portfolioId === 'local-portfolio';
   
   const isFilterActive = filterType !== 'ALL' || filterTicker !== '';
 
@@ -327,20 +334,30 @@ export default function TransactionsClient({
     setExportingFormat(format);
 
     try {
-      const requestFormat = format === 'pdf' ? 'json' : format;
-      const params = new URLSearchParams({ format: requestFormat });
-
-      if (portfolioId) params.set('portfolioId', portfolioId);
-      if (filterType !== 'ALL') params.set('type', filterType);
-      if (filterTicker.trim()) params.set('ticker', filterTicker.trim());
-
-      const response = await fetch(`/api/transactions/export?${params.toString()}`);
-      if (!response.ok) {
-        throw new Error('Export failed');
-      }
+      const localPayload = isLocalPortfolio
+        ? getLocalTransactionExportPayload({
+            range: 'all',
+            portfolioName,
+            type: filterType !== 'ALL' ? filterType : null,
+            ticker: filterTicker.trim(),
+          })
+        : null;
 
       if (format === 'pdf') {
-        const data = await response.json() as ExportPayload;
+        const data = localPayload ?? await (async () => {
+          const params = new URLSearchParams({ format: 'json' });
+
+          if (portfolioId) params.set('portfolioId', portfolioId);
+          if (filterType !== 'ALL') params.set('type', filterType);
+          if (filterTicker.trim()) params.set('ticker', filterTicker.trim());
+
+          const response = await fetch(`/api/transactions/export?${params.toString()}`);
+          if (!response.ok) {
+            throw new Error('Export failed');
+          }
+
+          return response.json() as Promise<ExportPayload>;
+        })();
         const doc = new jsPDF();
         const pageWidth = doc.internal.pageSize.getWidth();
         const generatedAt = new Date();
@@ -486,19 +503,42 @@ export default function TransactionsClient({
         return;
       }
 
-      const blob = await response.blob();
-      const downloadUrl = window.URL.createObjectURL(blob);
-      const contentDisposition = response.headers.get('Content-Disposition');
-      const filenameMatch = contentDisposition?.match(/filename="?([^"]+)"?/i);
-      const filename = filenameMatch?.[1] || `portfolio_transactions.${format}`;
+      if (localPayload) {
+        const filename = buildTransactionExportFilename(format, localPayload);
+        const content = format === 'json'
+          ? JSON.stringify(localPayload, null, 2)
+          : serializeTransactionExportCsv(localPayload);
+        const contentType = format === 'json'
+          ? 'application/json; charset=utf-8'
+          : 'text/csv; charset=utf-8';
 
-      const link = document.createElement('a');
-      link.href = downloadUrl;
-      link.download = filename;
-      document.body.appendChild(link);
-      link.click();
-      document.body.removeChild(link);
-      window.URL.revokeObjectURL(downloadUrl);
+        downloadTextFile(filename, content, contentType);
+      } else {
+        const params = new URLSearchParams({ format });
+
+        if (portfolioId) params.set('portfolioId', portfolioId);
+        if (filterType !== 'ALL') params.set('type', filterType);
+        if (filterTicker.trim()) params.set('ticker', filterTicker.trim());
+
+        const response = await fetch(`/api/transactions/export?${params.toString()}`);
+        if (!response.ok) {
+          throw new Error('Export failed');
+        }
+
+        const blob = await response.blob();
+        const downloadUrl = window.URL.createObjectURL(blob);
+        const contentDisposition = response.headers.get('Content-Disposition');
+        const filenameMatch = contentDisposition?.match(/filename="?([^"]+)"?/i);
+        const filename = filenameMatch?.[1] || `portfolio_transactions.${format}`;
+
+        const link = document.createElement('a');
+        link.href = downloadUrl;
+        link.download = filename;
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+        window.URL.revokeObjectURL(downloadUrl);
+      }
       setIsExportOpen(false);
     } catch (error) {
       console.error('Failed to export transactions:', error);

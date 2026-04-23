@@ -41,6 +41,12 @@ import ConfirmationModal from '@/app/components/ConfirmationModal';
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
 import { getCurrencySymbol } from '@/lib/currency';
+import {
+  buildTransactionExportFilename,
+  downloadTextFile,
+  getLocalTransactionExportPayload,
+  serializeTransactionExportCsv,
+} from '@/lib/local-transaction-export';
 
 interface SettingsClientProps {
   initialUser: User | null;
@@ -333,7 +339,7 @@ export default function SettingsClient({ initialUser, initialPortfolios }: Setti
   const [openPreferencesEditor, setOpenPreferencesEditor] = useState<'theme' | 'chartType' | 'colorScheme' | 'costBasis' | 'language' | null>(null);
   const [isExporting, setIsExporting] = useState(false);
   const [exportRange, setExportRange] = useState('all');
-  const [exportFormat, setExportFormat] = useState('csv');
+  const [exportFormat, setExportFormat] = useState<'csv' | 'json' | 'pdf'>('csv');
   const [exportLoading, setExportLoading] = useState(false);
   const longDateFormatter = new Intl.DateTimeFormat(locale, {
     year: 'numeric',
@@ -379,10 +385,21 @@ export default function SettingsClient({ initialUser, initialPortfolios }: Setti
     setExportLoading(true);
     const pidParam = currentPortfolioId ? `&portfolioId=${currentPortfolioId}` : '';
     try {
+      const isLocalExport = !isLoggedIn;
+      const localPayload = isLocalExport
+        ? getLocalTransactionExportPayload({
+            range: exportRange,
+            portfolioName,
+            portfolioCurrency: baseCurrency,
+          })
+        : null;
+
       if (exportFormat === 'pdf') {
-        const response = await fetch(`/api/transactions/export?format=json&range=${exportRange}${pidParam}`);
-        if (!response.ok) throw new Error(tNotifications('fetchPdfFailedMessage'));
-        const data = await response.json() as ExportPayload;
+        const data = localPayload ?? await (async () => {
+          const response = await fetch(`/api/transactions/export?format=json&range=${exportRange}${pidParam}`);
+          if (!response.ok) throw new Error(tNotifications('fetchPdfFailedMessage'));
+          return response.json() as Promise<ExportPayload>;
+        })();
 
         const doc = new jsPDF();
         const pageWidth = doc.internal.pageSize.getWidth();
@@ -531,18 +548,30 @@ export default function SettingsClient({ initialUser, initialPortfolios }: Setti
         showNotification('success', tNotifications('pdfDownloadedTitle'), tNotifications('pdfDownloadedMessage'));
         setIsExporting(false);
       } else {
-        const response = await fetch(`/api/transactions/export?format=${exportFormat}&range=${exportRange}${pidParam}`);
-        if (!response.ok) throw new Error('Export failed');
-        
-        const blob = await response.blob();
-        const url = window.URL.createObjectURL(blob);
-        const a = document.createElement('a');
-        a.href = url;
-        a.download = `portfolio_transactions_${exportRange}.${exportFormat}`;
-        document.body.appendChild(a);
-        a.click();
-        window.URL.revokeObjectURL(url);
-        document.body.removeChild(a);
+        if (localPayload) {
+          const filename = buildTransactionExportFilename(exportFormat, localPayload);
+          const content = exportFormat === 'json'
+            ? JSON.stringify(localPayload, null, 2)
+            : serializeTransactionExportCsv(localPayload);
+          const contentType = exportFormat === 'json'
+            ? 'application/json; charset=utf-8'
+            : 'text/csv; charset=utf-8';
+
+          downloadTextFile(filename, content, contentType);
+        } else {
+          const response = await fetch(`/api/transactions/export?format=${exportFormat}&range=${exportRange}${pidParam}`);
+          if (!response.ok) throw new Error('Export failed');
+          
+          const blob = await response.blob();
+          const url = window.URL.createObjectURL(blob);
+          const a = document.createElement('a');
+          a.href = url;
+          a.download = `portfolio_transactions_${exportRange}.${exportFormat}`;
+          document.body.appendChild(a);
+          a.click();
+          window.URL.revokeObjectURL(url);
+          document.body.removeChild(a);
+        }
         
         showNotification('success', tNotifications('exportCompleteTitle'), tNotifications('exportCompleteMessage', { format: exportFormat.toUpperCase() }));
         setIsExporting(false);
@@ -1280,11 +1309,11 @@ export default function SettingsClient({ initialUser, initialPortfolios }: Setti
                         <div className="space-y-3">
                           <label className="text-[11px] font-bold text-secondary uppercase tracking-[0.1em]">{tPortfolio('fileFormat')}</label>
                           <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 sm:gap-3">
-                            {[
+                            {([
                               { id: 'csv', label: 'CSV', sub: tPortfolio('formatCsvSub') },
                               { id: 'json', label: 'JSON', sub: tPortfolio('formatJsonSub') },
                               { id: 'pdf', label: 'PDF', sub: tPortfolio('formatPdfSub') }
-                            ].map((format) => (
+                            ] as const).map((format) => (
                               <button
                                 key={format.id}
                                 onClick={() => setExportFormat(format.id)}
