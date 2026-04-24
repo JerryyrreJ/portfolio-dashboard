@@ -1,11 +1,15 @@
 'use client';
 
+/* eslint-disable react-hooks/preserve-manual-memoization */
+
 import React, { useState, useCallback, useEffect, useRef } from 'react';
 import { X, Search as SearchIcon, Loader2, Calendar as CalendarIcon, DollarSign, AlertCircle, CheckCircle, ChevronRight, Hash, ChevronLeft, ChevronDown } from 'lucide-react';
 import { format, addMonths, subMonths, startOfMonth, endOfMonth, startOfWeek, endOfWeek, isSameMonth, isSameDay, eachDayOfInterval } from 'date-fns';
 import { useLocale, useTranslations } from 'next-intl';
 import { useStock } from '@/hooks/useStock';
-import { getCurrencySymbol } from '@/lib/currency';
+import { getCurrencySymbol, USD_RATES } from '@/lib/currency';
+import { createTransaction, getNamespaceForUser } from '@/lib/ledger/db';
+import type { User as SupabaseUser } from '@supabase/supabase-js';
 import CachedAssetLogo from './CachedAssetLogo';
 
 function inferCurrencyFromTicker(symbol: string): string {
@@ -50,6 +54,7 @@ interface AddTransactionModalProps {
   portfolioId: string;
   defaultTicker?: string;
   defaultTickerName?: string;
+  user?: SupabaseUser | null;
 }
 
 interface SearchResult {
@@ -77,6 +82,7 @@ export default function AddTransactionModal({
   portfolioId,
   defaultTicker,
   defaultTickerName,
+  user = null,
 }: AddTransactionModalProps) {
   const t = useTranslations('addTransaction');
   const locale = useLocale();
@@ -105,7 +111,10 @@ export default function AddTransactionModal({
   const [selectedStock, setSelectedStock] = useState<SearchResult | null>(null);
 
   const txTypeRef = useRef(transactionType);
-  txTypeRef.current = transactionType;
+
+  useEffect(() => {
+    txTypeRef.current = transactionType;
+  }, [transactionType]);
 
   // 货币与Logo
   const [txCurrency, setTxCurrency] = useState('USD');
@@ -156,25 +165,6 @@ export default function AddTransactionModal({
     const holding = holdings.find(h => h.ticker === ticker);
     return holding ? holding.quantity : 0;
   }, [holdings]);
-
-  useEffect(() => {
-    if (isOpen) {
-      fetchHoldings();
-      setPurchaseDate(new Date().toISOString().split('T')[0]);
-
-      if (defaultTicker) {
-        const ticker = defaultTicker.toUpperCase();
-        const mockStock: SearchResult = {
-          symbol: ticker,
-          displaySymbol: ticker,
-          description: defaultTickerName || ticker,
-          type: t('commonStock'),
-        };
-        setSearchQuery(ticker);
-        handleSelectStock(mockStock);
-      }
-    }
-  }, [isOpen, fetchHoldings, defaultTicker]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // 搜索股票逻辑
   useEffect(() => {
@@ -332,6 +322,29 @@ export default function AddTransactionModal({
     setIsFetchingPrice(false);
   }, [clearFieldError, purchaseDate, getQuote, getHistoricalPrice]);
 
+  useEffect(() => {
+    if (!isOpen) return;
+
+    const timer = window.setTimeout(() => {
+      void fetchHoldings();
+      setPurchaseDate(new Date().toISOString().split('T')[0]);
+
+      if (defaultTicker) {
+        const ticker = defaultTicker.toUpperCase();
+        const mockStock: SearchResult = {
+          symbol: ticker,
+          displaySymbol: ticker,
+          description: defaultTickerName || ticker,
+          type: t('commonStock'),
+        };
+        setSearchQuery(ticker);
+        void handleSelectStock(mockStock);
+      }
+    }, 0);
+
+    return () => window.clearTimeout(timer);
+  }, [defaultTicker, defaultTickerName, fetchHoldings, handleSelectStock, isOpen, t]);
+
   const handleDateSelect = useCallback(async (date: Date) => {
     const dateStr = format(date, 'yyyy-MM-dd');
     setPurchaseDate(dateStr);
@@ -410,86 +423,31 @@ export default function AddTransactionModal({
 
     setSubmitStatus('loading');
     try {
-      // 检查是否登录（通过检查 cookie 或传递的 props，这里简单通过 portfolioId 判断）
-      const isLocal = portfolioId === 'local-portfolio';
-
-      if (isLocal) {
-        // 1. 获取最新价格（可选，仅仅为了记录当时的 market value，这里已经有 price 了）
-        // 2. 构造本地 Transaction 对象
-        const newTx = {
-            id: 'local_' + Date.now(),
-            portfolioId: 'local-portfolio',
-            assetId: 'local_asset_' + selectedStock.symbol,
-            type: transactionType,
-            quantity: transactionType === 'DIVIDEND' ? 1 : Math.abs(parseFloat(shares)),
-            price: parseFloat(price),
-            fee: transactionType === 'DIVIDEND' ? 0 : (parseFloat(fees) || 0),
-            date: new Date(purchaseDate).toISOString(),
-            notes: notes || null,
-            asset: {
-                id: 'local_asset_' + selectedStock.symbol,
-                ticker: selectedStock.symbol,
-                name: selectedStock.description,
-                market: 'US', // 假设
-                logo: null
-            }
-        };
-
-        // 3. 读取现有的 localStorage
-        const storedTransactions = localStorage.getItem('local_transactions');
-        const localTxs = storedTransactions ? JSON.parse(storedTransactions) : [];
-        localTxs.push(newTx);
-
-        // 4. 保存回 localStorage
-        localStorage.setItem('local_transactions', JSON.stringify(localTxs));
-
-        // 5. 触发自定义事件，通知 DashboardClient 重新加载本地数据
-        window.dispatchEvent(new Event('localTransactionsUpdated'));
-
-        queueSuccessClose();
-        return;
-      }
-
-      // 以下为已登录状态的网络请求逻辑
-      const assetLookupRes = await fetch(`/api/assets/lookup?ticker=${encodeURIComponent(selectedStock.symbol)}`);
-      let assetId: string;
-
-      if (assetLookupRes.ok) {
-        const assetData = await assetLookupRes.json();
-        assetId = assetData.id;
-      } else {
-        const createAssetRes = await fetch('/api/assets', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            ticker: selectedStock.symbol,
-            name: selectedStock.description,
-            market: 'US',
-            currency: txCurrency,
-          }),
-        });
-        const newAsset = await createAssetRes.json();
-        assetId = newAsset.asset?.id ?? newAsset.id;
-      }
-
-      const response = await fetch('/api/transactions', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          portfolioId,
-          assetId,
-          type: transactionType,
-          quantity: transactionType === 'DIVIDEND' ? 1 : Math.abs(parseFloat(shares)),
-          price: parseFloat(price),
-          fee: transactionType === 'DIVIDEND' ? 0 : (parseFloat(fees) || 0),
-          date: purchaseDate,
-          notes: notes || null,
+      const exchangeRate = USD_RATES[txCurrency] ?? 1;
+      const parsedPrice = parseFloat(price);
+      await createTransaction({
+        namespace: getNamespaceForUser(user?.id),
+        portfolioId,
+        type: transactionType,
+        quantity: transactionType === 'DIVIDEND' ? 1 : Math.abs(parseFloat(shares)),
+        price: parsedPrice,
+        priceUSD: parsedPrice / exchangeRate,
+        exchangeRate,
+        fee: transactionType === 'DIVIDEND' ? 0 : (parseFloat(fees) || 0),
+        date: new Date(purchaseDate).toISOString(),
+        notes: notes || null,
+        currency: txCurrency,
+        asset: {
+          ticker: selectedStock.symbol,
+          name: selectedStock.description,
+          market: 'US',
           currency: txCurrency,
-        }),
+          logo: txLogo,
+        },
       });
 
-      if (!response.ok) throw new Error(t('submissionFailed'));
-      queueSuccessClose(() => window.location.reload());
+      window.dispatchEvent(new Event('localTransactionsUpdated'));
+      queueSuccessClose();
     } catch {
       setSubmitStatus('error');
       setSubmitError(t('recordFailed'));

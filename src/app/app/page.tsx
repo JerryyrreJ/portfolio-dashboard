@@ -226,6 +226,7 @@ export default async function Page({ searchParams }: { searchParams: Promise<{ p
       holdingsData: [],
       chartData: [],
       summary: { totalValue: 0, totalCapGain: 0, totalCapGainPercentage: 0, totalRealizedGain: 0, totalDividendIncome: 0 },
+      user,
     });
   }
   // 已登录：查找当前用户所有 Portfolios，没有则自动创建
@@ -279,6 +280,7 @@ export default async function Page({ searchParams }: { searchParams: Promise<{ p
       summary: { totalValue: 0, totalCapGain: 0, totalCapGainPercentage: 0, totalRealizedGain: 0, totalDividendIncome: 0 },
       initialPendingDividendCount,
       userDisplayName,
+      user,
     })
   }
 
@@ -685,5 +687,6 @@ export default async function Page({ searchParams }: { searchParams: Promise<{ p
     summary,
     initialPendingDividendCount,
     userDisplayName,
+    user,
   });
 }

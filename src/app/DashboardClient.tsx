@@ -36,6 +36,8 @@ import DashboardSkeleton from './components/DashboardSkeleton';
 import Link from 'next/link';
 import { useCurrency } from '@/lib/useCurrency';
 import { usePreferences } from '@/lib/usePreferences';
+import { usePortfolioDashboard } from '@/lib/ledger/react';
+import type { User as SupabaseUser } from '@supabase/supabase-js';
 import type { PortfolioClientRecord } from '@/lib/portfolio-client';
 
 // --- 辅助格式化组件 ---
@@ -100,6 +102,7 @@ interface DashboardClientProps {
   summary: Summary;
   initialPendingDividendCount?: number;
   userDisplayName?: string;
+  user?: SupabaseUser | null;
 }
 
 interface ChartPoint {
@@ -241,14 +244,16 @@ export default function DashboardClient({
   summary,
   initialPendingDividendCount = 0,
   userDisplayName = '',
+  user = null,
 }: DashboardClientProps) {
   const router = useRouter();
   const locale = useLocale();
   const t = useTranslations('dashboard');
   const { symbol, convert, fmt } = useCurrency();
+  const isGuest = !user?.id;
   const { prefs, colors } = usePreferences({
     initialPortfolios,
-    cloudSync: portfolioId !== 'local-portfolio',
+    cloudSync: !isGuest,
   });
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isDividendModalOpen, setIsDividendModalOpen] = useState(false);
@@ -274,14 +279,34 @@ export default function DashboardClient({
   const [localHoldings, setLocalHoldings] = useState<HoldingsGroup[]>(holdingsData);
   const [localSummary, setLocalSummary] = useState<Summary>(summary);
   const [localChartData, setLocalChartData] = useState<ChartPoint[]>(chartData);
+  const [livePrices, setLivePrices] = useState<Record<string, number>>({});
+  const ledgerPortfolioId = isGuest ? undefined : portfolioId;
+  const ledger = usePortfolioDashboard(user, ledgerPortfolioId, livePrices, prefs.costBasisMethod ?? 'FIFO');
+  const activePortfolioId = ledger.activePortfolioId ?? portfolioId;
+  const isLocalPortfolio = isGuest;
+  const activePortfolioName = ledger.portfolios.find((portfolio) => portfolio.id === activePortfolioId)?.name ?? portfolioName;
+  const activePortfolios = ledger.ready && ledger.portfolios.length > 0
+    ? ledger.portfolios.map((portfolio) => ({ id: portfolio.id, name: portfolio.name }))
+    : portfolios;
+  const displayHoldings = ledger.ready ? ledger.holdings : localHoldings;
+  const displaySummary = ledger.ready ? ledger.summary : localSummary;
+  const displayChartData = useMemo<ChartPoint[]>(() => (
+    ledger.ready
+      ? [{ date: 'Today', Local: ledger.summary.totalValue, Total: ledger.summary.totalValue }]
+      : localChartData
+  ), [ledger.ready, ledger.summary.totalValue, localChartData]);
 
   // 切换 portfolio 时显示骨架屏，同步 props → state
   const [isSwitching, setIsSwitching] = useState(false);
   const isFirstRender = useRef(true);
-  const fetchedPricesForPortfolioRef = useRef<string | null>(null);
+  const fetchedPriceKeyRef = useRef<string | null>(null);
   const refreshedProfileLogosForPortfolioRef = useRef<string | null>(null);
 
   useEffect(() => {
+    if (ledger.ready && ledger.portfolios.length > 0) {
+      return;
+    }
+
     if (isFirstRender.current) {
       isFirstRender.current = false;
       return;
@@ -299,21 +324,21 @@ export default function DashboardClient({
       cancelAnimationFrame(openFrame);
       cancelAnimationFrame(closeFrame);
     };
-  }, [chartData, holdingsData, portfolioId, summary]);
+  }, [chartData, holdingsData, ledger.portfolios.length, ledger.ready, portfolioId, summary]);
 
   useEffect(() => {
-    if (!portfolioId || portfolioId === 'local-portfolio') return;
-    if (refreshedProfileLogosForPortfolioRef.current === portfolioId) return;
+    if (!activePortfolioId || isLocalPortfolio) return;
+    if (refreshedProfileLogosForPortfolioRef.current === activePortfolioId) return;
 
     const tickers = [
       ...new Set(
-        localHoldings.flatMap((group) => group.holdings.map((holding) => holding.ticker)).filter(Boolean)
+        displayHoldings.flatMap((group) => group.holdings.map((holding) => holding.ticker)).filter(Boolean)
       ),
     ];
 
     if (tickers.length === 0) return;
 
-    refreshedProfileLogosForPortfolioRef.current = portfolioId;
+    refreshedProfileLogosForPortfolioRef.current = activePortfolioId;
     let cancelled = false;
 
     const refreshVisibleAssetProfiles = async () => {
@@ -339,7 +364,7 @@ export default function DashboardClient({
     return () => {
       cancelled = true;
     };
-  }, [localHoldings, portfolioId, router]);
+  }, [activePortfolioId, displayHoldings, isLocalPortfolio, router]);
 
   const formatYTick = (value: number) => {
     if (chartMode === 'return') return `${value > 0 ? '+' : ''}${value.toFixed(1)}%`;
@@ -350,17 +375,18 @@ export default function DashboardClient({
 
   // --- 客户端异步获取实时价格 ---
   useEffect(() => {
-    if (fetchedPricesForPortfolioRef.current === portfolioId) return;
-    fetchedPricesForPortfolioRef.current = portfolioId;
-
     // 直接用服务端传下来的 holdingsData 作为 source of truth，避免从
-    // localHoldings 读（那会在 effect 自身的 setState 后再触发一次读到自己的脏输出）。
+    // displayHoldings 读（那会在 effect 自身的 setState 后再触发一次读到自己的脏输出）。
     const tickers = new Set<string>();
-    holdingsData.forEach(group => {
+    const sourceHoldings = ledger.ready ? ledger.holdings : holdingsData;
+    sourceHoldings.forEach(group => {
       group.holdings.forEach(h => tickers.add(h.ticker));
     });
 
     if (tickers.size === 0) return;
+    const priceKey = `${activePortfolioId}:${Array.from(tickers).sort().join(',')}`;
+    if (fetchedPriceKeyRef.current === priceKey) return;
+    fetchedPriceKeyRef.current = priceKey;
 
     const fetchLivePrices = async () => {
       try {
@@ -374,6 +400,7 @@ export default function DashboardClient({
         if (!res.ok) return;
 
         const livePrices: Record<string, number> = await res.json();
+        setLivePrices(livePrices);
 
         if (Object.keys(livePrices).length === 0) return;
 
@@ -381,7 +408,7 @@ export default function DashboardClient({
         let newTotalValue = 0;
         let newTotalCost = 0;
 
-        const updatedHoldings = holdingsData.map(group => ({
+        const updatedHoldings = sourceHoldings.map(group => ({
           ...group,
           holdings: group.holdings.map(h => {
             const costBasis = h.totalCost;
@@ -422,10 +449,10 @@ export default function DashboardClient({
     return () => {
       window.clearTimeout(timer);
     };
-  }, [portfolioId, holdingsData]);
+  }, [activePortfolioId, holdingsData, ledger.holdings, ledger.ready]);
 
   // 获取待确认分红数量
-  const pendingDividendCount = pendingDividendCountOverride?.portfolioId === portfolioId
+  const pendingDividendCount = pendingDividendCountOverride?.portfolioId === activePortfolioId
     ? pendingDividendCountOverride.count
     : initialPendingDividendCount;
 
@@ -433,11 +460,11 @@ export default function DashboardClient({
     let cancelled = false;
 
     const syncAndRefreshDividendStats = async () => {
-      if (portfolioId === 'local-portfolio') return;
+      if (isLocalPortfolio) return;
 
       // 客户端节流：与服务端 6 小时节流保持一致，避免每次加载都发请求
       const THROTTLE_MS = 6 * 60 * 60 * 1000;
-      const storageKey = `dividend_sync_at_${portfolioId}`;
+      const storageKey = `dividend_sync_at_${activePortfolioId}`;
       const lastSyncAt = Number(localStorage.getItem(storageKey) || 0);
       const shouldSync = Date.now() - lastSyncAt >= THROTTLE_MS;
 
@@ -447,7 +474,7 @@ export default function DashboardClient({
         await fetch('/api/transactions/dividends/sync', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ portfolioId }),
+          body: JSON.stringify({ portfolioId: activePortfolioId }),
         });
         localStorage.setItem(storageKey, String(Date.now()));
       } catch (err) {
@@ -456,11 +483,11 @@ export default function DashboardClient({
       }
 
       try {
-        const response = await fetch(`/api/transactions/dividends/stats?portfolioId=${portfolioId}`);
+        const response = await fetch(`/api/transactions/dividends/stats?portfolioId=${activePortfolioId}`);
         if (!cancelled && response.ok) {
           const data = await response.json();
           setPendingDividendCountOverride({
-            portfolioId,
+            portfolioId: activePortfolioId,
             count: data.pendingCount || 0,
           });
         }
@@ -477,12 +504,12 @@ export default function DashboardClient({
       cancelled = true;
       window.clearTimeout(timer);
     };
-  }, [portfolioId]);
+  }, [activePortfolioId, isLocalPortfolio]);
 
   // 初始化和监听本地数据
   useEffect(() => {
     // 非本地模式（已登录），无需加载 localStorage
-    if (portfolioId !== 'local-portfolio') {
+    if (ledger.ready || !isLocalPortfolio) {
       return;
     }
 
@@ -602,11 +629,11 @@ export default function DashboardClient({
     const handleLocalUpdate = () => loadLocalData();
     window.addEventListener('localTransactionsUpdated', handleLocalUpdate);
     return () => window.removeEventListener('localTransactionsUpdated', handleLocalUpdate);
-  }, [portfolioId, prefs.costBasisMethod]);
+  }, [isLocalPortfolio, ledger.ready, prefs.costBasisMethod]);
 
   const filteredChartData = useMemo<ChartPoint[]>(() => {
     if (chartTimeRange === 'All') {
-      return localChartData;
+      return displayChartData;
     }
 
     const now = new Date();
@@ -626,11 +653,11 @@ export default function DashboardClient({
         break;
     }
 
-    return localChartData.filter((item) => {
+    return displayChartData.filter((item) => {
       if (item.date === 'Today') return true;
       return new Date(item.date) >= startDate;
     });
-  }, [chartTimeRange, localChartData]);
+  }, [chartTimeRange, displayChartData]);
 
   const chartDisplayData = useMemo<ChartPoint[]>(() => {
     if (chartMode !== 'return' || chartTimeRange === 'All') {
@@ -767,27 +794,28 @@ export default function DashboardClient({
       return calcYTicksForKeys(chartDisplayData, keys);
     }
 
-    const key = portfolioId === 'local-portfolio' ? 'Local' : 'Total';
+    const key = isLocalPortfolio ? 'Local' : 'Total';
     return calcYTicks(chartDisplayData, key);
-  }, [benchmark, chartDisplayData, chartMode, portfolioId]);
+  }, [benchmark, chartDisplayData, chartMode, isLocalPortfolio]);
 
   const handleRefresh = async () => {
     setIsRefreshing(true);
-    window.location.reload();
+    await ledger.syncNow();
+    setIsRefreshing(false);
   };
 
-  const totalReturnAbs = localSummary.totalCapGain + (localSummary.totalDividendIncome || 0);
-  const totalCostBase = localSummary.totalValue - localSummary.totalCapGain;
+  const totalReturnAbs = displaySummary.totalCapGain + (displaySummary.totalDividendIncome || 0);
+  const totalCostBase = displaySummary.totalValue - displaySummary.totalCapGain;
   const totalReturnPct = totalCostBase > 0 ? (totalReturnAbs / totalCostBase) * 100 : 0;
 
   const isUp = totalReturnAbs >= 0;
   const upColor = isUp ? colors.gain : colors.loss;
-  const isUnrealizedUp = localSummary.totalCapGain >= 0;
+  const isUnrealizedUp = displaySummary.totalCapGain >= 0;
   const unrealizedColor = isUnrealizedUp ? colors.gain : colors.loss;
-  const safeRealizedGain = isNaN(localSummary.totalRealizedGain) ? 0 : localSummary.totalRealizedGain;
+  const safeRealizedGain = isNaN(displaySummary.totalRealizedGain) ? 0 : displaySummary.totalRealizedGain;
   const isRealizedUp = safeRealizedGain >= 0;
   const realizedColor = isRealizedUp ? colors.gain : colors.loss;
-  const totalHoldingsCount = localHoldings.reduce((sum: number, g: HoldingsGroup) => sum + g.holdings.length, 0);
+  const totalHoldingsCount = displayHoldings.reduce((sum: number, g: HoldingsGroup) => sum + g.holdings.length, 0);
 
   if (isSwitching) {
     return <DashboardSkeleton />;
@@ -804,8 +832,8 @@ export default function DashboardClient({
               <span>Folio</span>
             </div>
           <nav className="hidden md:flex space-x-7 text-[14px] font-semibold text-secondary">
-            <a href={`/app${portfolioId !== 'local-portfolio' ? `?pid=${portfolioId}` : ''}`} className="text-primary border-b-2 border-primary py-[16px]">{t('nav.investments')}</a>
-            <a href={`/transactions${portfolioId !== 'local-portfolio' ? `?pid=${portfolioId}` : ''}`} className="hover:text-primary transition-colors py-[16px]">{t('nav.transactions')}</a>
+            <a href={`/app${!isLocalPortfolio ? `?pid=${activePortfolioId}` : ''}`} className="text-primary border-b-2 border-primary py-[16px]">{t('nav.investments')}</a>
+            <a href={`/transactions${!isLocalPortfolio ? `?pid=${activePortfolioId}` : ''}`} className="hover:text-primary transition-colors py-[16px]">{t('nav.transactions')}</a>
           </nav>
         </div>
         <div className="flex items-center space-x-5">
@@ -827,7 +855,7 @@ export default function DashboardClient({
 
             {/* Mobile Transactions Link */}
             <Link
-              href={`/transactions${portfolioId !== 'local-portfolio' ? `?pid=${portfolioId}` : ''}`}
+              href={`/transactions${!isLocalPortfolio ? `?pid=${activePortfolioId}` : ''}`}
               className="md:hidden w-7 h-7 rounded-full bg-element-hover border border-border flex items-center justify-center text-secondary active:bg-gray-200 transition-colors shadow-sm"
               title={t('nav.transactions')}
             >
@@ -874,15 +902,15 @@ export default function DashboardClient({
         {/* 标题 & 操作按钮 - 紧凑布局 */}
         <div className="flex justify-between items-center mb-6 gap-4">
           <div className="flex items-center space-x-3 min-w-0">
-            {portfolios.length > 1 ? (
+            {activePortfolios.length > 1 ? (
               <PortfolioSwitcher
-                portfolios={portfolios}
-                currentId={portfolioId}
+                portfolios={activePortfolios}
+                currentId={activePortfolioId}
                 variant="title"
               />
             ) : (
               <h1 className="text-[24px] sm:text-[28px] font-bold text-primary tracking-tight leading-tight">
-                {portfolioName || t('header.portfolioFallback')}
+                {activePortfolioName || t('header.portfolioFallback')}
               </h1>
             )}
             <span className={`hidden sm:inline-block text-[13px] font-medium px-2 py-0.5 rounded-md transition-colors shrink-0 ${isRateLimited ? 'text-rose-500 bg-rose-50/50' : 'text-secondary bg-element-hover'}`}>
@@ -909,7 +937,7 @@ export default function DashboardClient({
         </div>
 
         {/* Pending Dividends Notification Banner */}
-        {pendingDividendCount > 0 && portfolioId !== 'local-portfolio' && (
+        {pendingDividendCount > 0 && !isLocalPortfolio && (
           <div className="mb-8 animate-in fade-in slide-in-from-top-4 duration-700 ease-out">
             <div 
               onClick={() => setIsDividendModalOpen(true)}
@@ -957,7 +985,7 @@ export default function DashboardClient({
               <Plus className="w-4 h-4" />
               <span>{t('empty.cta')}</span>
             </button>
-            <p className="text-xs text-secondary mt-6 font-medium">{portfolioId === 'local-portfolio' ? t('empty.localHint') : t('empty.accountHint')}</p>
+            <p className="text-xs text-secondary mt-6 font-medium">{isLocalPortfolio ? t('empty.localHint') : t('empty.accountHint')}</p>
           </div>
         ) : (
           <>
@@ -970,7 +998,7 @@ export default function DashboardClient({
               <p className="text-[11px] text-secondary font-bold uppercase tracking-wider mb-1">{t('summary.portfolioValue')}</p>
               <div className="flex items-baseline space-x-1">
                 <span className="text-[28px] font-bold text-primary tracking-tight tabular-nums">
-                  {fmt(localSummary.totalValue)}
+                  {fmt(displaySummary.totalValue)}
                 </span>
               </div>
               <div className="mt-2 flex items-center space-x-2">
@@ -988,7 +1016,7 @@ export default function DashboardClient({
                 <p className="text-[11px] text-secondary font-bold uppercase tracking-wider mb-1">{t('summary.unrealizedPnL')}</p>
                 <div className="flex items-baseline">
                   <span className={`text-[20px] font-bold tracking-tight tabular-nums ${unrealizedColor.tailwind.text}`}>
-                    {isUnrealizedUp ? '+' : '-'}{fmt(Math.abs(localSummary.totalCapGain))}
+                    {isUnrealizedUp ? '+' : '-'}{fmt(Math.abs(displaySummary.totalCapGain))}
                   </span>
                 </div>
                 <p className="text-secondary text-[11px] font-medium mt-0.5">{t('summary.openPositions')}</p>
@@ -1013,8 +1041,8 @@ export default function DashboardClient({
                   <DollarSign className="w-3.5 h-3.5 text-secondary opacity-0 group-hover/div:opacity-100 transition-opacity" />
                 </div>
                 <div className="flex items-baseline justify-between">
-                  <span className={`text-[20px] font-bold tracking-tight tabular-nums ${localSummary.totalDividendIncome > 0 ? colors.gain.tailwind.text : 'text-secondary'}`}>
-                    {localSummary.totalDividendIncome > 0 ? '+' : ''}{fmt(localSummary.totalDividendIncome || 0)}
+                  <span className={`text-[20px] font-bold tracking-tight tabular-nums ${displaySummary.totalDividendIncome > 0 ? colors.gain.tailwind.text : 'text-secondary'}`}>
+                    {displaySummary.totalDividendIncome > 0 ? '+' : ''}{fmt(displaySummary.totalDividendIncome || 0)}
                   </span>
                 </div>
                 <p className="text-secondary text-[11px] font-medium mt-0.5">{t('summary.cashFlow')}</p>
@@ -1027,7 +1055,7 @@ export default function DashboardClient({
                 <p className="text-[22px] font-bold text-primary tracking-tight">{totalHoldingsCount}</p>
               </div>
               <div className="flex -space-x-1.5">
-                {localHoldings.flatMap(g => g.holdings).slice(0, 3).map((h) => (
+                {displayHoldings.flatMap(g => g.holdings).slice(0, 3).map((h) => (
                   <div key={h.ticker} className="w-7 h-7 rounded-full bg-card border border-border flex items-center justify-center text-[9px] font-bold text-secondary shadow-sm overflow-hidden z-10">
                     <CachedAssetLogo
                       ticker={h.ticker}
@@ -1054,7 +1082,7 @@ export default function DashboardClient({
                       {chartSubtitle.text}
                     </p>
                   </div>
-                  {portfolioId !== 'local-portfolio' && (
+                  {!isLocalPortfolio && (
                     <div className="flex items-center shrink-0">
                       <div className="flex bg-element rounded-lg p-0.5 border border-border">
                         {(['value', 'return'] as const).map((mode) => (
@@ -1072,7 +1100,7 @@ export default function DashboardClient({
                     </div>
                   )}
                 </div>
-                {chartMode === 'return' && portfolioId !== 'local-portfolio' && (
+                {chartMode === 'return' && !isLocalPortfolio && (
                   <div className="flex items-center gap-2">
                     <span className="text-[11px] text-secondary font-medium">vs</span>
                     {(['SPY', 'QQQ'] as const).map((idx) => (
@@ -1110,7 +1138,7 @@ export default function DashboardClient({
                       if (chartMode === 'return') {
                         isGain = (lastPoint.Return ?? 0) >= 0;
                       } else {
-                        const key = portfolioId === 'local-portfolio' ? 'Local' : 'Total';
+                        const key = isLocalPortfolio ? 'Local' : 'Total';
                         isGain = (lastPoint[key] ?? 0) >= (firstPoint[key] ?? 0);
                       }
                     }
@@ -1153,7 +1181,7 @@ export default function DashboardClient({
                               : [`${fmt(numVal)}`, t('chart.value')];
                           }}
                         />
-                        {portfolioId === 'local-portfolio' ? (
+                        {isLocalPortfolio ? (
                           <Area type="monotone" dataKey="Local" stroke={chartColorHex} strokeWidth={2} fill="var(--bg-element)" fillOpacity={1} activeDot={{ r: 4, strokeWidth: 0, fill: chartColorHex }} />
                         ) : (
                           <Area type="monotone" dataKey={chartMode === 'return' ? 'Return' : 'Total'} stroke={chartColorHex} strokeWidth={2} fill="url(#colorTotal)" activeDot={{ r: 4, strokeWidth: 0, fill: chartColorHex }} />
@@ -1232,7 +1260,7 @@ export default function DashboardClient({
                 </tr>
               </thead>
               <tbody className="divide-y divide-border bg-card">
-                {localHoldings.map((group) => (
+                {displayHoldings.map((group) => (
                   <React.Fragment key={group.market}>
                     {/* 分组标题行 */}
                     <tr className="bg-element/30">
@@ -1298,10 +1326,10 @@ export default function DashboardClient({
                   <td className="px-4 sm:px-6 py-4 text-[13px] text-primary">{t('holdings.total')}</td>
                   <td className="px-4 sm:px-6 py-4 hidden md:table-cell"></td>
                   <td className="px-4 sm:px-6 py-4 hidden sm:table-cell"></td>
-                  <td className="px-4 sm:px-6 py-4 text-right text-[14px] sm:text-[15px] text-primary tabular-nums">{fmt(localSummary.totalValue)}</td>
+                  <td className="px-4 sm:px-6 py-4 text-right text-[14px] sm:text-[15px] text-primary tabular-nums">{fmt(displaySummary.totalValue)}</td>
                   <td className="px-4 sm:px-6 py-4 text-right">
                     <FormatValue
-                      val={returnDisplayMode === 'percentage' ? localSummary.totalCapGainPercentage : localSummary.totalCapGain}
+                      val={returnDisplayMode === 'percentage' ? displaySummary.totalCapGainPercentage : displaySummary.totalCapGain}
                       isPercentage={returnDisplayMode === 'percentage'}
                       isCurrency={returnDisplayMode === 'currency'}
                       symbol={symbol}
@@ -1323,18 +1351,19 @@ export default function DashboardClient({
       <AddTransactionModal
         isOpen={isModalOpen}
         onClose={() => setIsModalOpen(false)}
-        portfolioName={portfolioName}
-        portfolioId={portfolioId}
+        portfolioName={activePortfolioName}
+        portfolioId={activePortfolioId}
+        user={user}
       />
 
       <DividendConfirmationModal
         isOpen={isDividendModalOpen}
         onClose={() => setIsDividendModalOpen(false)}
-        portfolioId={portfolioId}
+        portfolioId={activePortfolioId}
         onConfirmed={() => {
           // Refresh the page to show updated dividend income
           setPendingDividendCountOverride({
-            portfolioId,
+            portfolioId: activePortfolioId,
             count: 0,
           });
           window.location.reload();
