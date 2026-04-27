@@ -137,17 +137,33 @@ export async function POST(request: NextRequest) {
       const payload = toPortfolioPayload(operation.payload);
       if (!payload) continue;
 
-      await prisma.portfolio.upsert({
+      const existingPortfolio = await prisma.portfolio.findUnique({
         where: { id: payload.id },
-        create: {
-          id: payload.id,
-          userId: user.id,
-          name: payload.name,
-          currency: payload.currency,
-          preferences: payload.preferences,
-          settingsUpdatedAt: payload.settingsUpdatedAt ? new Date(payload.settingsUpdatedAt) : null,
-        },
-        update: {
+        select: { id: true, userId: true },
+      });
+
+      if (!existingPortfolio) {
+        await prisma.portfolio.create({
+          data: {
+            id: payload.id,
+            userId: user.id,
+            name: payload.name,
+            currency: payload.currency,
+            preferences: payload.preferences,
+            settingsUpdatedAt: payload.settingsUpdatedAt ? new Date(payload.settingsUpdatedAt) : null,
+          },
+        });
+        applied += 1;
+        continue;
+      }
+
+      if (existingPortfolio.userId !== user.id) {
+        continue;
+      }
+
+      await prisma.portfolio.update({
+        where: { id: payload.id },
+        data: {
           name: payload.name,
           currency: payload.currency,
           preferences: payload.preferences,
@@ -196,27 +212,48 @@ export async function POST(request: NextRequest) {
         },
       });
 
-      await prisma.transaction.upsert({
+      const existingTransaction = await prisma.transaction.findUnique({
         where: { id: payload.id },
-        create: {
-          id: payload.id,
-          portfolioId: payload.portfolioId,
-          assetId: asset.id,
-          type: payload.type,
-          eventId: payload.eventId,
-          source: payload.source,
-          subtype: payload.subtype,
-          isSystemGenerated: payload.isSystemGenerated ?? false,
-          date: new Date(payload.date),
-          quantity: payload.quantity,
-          price: payload.price,
-          priceUSD: payload.priceUSD,
-          exchangeRate: payload.exchangeRate,
-          fee: payload.fee,
-          currency: payload.currency,
-          notes: payload.notes,
+        select: {
+          id: true,
+          portfolio: {
+            select: { userId: true },
+          },
         },
-        update: {
+      });
+
+      if (!existingTransaction) {
+        await prisma.transaction.create({
+          data: {
+            id: payload.id,
+            portfolioId: payload.portfolioId,
+            assetId: asset.id,
+            type: payload.type,
+            eventId: payload.eventId,
+            source: payload.source,
+            subtype: payload.subtype,
+            isSystemGenerated: payload.isSystemGenerated ?? false,
+            date: new Date(payload.date),
+            quantity: payload.quantity,
+            price: payload.price,
+            priceUSD: payload.priceUSD,
+            exchangeRate: payload.exchangeRate,
+            fee: payload.fee,
+            currency: payload.currency,
+            notes: payload.notes,
+          },
+        });
+        applied += 1;
+        continue;
+      }
+
+      if (existingTransaction.portfolio.userId !== user.id) {
+        continue;
+      }
+
+      await prisma.transaction.update({
+        where: { id: payload.id },
+        data: {
           assetId: asset.id,
           type: payload.type,
           eventId: payload.eventId,

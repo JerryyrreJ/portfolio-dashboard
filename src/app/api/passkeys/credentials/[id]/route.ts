@@ -13,6 +13,12 @@ export async function DELETE(
 
   try {
     const { id } = await params;
+    const credentials = await passkeyApi.user(user.id).credentials();
+    const isOwnedCredential = credentials.some((credential) => credential.id === id);
+    if (!isOwnedCredential) {
+      return NextResponse.json({ error: "Credential not found" }, { status: 404 });
+    }
+
     await passkeyApi.credential(id).remove();
     return NextResponse.json({ success: true });
   } catch (err: unknown) {
