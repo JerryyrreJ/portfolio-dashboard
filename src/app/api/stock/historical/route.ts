@@ -1,9 +1,22 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { applyRateLimit } from '@/lib/rate-limit';
 
 const TWELVEDATA_API_KEY = process.env.TWELVEDATA_API_KEY;
 const BASE_URL = 'https://api.twelvedata.com';
 
 export async function GET(request: NextRequest) {
+  const rateLimit = await applyRateLimit(request, {
+    keyPrefix: 'api:stock:historical',
+    limit: 60,
+    windowMs: 60_000,
+  });
+  if (!rateLimit.allowed) {
+    return NextResponse.json(
+      { error: 'Too many requests' },
+      { status: 429, headers: rateLimit.headers }
+    );
+  }
+
   const searchParams = request.nextUrl.searchParams;
   const symbol = searchParams.get('symbol');
   const date = searchParams.get('date'); // 格式: YYYY-MM-DD
@@ -52,18 +65,18 @@ export async function GET(request: NextRequest) {
         open: parseFloat(latest.open),
         high: parseFloat(latest.high),
         low: parseFloat(latest.low),
-      });
+      }, { headers: rateLimit.headers });
     } else {
       return NextResponse.json(
         { error: data.message || 'No data available for the specified date' },
-        { status: 404 }
+        { status: 404, headers: rateLimit.headers }
       );
     }
   } catch (error) {
     console.error('Historical price error:', error);
     return NextResponse.json(
       { error: 'Failed to fetch historical price' },
-      { status: 500 }
+      { status: 500, headers: rateLimit.headers }
     );
   }
 }

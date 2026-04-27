@@ -3,6 +3,44 @@ import { getPriceUSD } from '@/lib/exchange-rate';
 import prisma from '@/lib/prisma';
 import { findOwnedPortfolio, requireAuthenticatedUser } from '@/lib/ownership';
 
+const MAX_LIMIT = 200;
+
+function parsePositiveNumber(value: unknown): number | null {
+  const parsed = typeof value === 'number' ? value : Number(value);
+  if (!Number.isFinite(parsed) || parsed <= 0) {
+    return null;
+  }
+  return parsed;
+}
+
+function parseNonNegativeNumber(value: unknown, fallback = 0): number | null {
+  if (value === undefined || value === null || value === '') {
+    return fallback;
+  }
+  const parsed = typeof value === 'number' ? value : Number(value);
+  if (!Number.isFinite(parsed) || parsed < 0) {
+    return null;
+  }
+  return parsed;
+}
+
+function parseIsoDate(value: unknown): Date | null {
+  if (typeof value !== 'string' || !value.trim()) {
+    return null;
+  }
+  const parsed = new Date(value);
+  if (Number.isNaN(parsed.getTime())) {
+    return null;
+  }
+  return parsed;
+}
+
+function parsePaginationValue(value: string | null, fallback: number) {
+  if (value === null) return fallback;
+  if (!/^\d+$/.test(value)) return null;
+  return Number(value);
+}
+
 // 创建新交易记录
 export async function POST(request: NextRequest) {
   try {
@@ -33,17 +71,34 @@ export async function POST(request: NextRequest) {
       );
     }
 
+    const quantity = parsePositiveNumber(body.quantity);
+    const price = parsePositiveNumber(body.price);
+    const fee = parseNonNegativeNumber(body.fee, 0);
+    const date = parseIsoDate(body.date);
+
     // 验证数量和价格为正数
-    if (body.quantity <= 0 || body.price <= 0) {
+    if (quantity === null || price === null) {
       return NextResponse.json(
         { error: 'Quantity and price must be positive numbers' },
+        { status: 400 }
+      );
+    }
+    if (fee === null) {
+      return NextResponse.json(
+        { error: 'Fee must be a non-negative number' },
+        { status: 400 }
+      );
+    }
+    if (date === null) {
+      return NextResponse.json(
+        { error: 'Invalid date' },
         { status: 400 }
       );
     }
 
     // 服务端计算 priceUSD 和 exchangeRate
     const currency = body.currency || 'USD';
-    const { priceUSD, exchangeRate } = await getPriceUSD(parseFloat(body.price), currency);
+    const { priceUSD, exchangeRate } = await getPriceUSD(price, currency);
 
     const portfolio = await findOwnedPortfolio(user.id, body.portfolioId);
     if (!portfolio) {
@@ -59,10 +114,10 @@ export async function POST(request: NextRequest) {
         portfolioId: body.portfolioId,
         assetId: body.assetId,
         type: body.type,
-        quantity: parseFloat(body.quantity),
-        price: parseFloat(body.price),
-        fee: parseFloat(body.fee || 0),
-        date: new Date(body.date),
+        quantity,
+        price,
+        fee,
+        date,
         currency,
         exchangeRate,
         priceUSD,
@@ -123,8 +178,17 @@ export async function GET(request: NextRequest) {
 
     const searchParams = request.nextUrl.searchParams;
     const portfolioId = searchParams.get('portfolioId');
-    const limit = parseInt(searchParams.get('limit') || '50');
-    const offset = parseInt(searchParams.get('offset') || '0');
+    const rawLimit = parsePaginationValue(searchParams.get('limit'), 50);
+    const rawOffset = parsePaginationValue(searchParams.get('offset'), 0);
+    if (rawLimit === null || rawOffset === null) {
+      return NextResponse.json(
+        { error: 'Invalid pagination parameters' },
+        { status: 400 }
+      );
+    }
+
+    const limit = Math.min(Math.max(rawLimit, 1), MAX_LIMIT);
+    const offset = Math.max(rawOffset, 0);
 
     if (portfolioId) {
       const portfolio = await findOwnedPortfolio(user.id, portfolioId);

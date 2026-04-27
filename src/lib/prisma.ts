@@ -13,6 +13,7 @@ const REQUIRED_DELEGATES = [
   'indexPriceHistory',
   'transaction',
   'pendingDividend',
+  'rateLimitCounter',
 ] as const satisfies readonly (keyof PrismaClientInstance)[]
 
 function hasRequiredDelegates(client: PrismaClientInstance) {

@@ -3,6 +3,8 @@ import prisma from '@/lib/prisma';
 import { requireAuthenticatedUser } from '@/lib/ownership';
 import type { LedgerSyncOperation } from '@/lib/ledger/types';
 
+const MAX_OPERATIONS_PER_REQUEST = 200;
+
 type TransactionPayload = {
   id: string;
   portfolioId: string;
@@ -21,10 +23,6 @@ type TransactionPayload = {
   notes?: string | null;
   asset: {
     ticker: string;
-    name: string;
-    market: string;
-    currency: string;
-    logo?: string | null;
   };
 };
 
@@ -68,10 +66,7 @@ function toTransactionPayload(payload: Record<string, unknown>): TransactionPayl
     typeof payload.fee !== 'number' ||
     typeof payload.currency !== 'string' ||
     !isRecord(payload.asset) ||
-    typeof payload.asset.ticker !== 'string' ||
-    typeof payload.asset.name !== 'string' ||
-    typeof payload.asset.market !== 'string' ||
-    typeof payload.asset.currency !== 'string'
+    typeof payload.asset.ticker !== 'string'
   ) {
     return null;
   }
@@ -93,11 +88,7 @@ function toTransactionPayload(payload: Record<string, unknown>): TransactionPayl
     currency: payload.currency,
     notes: typeof payload.notes === 'string' ? payload.notes : null,
     asset: {
-      ticker: payload.asset.ticker,
-      name: payload.asset.name,
-      market: payload.asset.market,
-      currency: payload.asset.currency,
-      logo: typeof payload.asset.logo === 'string' ? payload.asset.logo : null,
+      ticker: payload.asset.ticker.toUpperCase(),
     },
   };
 }
@@ -112,6 +103,14 @@ export async function POST(request: NextRequest) {
   const operations = Array.isArray(body.operations) ? body.operations as LedgerSyncOperation[] : [];
   if (operations.length === 0) {
     return NextResponse.json({ ok: true, applied: 0 });
+  }
+  if (operations.length > MAX_OPERATIONS_PER_REQUEST) {
+    return NextResponse.json(
+      {
+        error: `Too many operations in one request (max ${MAX_OPERATIONS_PER_REQUEST})`,
+      },
+      { status: 413 }
+    );
   }
 
   const orderedOperations = [...operations].sort(
@@ -195,21 +194,18 @@ export async function POST(request: NextRequest) {
       });
       if (!portfolio) continue;
 
+      // Do not trust client-provided asset metadata in sync payloads.
+      // Asset profile fields are server-owned and updated by provider sync routes.
       const asset = await prisma.asset.upsert({
-        where: { ticker: payload.asset.ticker.toUpperCase() },
+        where: { ticker: payload.asset.ticker },
         create: {
-          ticker: payload.asset.ticker.toUpperCase(),
-          name: payload.asset.name,
-          market: payload.asset.market,
-          currency: payload.asset.currency,
-          logo: payload.asset.logo,
+          ticker: payload.asset.ticker,
+          name: payload.asset.ticker,
+          market: 'US',
+          currency: 'USD',
         },
-        update: {
-          name: payload.asset.name,
-          market: payload.asset.market,
-          currency: payload.asset.currency,
-          logo: payload.asset.logo,
-        },
+        update: {},
+        select: { id: true },
       });
 
       const existingTransaction = await prisma.transaction.findUnique({

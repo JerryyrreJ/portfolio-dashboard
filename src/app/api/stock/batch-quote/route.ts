@@ -1,10 +1,23 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { applyRateLimit } from '@/lib/rate-limit';
 
 const FINNHUB_API_KEY = process.env.FINNHUB_API_KEY;
 const BASE_URL = 'https://finnhub.io/api/v1';
 const MAX_SYMBOLS_PER_REQUEST = 50;
 
 export async function GET(request: NextRequest) {
+  const rateLimit = await applyRateLimit(request, {
+    keyPrefix: 'api:stock:batch-quote',
+    limit: 30,
+    windowMs: 60_000,
+  });
+  if (!rateLimit.allowed) {
+    return NextResponse.json(
+      { error: 'Too many requests' },
+      { status: 429, headers: rateLimit.headers }
+    );
+  }
+
   const searchParams = request.nextUrl.searchParams;
   const symbolsParam = searchParams.get('symbols');
 
@@ -19,7 +32,7 @@ export async function GET(request: NextRequest) {
   const symbols = symbolsParam.split(',').map(s => s.trim().toUpperCase()).filter(Boolean);
 
   if (symbols.length === 0) {
-    return NextResponse.json({});
+    return NextResponse.json({}, { headers: rateLimit.headers });
   }
 
   if (symbols.length > MAX_SYMBOLS_PER_REQUEST) {
@@ -65,13 +78,16 @@ export async function GET(request: NextRequest) {
 
       await Promise.allSettled(fetchPromises);
 
-      const nextResponse = NextResponse.json(prices);
+      const nextResponse = NextResponse.json(prices, { headers: rateLimit.headers });
       if (hasRateLimit) {
         nextResponse.headers.set('X-RateLimit-Exhausted', 'true');
       }
       return nextResponse;
   } catch (error) {
     console.error('Batch quote error:', error);
-    return NextResponse.json({ error: 'Failed to fetch batch quotes' }, { status: 500 });
+    return NextResponse.json(
+      { error: 'Failed to fetch batch quotes' },
+      { status: 500, headers: rateLimit.headers }
+    );
   }
 }

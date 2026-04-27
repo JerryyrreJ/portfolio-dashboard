@@ -1,10 +1,24 @@
 import { NextResponse } from 'next/server';
 import { USD_RATES } from '@/lib/currency';
 import { createServerProfiler } from '@/lib/perf';
+import { applyRateLimit } from '@/lib/rate-limit';
+import type { NextRequest } from 'next/server';
 
 const EXCHANGE_API_KEY = process.env.EXCHANGE_RATE_API_KEY;
 
-export async function GET() {
+export async function GET(request: NextRequest) {
+  const rateLimit = await applyRateLimit(request, {
+    keyPrefix: 'api:exchange-rates',
+    limit: 30,
+    windowMs: 60_000,
+  });
+  if (!rateLimit.allowed) {
+    return NextResponse.json(
+      { error: 'Too many requests' },
+      { status: 429, headers: rateLimit.headers }
+    );
+  }
+
   const perf = createServerProfiler('api/exchange-rates.GET');
   // Always return USD-based rates for consistent conversion logic
   // Client will handle the conversion to the target currency
@@ -15,7 +29,7 @@ export async function GET() {
       rates: USD_RATES,
       lastUpdated: new Date().toISOString(),
       isFallback: true,
-    });
+    }, { headers: rateLimit.headers });
   }
 
   try {
@@ -41,7 +55,7 @@ export async function GET() {
       base: 'USD',
       rates,
       lastUpdated: new Date().toISOString(),
-    });
+    }, { headers: rateLimit.headers });
   } catch {
     perf.flush('fallback=fetch-error');
     return NextResponse.json({
@@ -49,6 +63,6 @@ export async function GET() {
       rates: USD_RATES,
       lastUpdated: new Date().toISOString(),
       isFallback: true,
-    });
+    }, { headers: rateLimit.headers });
   }
 }

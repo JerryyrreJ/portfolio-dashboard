@@ -113,3 +113,12 @@ model PendingDividend {
   @@unique([portfolioId, ticker, exDate, sourceKey])
   @@index([portfolioId, status])
 }
+
+model RateLimitCounter {
+  key     String   @id
+  count   Int      @default(0)
+  resetAt DateTime
+  updatedAt DateTime @updatedAt
+
+  @@index([resetAt])
+}
