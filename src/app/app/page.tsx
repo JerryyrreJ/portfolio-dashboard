@@ -10,6 +10,14 @@ import prisma, { withRetry } from '@/lib/prisma'
 import { getPriceOnOrBefore } from '@/lib/portfolio-chart'
 import { createServerProfiler } from '@/lib/perf'
 import { absoluteUrl, siteConfig } from '@/lib/site'
+import {
+  deriveAggregatedPortfolioDashboard,
+  parseCostBasisMethod,
+} from '@/lib/portfolio-aggregation'
+import {
+  buildPortfolioSelectionLabel,
+  resolvePortfolioSelection,
+} from '@/lib/portfolio-selection'
 
 export const metadata: Metadata = {
   title: "Dashboard",
@@ -32,13 +40,9 @@ export const metadata: Metadata = {
   },
 };
 
-type HoldingLot = {
-  qty: number;
-  unitCost: number;
-};
-
 const dashboardTransactionSelect = Prisma.validator<Prisma.TransactionDefaultArgs>()({
   select: {
+    portfolioId: true,
     type: true,
     date: true,
     quantity: true,
@@ -58,17 +62,6 @@ const dashboardTransactionSelect = Prisma.validator<Prisma.TransactionDefaultArg
   },
 });
 
-type DashboardTransaction = Prisma.TransactionGetPayload<typeof dashboardTransactionSelect>;
-type DashboardAsset = DashboardTransaction["asset"];
-
-type HoldingAccumulator = {
-  asset: DashboardAsset;
-  totalQty: number;
-  totalCost: number;
-  realizedGain: number;
-  dividendIncome: number;
-  lots: HoldingLot[];
-}
 
 function getIndexPriceHistoryDelegate() {
   const delegate = (prisma as typeof prisma & {
@@ -200,13 +193,15 @@ async function runIndexHistorySync(
   return work
 }
 
-export default async function Page({ searchParams }: { searchParams: Promise<{ pid?: string }> }) {
-  const [user, { pid }, locale, messages] = await Promise.all([
+export default async function Page({ searchParams }: { searchParams: Promise<{ pid?: string; pids?: string }> }) {
+  const [user, rawSearchParams, locale, messages] = await Promise.all([
     getUser(),
     searchParams,
     getLocale(),
     getMessages(),
   ])
+  const searchSelection = rawSearchParams as { pid?: string; pids?: string }
+  const pid = searchSelection.pid
   const perf = createServerProfiler('app/dashboard', pid ? `pid=${pid}` : undefined)
   const userDisplayName = user
     ? (user.user_metadata?.display_name || user.email?.split('@')[0] || '')
@@ -223,6 +218,10 @@ export default async function Page({ searchParams }: { searchParams: Promise<{ p
       portfolioName: "My Portfolio",
       portfolios: [],
       initialPortfolios: [],
+      selectedPortfolioIds: [],
+      selectionMode: 'single',
+      selectionCanWrite: true,
+      isAllPortfoliosSelected: false,
       holdingsData: [],
       chartData: [],
       summary: { totalValue: 0, totalCapGain: 0, totalCapGainPercentage: 0, totalRealizedGain: 0, totalDividendIncome: 0 },
@@ -251,18 +250,23 @@ export default async function Page({ searchParams }: { searchParams: Promise<{ p
     settingsUpdatedAt: portfolio.settingsUpdatedAt?.toISOString() ?? null,
   }))
 
-  // 根据 ?pid= 选中 portfolio，找不到则 fallback 到第一个
-  const selectedMeta = allPortfolios.find(p => p.id === pid) ?? allPortfolios[0]
+  const selection = resolvePortfolioSelection(allPortfolios, searchSelection)
+  const selectedPortfolioIds = selection.portfolioIds
+  const primaryPortfolio = allPortfolios.find((portfolio) => portfolio.id === selection.primaryPortfolioId) ?? allPortfolios[0]
+  const selectionLabel = buildPortfolioSelectionLabel(selection, portfolioMeta, {
+    allLabel: 'All Portfolios',
+    countLabel: (count) => `${count} Portfolios`,
+  })
 
   const [transactions, initialPendingDividendCount] = await Promise.all([
     perf.time('transaction.findManyWithAsset', () => withRetry(() => prisma.transaction.findMany({
-      where: { portfolioId: selectedMeta.id },
+      where: { portfolioId: { in: selectedPortfolioIds } },
       ...dashboardTransactionSelect,
       orderBy: { date: 'asc' },
     }))),
     perf.time('pendingDividend.count', () => withRetry(() => prisma.pendingDividend.count({
       where: {
-        portfolioId: selectedMeta.id,
+        portfolioId: { in: selectedPortfolioIds },
         status: 'pending',
       },
     }))),
@@ -271,10 +275,14 @@ export default async function Page({ searchParams }: { searchParams: Promise<{ p
   if (transactions.length === 0) {
     perf.flush(`user=${user.id} tx=0`);
     return renderDashboard({
-      portfolioId: selectedMeta.id,
-      portfolioName: selectedMeta.name,
+      portfolioId: primaryPortfolio.id,
+      portfolioName: selectionLabel,
       portfolios: portfolioMeta,
       initialPortfolios: initialPortfolioRecords,
+      selectedPortfolioIds,
+      selectionMode: selection.mode,
+      selectionCanWrite: selection.canWrite,
+      isAllPortfoliosSelected: selection.isAllSelected,
       holdingsData: [],
       chartData: [],
       summary: { totalValue: 0, totalCapGain: 0, totalCapGainPercentage: 0, totalRealizedGain: 0, totalDividendIncome: 0 },
@@ -284,88 +292,13 @@ export default async function Page({ searchParams }: { searchParams: Promise<{ p
     })
   }
 
-  // 2. 读取用户偏好的成本计算方式
-  let costBasisMethod: 'FIFO' | 'AVCO' = 'FIFO';
-  if (selectedMeta.preferences) {
-    try {
-      const parsed = JSON.parse(selectedMeta.preferences);
-      if (parsed.costBasisMethod === 'AVCO') costBasisMethod = 'AVCO';
-    } catch { /* 忽略解析错误，使用默认值 */ }
-  }
+  const costBasisByPortfolio = new Map(
+    allPortfolios.map((portfolio) => [portfolio.id, parseCostBasisMethod(portfolio.preferences)])
+  )
 
-  // 3. 核心财务逻辑：通过历史交易流水计算实时持仓 (Holdings)
-  const holdingsMap = new Map<string, HoldingAccumulator>();
-
-  for (const t of transactions) {
-    const ticker = t.asset.ticker;
-    if (!holdingsMap.has(ticker)) {
-      holdingsMap.set(ticker, {
-        asset: t.asset,
-        totalQty: 0,
-        totalCost: 0,
-        realizedGain: 0,
-        dividendIncome: 0,
-        // FIFO 专用：买入批次队列 [{ qty, unitCost }]
-        lots: [],
-      })
-    }
-    const current = holdingsMap.get(ticker);
-    if (!current) continue;
-
-    if (t.type === 'BUY') {
-      const qty = Number(t.quantity);
-      if (qty <= 0) continue;
-      const unitCost = Number(t.price) + Number(t.fee) / qty;
-      current.totalQty += qty;
-      current.totalCost += qty * unitCost;
-      if (costBasisMethod === 'FIFO') {
-        current.lots.push({ qty, unitCost });
-      }
-    } else if (t.type === 'SELL') {
-      const sellQty = Number(t.quantity);
-      const sellPrice = Number(t.price);
-      const sellFee = Number(t.fee);
-
-      if (costBasisMethod === 'FIFO') {
-        // FIFO：从最早的批次开始消耗
-        let remaining = sellQty;
-        let costOfSold = 0;
-        while (remaining > 0 && current.lots.length > 0) {
-          const lot = current.lots[0];
-          const consumed = Math.min(remaining, lot.qty);
-          costOfSold += consumed * lot.unitCost;
-          lot.qty -= consumed;
-          remaining -= consumed;
-          if (lot.qty <= 0) current.lots.shift();
-        }
-        current.realizedGain += (sellPrice * sellQty - sellFee) - costOfSold;
-        current.totalQty -= sellQty;
-        current.totalCost = current.lots.reduce(
-          (s: number, l: { qty: number; unitCost: number }) => s + l.qty * l.unitCost, 0
-        );
-      } else {
-        // AVCO：加权平均成本
-        const avgCost = current.totalQty > 0 ? current.totalCost / current.totalQty : 0;
-        current.realizedGain += (sellPrice - avgCost) * sellQty - sellFee;
-        current.totalQty -= sellQty;
-        current.totalCost -= avgCost * sellQty;
-      }
-
-      if (current.totalQty <= 0) {
-        current.totalQty = 0;
-        current.totalCost = 0;
-        current.lots = [];
-      }
-    } else if (t.type === 'DIVIDEND') {
-      const payout = Number(t.price) * Number(t.quantity);
-      current.dividendIncome += payout;
-    }
-  }
-
-  // 3. 计算当前市值和盈亏 (并发获取实时数据)
-  let totalValue = 0;
-  let totalCostBase = 0;
-  const assetsWithLogo = Array.from(holdingsMap.values()).map(h => h.asset);
+  const assetsWithLogo = Array.from(
+    new Map(transactions.map((transaction) => [transaction.asset.ticker, transaction.asset])).values()
+  );
   const logoMap: Record<string, string | null> = {};
 
   // --- 核心改动：不再在此处 await fetchBatchQuotes ---
@@ -410,51 +343,44 @@ export default async function Page({ searchParams }: { searchParams: Promise<{ p
     logoMap[asset.ticker] = asset.logo;
   }
 
-  const calculatedHoldings = Array.from(holdingsMap.values()).filter(h => h.totalQty > 0).map(h => {
-    const currentPrice = h.asset.lastPrice || 0;
-    const value = currentPrice * h.totalQty;
-    const capGain = value - h.totalCost;
-    const returnPct = h.totalCost > 0 ? (capGain / h.totalCost) * 100 : 0;
+  const derivedDashboard = deriveAggregatedPortfolioDashboard(
+    transactions.map((transaction) => ({
+      portfolioId: transaction.portfolioId,
+      date: transaction.date,
+      type: transaction.type as 'BUY' | 'SELL' | 'DIVIDEND',
+      quantity: transaction.quantity,
+      price: transaction.price,
+      fee: transaction.fee,
+      asset: {
+        ticker: transaction.asset.ticker,
+        name: transaction.asset.name,
+        market: transaction.asset.market,
+        logo: transaction.asset.logo,
+        lastPrice: transaction.asset.lastPrice,
+      },
+    })),
+    {
+      getCostBasisMethodForPortfolio: (portfolioId) => costBasisByPortfolio.get(portfolioId) ?? 'FIFO',
+    },
+  )
 
-    totalValue += value;
-    totalCostBase += h.totalCost;
+  const holdingsData = derivedDashboard.holdings.map((group) => ({
+    market: group.market,
+    holdings: group.holdings.map((holding) => ({
+      ...holding,
+      logo: logoMap[holding.ticker] ?? holding.logo ?? null,
+    })),
+  }))
 
-    return {
-      ticker: h.asset.ticker,
-      name: h.asset.name,
-      market: h.asset.market,
-      price: currentPrice,
-      qty: h.totalQty,
-      value: value,
-      totalCost: h.totalCost,
-      capGain: capGain,
-      return: returnPct,
-      dividendIncome: h.dividendIncome,
-      logo: logoMap[h.asset.ticker],
-    }
-  });
-
-  // 4. 数据按 Market 分组 (NASDAQ, NYSE, OTC)
-  const markets = Array.from(new Set(calculatedHoldings.map(h => h.market)));
-  const holdingsData = markets.map(m => ({
-    market: m,
-    holdings: calculatedHoldings.filter(h => h.market === m)
-  }));
-
-  const totalCapGain = totalValue - totalCostBase;
-  const totalCapGainPercentage = totalCostBase > 0 ? (totalCapGain / totalCostBase) * 100 : 0;
-
-  let totalRealizedGain = 0;
-  let totalDividendIncome = 0;
-  for (const h of holdingsMap.values()) {
-    totalRealizedGain += h.realizedGain;
-    totalDividendIncome += h.dividendIncome;
-  }
+  const summary = derivedDashboard.summary
+  const holdingPriceByTicker = new Map(
+    holdingsData.flatMap((group) => group.holdings.map((holding) => [holding.ticker, holding.price] as const))
+  )
 
   // 5. 时间轴走势数据 (给折线图)
 
   // 5a. 从 AssetPriceHistory 表读取所有持仓的日度价格（过去1年）
-  const tickers = Array.from(holdingsMap.keys());
+  const tickers = Array.from(new Set(transactions.map((transaction) => transaction.asset.ticker)));
   const oneYearAgo = new Date();
   oneYearAgo.setFullYear(oneYearAgo.getFullYear() - 1);
 
@@ -638,10 +564,10 @@ export default async function Page({ searchParams }: { searchParams: Promise<{ p
       if (!dayPrices) continue;
       const prevPrice = getPriceOnOrBefore(dayPrices, lastLabel);
       // 今天实时价格从 holdingsData 里取
-      const holding = calculatedHoldings.find(h => h.ticker === ticker);
-      if (prevPrice == null || !holding || prevPrice === 0) continue;
+      const livePrice = holdingPriceByTicker.get(ticker);
+      if (prevPrice == null || livePrice == null || prevPrice === 0) continue;
       const weight = qty * prevPrice;
-      dailyFactor += (holding.price / prevPrice) * weight;
+      dailyFactor += (livePrice / prevPrice) * weight;
       weightSum += weight;
     }
     if (weightSum > 0) {
@@ -660,28 +586,24 @@ export default async function Page({ searchParams }: { searchParams: Promise<{ p
     ...historicalChartDataWithIndex,
     {
       date: 'Today',
-      Total: Math.round(totalValue * 100) / 100,
+      Total: Math.round(summary.totalValue * 100) / 100,
       Return: Math.round((todayReturnFactor - 1) * 10000) / 100,
       SPY: todayIndexReturns['SPY'],
       QQQ: todayIndexReturns['QQQ'],
     },
   ];
 
-  const summary = {
-    totalValue,
-    totalCapGain,
-    totalCapGainPercentage,
-    totalRealizedGain,
-    totalDividendIncome,
-  };
-
   // 6. 将所有算好的数据作为 Props 传递给客户端组件渲染
-  perf.flush(`user=${user.id} tx=${transactions.length} holdings=${holdingsMap.size} chart=${historicalChartData.length}`);
+  perf.flush(`user=${user.id} tx=${transactions.length} holdings=${holdingsData.reduce((sum, group) => sum + group.holdings.length, 0)} chart=${historicalChartData.length}`);
   return renderDashboard({
-    portfolioId: selectedMeta.id,
-    portfolioName: selectedMeta.name,
+    portfolioId: primaryPortfolio.id,
+    portfolioName: selectionLabel,
     portfolios: portfolioMeta,
     initialPortfolios: initialPortfolioRecords,
+    selectedPortfolioIds,
+    selectionMode: selection.mode,
+    selectionCanWrite: selection.canWrite,
+    isAllPortfoliosSelected: selection.isAllSelected,
     holdingsData,
     chartData,
     summary,

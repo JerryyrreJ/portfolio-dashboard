@@ -83,7 +83,7 @@ export async function applyRateLimit(
       allowed: record.count <= config.limit,
       headers: buildHeaders(config.limit, remaining, record.resetAt.getTime()),
     };
-  } catch (error) {
+  } catch {
     // Fallback: fail-open to avoid blocking critical API flows when DB is transiently unavailable.
     const resetAt = nowDate.getTime() + config.windowMs;
     return {

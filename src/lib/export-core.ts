@@ -4,6 +4,7 @@ export type TransactionExportType = 'BUY' | 'SELL' | 'DIVIDEND';
 
 export type TransactionExportRequest = {
   portfolioId?: string;
+  portfolioIds?: string[];
   ticker?: string;
   type?: TransactionExportType;
   range: TransactionExportRange;
@@ -39,6 +40,16 @@ export type TransactionExportPayload = {
     name: string;
     currency: string;
   };
+  selection?: {
+    portfolioIds: string[];
+    label: string;
+    mode: 'single' | 'multi';
+  };
+  portfolios?: Array<{
+    id: string;
+    name: string;
+    currency: string;
+  }>;
   exportDate: string;
   range: TransactionExportRange;
   filters: {
@@ -57,6 +68,8 @@ type ExportPortfolioMeta = {
 
 type BuildTransactionExportPayloadOptions = {
   portfolio: ExportPortfolioMeta;
+  selection?: TransactionExportPayload['selection'];
+  portfolios?: TransactionExportPayload['portfolios'];
   range: TransactionExportRange;
   ticker?: string | null;
   type?: TransactionExportType | null;
@@ -116,6 +129,8 @@ export function buildTransactionExportPayload(
 
   return {
     portfolio: options.portfolio,
+    selection: options.selection,
+    portfolios: options.portfolios,
     exportDate: new Date().toISOString(),
     range: options.range,
     filters: {
@@ -140,9 +155,10 @@ function formatCsvAmount(value: number) {
 }
 
 export function serializeTransactionExportCsv(payload: TransactionExportPayload) {
-  const header = 'Date,Ticker,Name,Market,Type,Quantity,Price,Currency,Fee,Total Value,Notes\n';
+  const header = 'Date,Portfolio,Ticker,Name,Market,Type,Quantity,Price,Currency,Fee,Total Value,Notes\n';
   const rows = payload.transactions.map((transaction) => ([
     transaction.date,
+    escapeCsvValue(transaction.portfolioName),
     escapeCsvValue(transaction.ticker),
     escapeCsvValue(transaction.name),
     escapeCsvValue(transaction.market),

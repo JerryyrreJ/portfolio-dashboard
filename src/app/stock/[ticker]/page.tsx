@@ -13,7 +13,7 @@ import { absoluteUrl, getStockPageJsonLd, siteConfig } from '@/lib/site'
 
 interface PageProps {
   params: Promise<{ ticker: string }>
-  searchParams: Promise<{ pid?: string }>
+  searchParams: Promise<{ pid?: string; pids?: string }>
 }
 
 type StockDetailData = Parameters<typeof StockDetailClient>[0]["stockData"]
@@ -162,7 +162,8 @@ export default async function StockDetailPage(props: PageProps) {
   const { ticker } = params
   const decodedTicker = decodeURIComponent(ticker).toUpperCase()
   const pid = searchParams.pid
-  const perf = createServerProfiler('stock/page', `ticker=${decodedTicker}${pid ? ` pid=${pid}` : ''}`)
+  const pids = searchParams.pids
+  const perf = createServerProfiler('stock/page', `ticker=${decodedTicker}${pids ? ` pids=${pids}` : pid ? ` pid=${pid}` : ''}`)
 
   const user = await perf.time('getUser', () => getUser())
   const userDisplayName = user
@@ -281,6 +282,7 @@ export default async function StockDetailPage(props: PageProps) {
     lastUpdated: asset.lastPriceUpdated || new Date(),
     chartData,
     requestedPortfolioId: pid ?? '',
+    requestedPortfolioIds: pids ?? (pid ?? ''),
     profile,
     metrics,
     userDisplayName,

@@ -4,6 +4,10 @@ import type { PortfolioClientRecord } from '@/lib/portfolio-client';
 import { getUser } from '@/lib/supabase-server';
 import prisma, { withRetry } from '@/lib/prisma';
 import TransactionsClient from './TransactionsClient';
+import {
+  buildPortfolioSelectionLabel,
+  resolvePortfolioSelection,
+} from '@/lib/portfolio-selection';
 
 interface TransactionWithAsset {
   id: string;
@@ -26,27 +30,31 @@ interface TransactionWithAsset {
     market: string;
     logo?: string | null;
   };
+  portfolio: {
+    id: string;
+    name: string;
+  };
 }
 
 
 async function getPortfolioWithTransactions(
-  portfolioId: string,
+  portfolioIds: string[],
   searchParams: { [key: string]: string | undefined }
 ): Promise<{ transactions: TransactionWithAsset[]; total: number }> {
-  const perf = createServerProfiler('transactions/data', `pid=${portfolioId}`);
+  const perf = createServerProfiler('transactions/data', `pids=${portfolioIds.join(',')}`);
   const page = parseInt(searchParams.page || '1');
   const limit = parseInt(searchParams.limit || '20');
   const ticker = searchParams.ticker;
   const type = searchParams.type;
 
-  const where: Prisma.TransactionWhereInput = { portfolioId };
+  const where: Prisma.TransactionWhereInput = { portfolioId: { in: portfolioIds } };
   if (ticker) where.asset = { ticker: { contains: ticker, mode: 'insensitive' } };
-  if (type && ['BUY', 'SELL'].includes(type)) where.type = type;
+  if (type && ['BUY', 'SELL', 'DIVIDEND'].includes(type)) where.type = type;
 
   const [transactions, total] = await perf.time('transactions.findMany+count', () => Promise.all([
     withRetry(() => prisma.transaction.findMany({
       where,
-      include: { asset: true },
+      include: { asset: true, portfolio: true },
       orderBy: { date: 'desc' },
       skip: (page - 1) * limit,
       take: limit,
@@ -54,7 +62,7 @@ async function getPortfolioWithTransactions(
     withRetry(() => prisma.transaction.count({ where })),
   ]));
 
-  perf.flush(`portfolio=${portfolioId} rows=${transactions.length} total=${total}`);
+  perf.flush(`portfolios=${portfolioIds.join(',')} rows=${transactions.length} total=${total}`);
   return {
     transactions: transactions.map((transaction) => ({
       id: transaction.id,
@@ -77,13 +85,17 @@ async function getPortfolioWithTransactions(
         market: transaction.asset.market,
         logo: transaction.asset.logo,
       },
+      portfolio: {
+        id: transaction.portfolioId,
+        name: transaction.portfolio.name,
+      },
     })),
     total,
   };
 }
 
 export default async function TransactionsPage(props: {
-  searchParams: Promise<{ [key: string]: string | undefined }>;
+  searchParams: Promise<{ [key: string]: string | undefined; pids?: string }>;
 }) {
   const perf = createServerProfiler('transactions/page');
   // Parallelize user auth and searchParams resolution
@@ -95,6 +107,8 @@ export default async function TransactionsPage(props: {
 
   let portfolioId = '';
   let portfolioName = 'Portfolio';
+  let selectedPortfolioIds: string[] = [];
+  let selectionMode: 'single' | 'multi' = 'single';
   let initialPortfolios: PortfolioClientRecord[] = [];
   let transactions: TransactionWithAsset[] = [];
   let total = 0;
@@ -120,14 +134,23 @@ export default async function TransactionsPage(props: {
         settingsUpdatedAt: portfolio.settingsUpdatedAt?.toISOString() ?? null,
       }));
 
-      const resolvedPortfolio = searchParams.pid
-        ? initialPortfolios.find((portfolio) => portfolio.id === searchParams.pid) ?? initialPortfolios[0]
+      const selection = resolvePortfolioSelection(initialPortfolios, {
+        pid: searchParams.pid,
+        pids: searchParams.pids,
+      });
+      selectedPortfolioIds = selection.portfolioIds;
+      selectionMode = selection.mode;
+      const resolvedPortfolio = selection.primaryPortfolioId
+        ? initialPortfolios.find((portfolio) => portfolio.id === selection.primaryPortfolioId) ?? initialPortfolios[0]
         : initialPortfolios[0];
 
       if (resolvedPortfolio) {
         portfolioId = resolvedPortfolio.id;
-        portfolioName = resolvedPortfolio.name ?? 'Portfolio';
-        const data = await perf.time('getPortfolioWithTransactions', () => getPortfolioWithTransactions(resolvedPortfolio.id, searchParams));
+        portfolioName = buildPortfolioSelectionLabel(selection, initialPortfolios, {
+          allLabel: 'All Portfolios',
+          countLabel: (count) => `${count} Portfolios`,
+        }) ?? (resolvedPortfolio.name ?? 'Portfolio');
+        const data = await perf.time('getPortfolioWithTransactions', () => getPortfolioWithTransactions(selectedPortfolioIds, searchParams));
         transactions = data.transactions;
         total = data.total;
       }
@@ -164,6 +187,8 @@ export default async function TransactionsPage(props: {
       limit={limit}
       portfolioId={portfolioId}
       portfolioName={portfolioName}
+      selectedPortfolioIds={selectedPortfolioIds}
+      selectionMode={selectionMode}
       initialPortfolios={initialPortfolios}
       logoMap={logoMap}
       searchTicker={searchParams.ticker}

@@ -6,6 +6,10 @@ import { useTranslations } from 'next-intl';
 import { createPortal } from 'react-dom';
 import { ChevronDown, Check, X, Settings2 } from 'lucide-react';
 import { useHydrated } from '@/lib/useHydrated';
+import {
+  applyPortfolioSelectionToSearchParams,
+  buildPortfolioSelectionLabel,
+} from '@/lib/portfolio-selection';
 
 interface Portfolio {
   id: string;
@@ -14,19 +18,39 @@ interface Portfolio {
 
 interface PortfolioSwitcherProps {
   portfolios: Portfolio[];
-  currentId: string;
+  selectedIds: string[];
   variant?: 'header' | 'title';
 }
 
-export default function PortfolioSwitcher({ portfolios, currentId, variant = 'header' }: PortfolioSwitcherProps) {
+export default function PortfolioSwitcher({ portfolios, selectedIds, variant = 'header' }: PortfolioSwitcherProps) {
   const t = useTranslations('portfolioSwitcher');
   const router = useRouter();
   const searchParams = useSearchParams();
   const [open, setOpen] = useState(false);
+  const [draftSelection, setDraftSelection] = useState<string[]>(selectedIds);
   const ref = useRef<HTMLDivElement>(null);
   const isHydrated = useHydrated();
 
-  const current = portfolios.find(p => p.id === currentId) ?? portfolios[0];
+  useEffect(() => {
+    setDraftSelection(selectedIds);
+  }, [selectedIds]);
+
+  const currentLabel = buildPortfolioSelectionLabel(
+    {
+      portfolioIds: selectedIds,
+      primaryPortfolioId: selectedIds[0] ?? null,
+      mode: selectedIds.length > 1 ? 'multi' : 'single',
+      isAllSelected: portfolios.length > 0 && selectedIds.length === portfolios.length,
+      canWrite: selectedIds.length === 1,
+      selectedCount: selectedIds.length,
+      rawRequestedIds: selectedIds,
+    },
+    portfolios,
+    {
+      allLabel: 'All Portfolios',
+      countLabel: (count) => `${count} Portfolios`,
+    },
+  );
 
   // Close on outside click
   useEffect(() => {
@@ -39,18 +63,38 @@ export default function PortfolioSwitcher({ portfolios, currentId, variant = 'he
     return () => document.removeEventListener('mousedown', handleClick);
   }, []);
 
-  function switchTo(id: string) {
+  function applySelection(ids: string[]) {
     setOpen(false);
     const params = new URLSearchParams(searchParams.toString());
-    params.set('pid', id);
+    applyPortfolioSelectionToSearchParams(params, ids);
     router.push(`/app?${params.toString()}`);
+  }
+
+  function toggleSelection(id: string) {
+    setDraftSelection((current) => {
+      if (current.includes(id)) {
+        const next = current.filter((selectedId) => selectedId !== id);
+        return next.length > 0 ? next : current;
+      }
+      return portfolios
+        .map((portfolio) => portfolio.id)
+        .filter((portfolioId) => portfolioId === id || current.includes(portfolioId));
+    });
+  }
+
+  function selectAll() {
+    setDraftSelection(portfolios.map((portfolio) => portfolio.id));
+  }
+
+  function selectOnly(id: string) {
+    setDraftSelection([id]);
   }
 
   function goToManagePortfolios() {
     setOpen(false);
     const params = new URLSearchParams();
-    if (currentId && currentId !== 'local-portfolio') {
-      params.set('pid', currentId);
+    if (selectedIds.length === 1 && selectedIds[0] && selectedIds[0] !== 'local-portfolio') {
+      params.set('pid', selectedIds[0]);
     }
     const query = params.toString();
     router.push(`/settings${query ? `?${query}` : ''}#portfolio`);
@@ -71,7 +115,7 @@ export default function PortfolioSwitcher({ portfolios, currentId, variant = 'he
         ? 'text-[24px] sm:text-[28px] font-bold text-primary tracking-tight leading-tight' 
         : 'text-[13px] font-semibold text-secondary group-hover:text-primary max-w-[140px] truncate'
       }>
-        {current?.name ?? t('fallback')}
+        {currentLabel || t('fallback')}
       </span>
       <ChevronDown className={`${
         isTitle ? 'w-5 h-5 text-secondary shrink-0' : 'w-3.5 h-3.5 text-secondary shrink-0'
@@ -82,23 +126,47 @@ export default function PortfolioSwitcher({ portfolios, currentId, variant = 'he
   const menuItems = (
     <>
       <div className="max-h-[300px] overflow-y-auto no-scrollbar py-1" style={{ pointerEvents: 'auto' }}>
+        {portfolios.length > 1 && (
+          <div className="px-4 py-2.5 border-b border-border/40 flex items-center justify-between gap-2">
+            <button
+              onClick={(event) => {
+                event.preventDefault();
+                event.stopPropagation();
+                selectAll();
+              }}
+              className="text-[12px] font-semibold text-secondary hover:text-primary transition-colors"
+            >
+              Select All
+            </button>
+            <button
+              onClick={(event) => {
+                event.preventDefault();
+                event.stopPropagation();
+                applySelection(draftSelection);
+              }}
+              className="px-3 py-1 rounded-lg bg-primary text-on-primary text-[12px] font-semibold"
+            >
+              Apply
+            </button>
+          </div>
+        )}
         {portfolios.map(p => (
           <div
             key={p.id}
             onClick={(e) => {
               e.preventDefault();
               e.stopPropagation();
-              switchTo(p.id);
+              toggleSelection(p.id);
             }}
             onTouchEnd={(e) => {
               e.preventDefault();
               e.stopPropagation();
-              switchTo(p.id);
+              toggleSelection(p.id);
             }}
             onKeyDown={(e) => {
               if (e.key === 'Enter' || e.key === ' ') {
                 e.preventDefault();
-                switchTo(p.id);
+                toggleSelection(p.id);
               }
             }}
             role="button"
@@ -108,16 +176,27 @@ export default function PortfolioSwitcher({ portfolios, currentId, variant = 'he
           >
             <div className="flex items-center gap-3 min-w-0">
               <div className={`w-4 h-4 rounded-full border flex items-center justify-center transition-all ${
-                p.id === currentId
+                draftSelection.includes(p.id)
                   ? 'border-primary bg-primary text-on-primary scale-110'
                   : 'border-border group-hover/item:border-gray-400'
               }`}>
-                {p.id === currentId && <Check className="w-2.5 h-2.5" />}
+                {draftSelection.includes(p.id) && <Check className="w-2.5 h-2.5" />}
               </div>
               <span className={`text-[15px] sm:text-[13px] font-semibold truncate ${
-                p.id === currentId ? 'text-primary' : 'text-secondary group-hover/item:text-primary'
+                draftSelection.includes(p.id) ? 'text-primary' : 'text-secondary group-hover/item:text-primary'
               }`}>{p.name}</span>
             </div>
+            <button
+              onClick={(event) => {
+                event.preventDefault();
+                event.stopPropagation();
+                selectOnly(p.id);
+                applySelection([p.id]);
+              }}
+              className="text-[11px] font-semibold text-secondary hover:text-primary transition-colors"
+            >
+              Only
+            </button>
           </div>
         ))}
       </div>

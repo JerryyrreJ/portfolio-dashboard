@@ -1,7 +1,7 @@
 import type { Prisma } from '@prisma/client';
 import { format } from 'date-fns';
 import prisma from '@/lib/prisma';
-import { findOwnedPortfolio } from '@/lib/ownership';
+import { findOwnedPortfolio, getOwnedPortfolioIds } from '@/lib/ownership';
 import {
   buildTransactionExportFilename,
   buildTransactionExportPayload,
@@ -18,6 +18,10 @@ import {
   type TransactionExportRange,
   type TransactionExportRequest,
 } from '@/lib/export-core';
+import {
+  buildPortfolioSelectionLabel,
+  parsePortfolioIdList,
+} from '@/lib/portfolio-selection';
 
 function getRangeDateFilter(range: TransactionExportRange): Prisma.DateTimeFilter | undefined {
   const startDate = getRangeStartDate(range);
@@ -34,9 +38,11 @@ export function parseTransactionExportRequest(searchParams: URLSearchParams): Tr
   const rawType = normalizeString(searchParams.get('type'));
   const rawTicker = normalizeString(searchParams.get('ticker'));
   const portfolioId = normalizeString(searchParams.get('portfolioId')) ?? normalizeString(searchParams.get('pid'));
+  const portfolioIds = parsePortfolioIdList(searchParams.get('pids'));
 
   return {
     portfolioId,
+    portfolioIds,
     ticker: normalizeTransactionExportTicker(rawTicker) ?? undefined,
     type: normalizeTransactionExportType(rawType) ?? undefined,
     range: normalizeTransactionExportRange(rawRange),
@@ -52,20 +58,48 @@ export async function getTransactionExportPayload(
   userId: string,
   request: TransactionExportRequest
 ): Promise<TransactionExportPayload | null> {
+  const allPortfolios = await prisma.portfolio.findMany({
+    where: { userId },
+    orderBy: { createdAt: 'asc' },
+  });
+
+  const allowedIds = new Set(await getOwnedPortfolioIds(userId));
+  const selectedPortfolioIds = request.portfolioIds && request.portfolioIds.length > 0
+    ? request.portfolioIds.filter((id) => allowedIds.has(id))
+    : [];
+
   const resolvedPortfolio = request.portfolioId
     ? await findOwnedPortfolio(userId, request.portfolioId)
-    : await prisma.portfolio.findFirst({
-        where: { userId },
-        orderBy: { id: 'asc' },
-      });
+    : allPortfolios[0] ?? null;
 
   if (!resolvedPortfolio) {
     return null;
   }
 
+  const effectivePortfolioIds = selectedPortfolioIds.length > 0
+    ? selectedPortfolioIds
+    : [resolvedPortfolio.id];
+  const selectedPortfolios = allPortfolios.filter((portfolio) => effectivePortfolioIds.includes(portfolio.id));
+  const selectionLabel = buildPortfolioSelectionLabel(
+    {
+      portfolioIds: effectivePortfolioIds,
+      primaryPortfolioId: effectivePortfolioIds[0] ?? null,
+      mode: effectivePortfolioIds.length > 1 ? 'multi' : 'single',
+      isAllSelected: allPortfolios.length > 0 && effectivePortfolioIds.length === allPortfolios.length,
+      canWrite: effectivePortfolioIds.length === 1,
+      selectedCount: effectivePortfolioIds.length,
+      rawRequestedIds: effectivePortfolioIds,
+    },
+    selectedPortfolios,
+    {
+      allLabel: 'All Portfolios',
+      countLabel: (count) => `${count} Portfolios`,
+    },
+  );
+
   const dateFilter = getRangeDateFilter(request.range);
   const where: Prisma.TransactionWhereInput = {
-    portfolioId: resolvedPortfolio.id,
+    portfolioId: { in: effectivePortfolioIds },
     ...(request.type ? { type: request.type } : {}),
     ...(request.ticker
       ? {
@@ -84,6 +118,7 @@ export async function getTransactionExportPayload(
     where,
     include: {
       asset: true,
+      portfolio: true,
     },
     orderBy: [
       { date: 'desc' },
@@ -97,8 +132,8 @@ export async function getTransactionExportPayload(
 
     return {
       transactionId: transaction.id,
-      portfolioId: resolvedPortfolio.id,
-      portfolioName: resolvedPortfolio.name,
+      portfolioId: transaction.portfolioId,
+      portfolioName: transaction.portfolio.name,
       date: format(new Date(transaction.date), 'yyyy-MM-dd'),
       ticker: transaction.asset.ticker,
       name: transaction.asset.name,
@@ -122,10 +157,20 @@ export async function getTransactionExportPayload(
 
   return buildTransactionExportPayload({
     portfolio: {
-      id: resolvedPortfolio.id,
-      name: resolvedPortfolio.name,
-      currency: resolvedPortfolio.currency,
+      id: effectivePortfolioIds.length === 1 ? resolvedPortfolio.id : 'multi-portfolio',
+      name: effectivePortfolioIds.length === 1 ? resolvedPortfolio.name : selectionLabel,
+      currency: effectivePortfolioIds.length === 1 ? resolvedPortfolio.currency : resolvedPortfolio.currency,
     },
+    selection: {
+      portfolioIds: effectivePortfolioIds,
+      label: selectionLabel,
+      mode: effectivePortfolioIds.length > 1 ? 'multi' : 'single',
+    },
+    portfolios: selectedPortfolios.map((portfolio) => ({
+      id: portfolio.id,
+      name: portfolio.name,
+      currency: portfolio.currency,
+    })),
     range: request.range,
     transactions: exportItems,
     ticker: request.ticker ?? null,

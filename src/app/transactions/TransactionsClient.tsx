@@ -21,6 +21,7 @@ import {
   getLocalTransactionExportPayload,
   serializeTransactionExportCsv,
 } from '@/lib/local-transaction-export';
+import { toPortfolioSelectionHref } from '@/lib/portfolio-links';
 
 interface TransactionWithAsset {
   id: string;
@@ -42,6 +43,10 @@ interface TransactionWithAsset {
     name: string;
     market: string;
     logo?: string | null;
+  };
+  portfolio: {
+    id: string;
+    name: string;
   };
 }
 
@@ -115,6 +120,8 @@ interface TransactionsClientProps {
   limit: number;
   portfolioId: string;
   portfolioName: string;
+  selectedPortfolioIds?: string[];
+  selectionMode?: 'single' | 'multi';
   initialPortfolios: PortfolioClientRecord[];
   logoMap: Record<string, string | null>;
   searchTicker?: string;
@@ -153,7 +160,7 @@ function formatExportAmount(num: number, locale: string, decimals: number = 2): 
 
 export default function TransactionsClient({
   transactions: initialTransactions, total, totalPages, currentPage, limit,
-  portfolioId, portfolioName, initialPortfolios, logoMap, searchTicker, searchType,
+  portfolioId, portfolioName, selectedPortfolioIds = [], selectionMode = 'single', initialPortfolios, logoMap, searchTicker, searchType,
   buyCount, sellCount, totalVolume, userDisplayName = '',
 }: TransactionsClientProps) {
   const router = useRouter();
@@ -166,7 +173,12 @@ export default function TransactionsClient({
   });
   const [transactions, setTransactions] = useState(initialTransactions);
   const refreshedProfileLogosForPortfolioRef = useRef<string | null>(null);
-  const pidParam = portfolioId ? `&pid=${portfolioId}` : '';
+  const effectiveSelectedPortfolioIds = selectedPortfolioIds.length > 0
+    ? selectedPortfolioIds
+    : (portfolioId ? [portfolioId] : []);
+  const selectionKey = effectiveSelectedPortfolioIds.join(',');
+  const dashboardHref = portfolioId ? toPortfolioSelectionHref('/app', effectiveSelectedPortfolioIds) : '/app';
+  const transactionsBaseHref = portfolioId ? toPortfolioSelectionHref('/transactions', effectiveSelectedPortfolioIds) : '/transactions';
   const [confirmingId, setConfirmingId] = useState<string | null>(null);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editState, setEditState] = useState<EditState | null>(null);
@@ -190,12 +202,12 @@ export default function TransactionsClient({
 
   useEffect(() => {
     if (!portfolioId || portfolioId === 'local-portfolio') return;
-    if (refreshedProfileLogosForPortfolioRef.current === portfolioId) return;
+    if (refreshedProfileLogosForPortfolioRef.current === selectionKey) return;
 
     const tickers = [...new Set(transactions.map((transaction) => transaction.asset.ticker).filter(Boolean))];
     if (tickers.length === 0) return;
 
-    refreshedProfileLogosForPortfolioRef.current = portfolioId;
+    refreshedProfileLogosForPortfolioRef.current = selectionKey;
     let cancelled = false;
 
     const refreshVisibleAssetProfiles = async () => {
@@ -221,7 +233,7 @@ export default function TransactionsClient({
     return () => {
       cancelled = true;
     };
-  }, [portfolioId, router, transactions]);
+  }, [portfolioId, router, selectionKey, transactions]);
 
   const getTransactionTypeLabel = (type: string) => {
     if (type === 'BUY') return t('types.buy');
@@ -347,7 +359,11 @@ export default function TransactionsClient({
         const data = localPayload ?? await (async () => {
           const params = new URLSearchParams({ format: 'json' });
 
-          if (portfolioId) params.set('portfolioId', portfolioId);
+          if (effectiveSelectedPortfolioIds.length > 1) {
+            params.set('pids', effectiveSelectedPortfolioIds.join(','));
+          } else if (portfolioId) {
+            params.set('portfolioId', portfolioId);
+          }
           if (filterType !== 'ALL') params.set('type', filterType);
           if (filterTicker.trim()) params.set('ticker', filterTicker.trim());
 
@@ -516,7 +532,11 @@ export default function TransactionsClient({
       } else {
         const params = new URLSearchParams({ format });
 
-        if (portfolioId) params.set('portfolioId', portfolioId);
+        if (effectiveSelectedPortfolioIds.length > 1) {
+          params.set('pids', effectiveSelectedPortfolioIds.join(','));
+        } else if (portfolioId) {
+          params.set('portfolioId', portfolioId);
+        }
         if (filterType !== 'ALL') params.set('type', filterType);
         if (filterTicker.trim()) params.set('ticker', filterTicker.trim());
 
@@ -559,15 +579,15 @@ export default function TransactionsClient({
       {/* Header */}
       <header className="bg-card/70 backdrop-blur-xl border-b border-border px-6 h-[56px] flex items-center justify-between sticky top-0 z-50">
         <div className="flex items-center space-x-8">
-          <Link href={`/app${portfolioId ? `?pid=${portfolioId}` : ''}`} className="flex items-center space-x-2 text-primary font-bold text-[17px] tracking-tight">
+          <Link href={dashboardHref} className="flex items-center space-x-2 text-primary font-bold text-[17px] tracking-tight">
             <div className="bg-primary text-on-primary p-1 rounded-md">
               <TrendingUp className="w-4 h-4" />
             </div>
             <span>Folio</span>
           </Link>
           <nav className="hidden md:flex space-x-7 text-[14px] font-semibold text-secondary">
-            <Link href={`/app${portfolioId ? `?pid=${portfolioId}` : ''}`} className="hover:text-primary transition-colors py-[16px]">{t('nav.investments')}</Link>
-            <Link href={`/transactions${portfolioId ? `?pid=${portfolioId}` : ''}`} className="text-primary border-b-2 border-primary py-[16px]">{t('nav.transactions')}</Link>
+            <Link href={dashboardHref} className="hover:text-primary transition-colors py-[16px]">{t('nav.investments')}</Link>
+            <Link href={transactionsBaseHref} className="text-primary border-b-2 border-primary py-[16px]">{t('nav.transactions')}</Link>
           </nav>
         </div>
         <div className="flex items-center space-x-5">
@@ -596,7 +616,7 @@ export default function TransactionsClient({
         <div className="flex flex-col sm:flex-row justify-between items-start sm:items-end gap-4 mb-6 sm:mb-8">
           <div>
             <div className="flex items-center gap-2 text-[12px] sm:text-[13px] font-medium text-secondary mb-1.5 sm:mb-2">
-              <Link href="/app" className="hover:text-primary transition-colors">{t('breadcrumbDashboard')}</Link>
+              <Link href={dashboardHref} className="hover:text-primary transition-colors">{t('breadcrumbDashboard')}</Link>
               <ChevronRight className="w-3 h-3" />
               <span className="text-primary">{t('breadcrumbCurrent')}</span>
             </div>
@@ -764,6 +784,9 @@ export default function TransactionsClient({
                             <div className="min-w-0">
                               <p className="text-[14px] font-bold text-primary leading-tight group-hover:underline underline-offset-2 truncate">{tx.asset.ticker}</p>
                               <p className="text-[11px] text-secondary font-medium truncate max-w-[150px] opacity-60">{tx.asset.name}</p>
+                              {selectionMode === 'multi' && (
+                                <p className="text-[10px] text-secondary/70 font-semibold truncate max-w-[150px]">{tx.portfolio.name}</p>
+                              )}
                             </div>
                           </Link>
                         </td>
@@ -900,11 +923,11 @@ export default function TransactionsClient({
               {t('showing', { from: ((currentPage - 1) * limit) + 1, to: Math.min(currentPage * limit, total), total })}
             </p>
             <div className="flex items-center gap-1 bg-card border border-border p-1 rounded-full shadow-sm order-1 sm:order-2">
-              <Link href={`/transactions?page=${currentPage - 1}${pidParam}`} className={`px-5 py-2 text-[12px] font-bold rounded-full transition-all ${currentPage <= 1 ? 'opacity-20 pointer-events-none' : 'text-secondary hover:text-primary hover:bg-element'}`}>
+              <Link href={toPortfolioSelectionHref('/transactions', effectiveSelectedPortfolioIds, new URLSearchParams({ page: String(currentPage - 1) }))} className={`px-5 py-2 text-[12px] font-bold rounded-full transition-all ${currentPage <= 1 ? 'opacity-20 pointer-events-none' : 'text-secondary hover:text-primary hover:bg-element'}`}>
                 Prev
               </Link>
               <div className="w-px h-3 bg-border/60 mx-1" />
-              <Link href={`/transactions?page=${currentPage + 1}${pidParam}`} className={`px-5 py-2 text-[12px] font-bold rounded-full transition-all ${currentPage >= totalPages ? 'opacity-20 pointer-events-none' : 'text-secondary hover:text-primary hover:bg-element'}`}>
+              <Link href={toPortfolioSelectionHref('/transactions', effectiveSelectedPortfolioIds, new URLSearchParams({ page: String(currentPage + 1) }))} className={`px-5 py-2 text-[12px] font-bold rounded-full transition-all ${currentPage >= totalPages ? 'opacity-20 pointer-events-none' : 'text-secondary hover:text-primary hover:bg-element'}`}>
                 Next
               </Link>
             </div>

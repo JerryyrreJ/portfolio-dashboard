@@ -176,23 +176,46 @@ export function useLedger(user: User | null) {
   };
 }
 
-export function usePortfolioLedger(user: User | null, portfolioId?: string) {
+export function usePortfolioLedger(user: User | null, portfolioId?: string, selectedPortfolioIds?: string[]) {
   const ledger = useLedger(user);
-  const activePortfolioId = portfolioId || ledger.portfolios[0]?.id;
+  const resolvedSelection = useMemo(
+    () => (selectedPortfolioIds && selectedPortfolioIds.length > 0
+      ? selectedPortfolioIds
+      : (portfolioId ? [portfolioId] : [])),
+    [portfolioId, selectedPortfolioIds],
+  );
+  const activePortfolioId = resolvedSelection[0] || portfolioId || ledger.portfolios[0]?.id;
   const transactions = useMemo(
-    () => ledger.transactions.filter((transaction) => !activePortfolioId || transaction.portfolioId === activePortfolioId),
-    [activePortfolioId, ledger.transactions],
+    () => {
+      const selectedIdsSet = new Set(resolvedSelection);
+      return ledger.transactions.filter((transaction) => {
+        if (selectedIdsSet.size > 0) {
+          return selectedIdsSet.has(transaction.portfolioId);
+        }
+        return !activePortfolioId || transaction.portfolioId === activePortfolioId;
+      });
+    },
+    [activePortfolioId, ledger.transactions, resolvedSelection],
   );
 
   return {
     ...ledger,
     activePortfolioId,
+    selectedPortfolioIds: resolvedSelection.length > 0
+      ? resolvedSelection
+      : (activePortfolioId ? [activePortfolioId] : []),
     transactions,
   };
 }
 
-export function usePortfolioDashboard(user: User | null, portfolioId: string | undefined, livePrices: Record<string, number>, costBasisMethod: 'FIFO' | 'AVCO' = 'FIFO') {
-  const ledger = usePortfolioLedger(user, portfolioId);
+export function usePortfolioDashboard(
+  user: User | null,
+  portfolioId: string | undefined,
+  livePrices: Record<string, number>,
+  costBasisMethod: 'FIFO' | 'AVCO' = 'FIFO',
+  selectedPortfolioIds?: string[],
+) {
+  const ledger = usePortfolioLedger(user, portfolioId, selectedPortfolioIds);
   const derived = useMemo(
     () => derivePortfolioDashboard(ledger.transactions, livePrices, costBasisMethod),
     [costBasisMethod, ledger.transactions, livePrices],

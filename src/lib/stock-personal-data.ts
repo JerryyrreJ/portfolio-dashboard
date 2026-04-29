@@ -1,5 +1,6 @@
 import type { Portfolio, Transaction } from '@prisma/client'
 import prisma, { withRetry } from '@/lib/prisma'
+import { parsePortfolioIdList } from '@/lib/portfolio-selection'
 
 export type PersonalDataState = 'ready' | 'loading' | 'unavailable' | 'empty' | 'guest'
 
@@ -125,14 +126,22 @@ export async function loadPersonalStockPosition(
   userId: string,
   ticker: string,
   currentPrice: number,
-  pid?: string
+  pid?: string,
+  pids?: string
 ): Promise<PersonalPositionPayload> {
+  const selectedPortfolioIds = parsePortfolioIdList(pids).length > 0
+    ? parsePortfolioIdList(pids)
+    : (pid ? [pid] : []);
+
   const [asset, defaultPortfolio] = await Promise.all([
     withRetry(() => prisma.asset.findUnique({
       where: { ticker },
       include: {
         transactions: {
-          where: { portfolio: { userId } },
+          where: {
+            portfolio: { userId },
+            ...(selectedPortfolioIds.length > 0 ? { portfolioId: { in: selectedPortfolioIds } } : {}),
+          },
           include: { portfolio: true },
           orderBy: { date: 'desc' },
         },
@@ -157,8 +166,8 @@ export async function loadPersonalStockPosition(
 
   const portfolioContext = asset.transactions.length > 0
     ? {
-        portfolioId: asset.transactions[0].portfolioId,
-        portfolioName: asset.transactions[0].portfolio.name,
+        portfolioId: selectedPortfolioIds.length === 1 ? asset.transactions[0].portfolioId : '',
+        portfolioName: selectedPortfolioIds.length === 1 ? asset.transactions[0].portfolio.name : '',
       }
     : defaultPortfolio
 

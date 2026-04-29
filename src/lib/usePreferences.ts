@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useCallback } from 'react';
 import { fetchPortfolioList, invalidatePortfolioListCache, type PortfolioClientRecord } from '@/lib/portfolio-client';
+import { parsePortfolioIdList } from '@/lib/portfolio-selection';
 
 type IdleCallbackHandle = number | ReturnType<typeof globalThis.setTimeout>;
 type IdleScheduler = (callback: () => void, timeout?: number) => IdleCallbackHandle;
@@ -75,6 +76,10 @@ export function usePreferences(options?: UsePreferencesOptions) {
     const sync = async () => {
       try {
         const pid = new URLSearchParams(window.location.search).get('pid') ?? '';
+        const pids = parsePortfolioIdList(new URLSearchParams(window.location.search).get('pids'));
+        if (pids.length > 1) {
+          return;
+        }
         const idParam = pid ? `?id=${pid}` : '';
         const data = initialPortfolios && initialPortfolios.length > 0
           ? { portfolios: initialPortfolios }
@@ -153,6 +158,10 @@ export function usePreferences(options?: UsePreferencesOptions) {
     }
 
     const pid = new URLSearchParams(window.location.search).get('pid') ?? '';
+    const pids = parsePortfolioIdList(new URLSearchParams(window.location.search).get('pids'));
+    if (pids.length > 1) {
+      return;
+    }
     const idParam = pid ? `?id=${pid}` : '';
     fetch(`/api/portfolio${idParam}`, {
       method: 'PATCH',

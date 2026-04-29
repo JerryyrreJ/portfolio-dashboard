@@ -18,6 +18,8 @@ import Link from 'next/link';
 import { useCurrency } from '@/lib/useCurrency';
 import { usePreferences } from '@/lib/usePreferences';
 import type { PersonalDataState } from '@/lib/stock-personal-data';
+import { toPortfolioSelectionHref } from '@/lib/portfolio-links';
+import { parsePortfolioIdList } from '@/lib/portfolio-selection';
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
@@ -101,6 +103,7 @@ interface StockData {
   chartData: ChartPoint[];
   transactions: Transaction[];
   requestedPortfolioId: string;
+  requestedPortfolioIds?: string;
   portfolioId: string;
   portfolioName: string;
   profile: CompanyProfile | null;
@@ -274,9 +277,16 @@ export default function StockDetailClient({ stockData }: { stockData: StockData 
     currentPrice, priceChange, priceChangePercent,
     dayHigh, dayLow, dayOpen, prevClose, lastUpdated,
     requestedPortfolioId,
+    requestedPortfolioIds = '',
     profile, metrics,
     userDisplayName, userInitial
   } = stockData;
+  const parsedRequestedPortfolioIds = parsePortfolioIdList(requestedPortfolioIds);
+  const selectedPortfolioIds = parsedRequestedPortfolioIds.length > 0
+    ? parsedRequestedPortfolioIds
+    : (requestedPortfolioId ? [requestedPortfolioId] : []);
+  const appHref = selectedPortfolioIds.length > 0 ? toPortfolioSelectionHref('/app', selectedPortfolioIds) : '/app';
+  const transactionsHref = selectedPortfolioIds.length > 0 ? toPortfolioSelectionHref('/transactions', selectedPortfolioIds) : '/transactions';
 
   const [personalPosition, setPersonalPosition] = useState<PersonalPositionState>(() => ({
     personalDataState: stockData.personalDataState,
@@ -324,7 +334,9 @@ export default function StockDetailClient({ stockData }: { stockData: StockData 
     const fetchPersonalPosition = async () => {
       try {
         const params = new URLSearchParams();
-        if (requestedPortfolioId) {
+        if (requestedPortfolioIds) {
+          params.set('pids', requestedPortfolioIds);
+        } else if (requestedPortfolioId) {
           params.set('pid', requestedPortfolioId);
         }
         const query = params.toString();
@@ -357,7 +369,7 @@ export default function StockDetailClient({ stockData }: { stockData: StockData 
       controller.abort();
       hasRequestedPersonalData.current = false;
     };
-  }, [personalPosition.personalDataState, requestedPortfolioId, ticker]);
+  }, [personalPosition.personalDataState, requestedPortfolioId, requestedPortfolioIds, ticker]);
 
   const {
     totalQty,
@@ -464,8 +476,8 @@ export default function StockDetailClient({ stockData }: { stockData: StockData 
             <span>Folio</span>
           </Link>
           <nav className="hidden md:flex space-x-7 text-[14px] font-semibold text-secondary">
-            <Link href={portfolioId ? `/app?pid=${portfolioId}` : '/app'} className="hover:text-primary transition-colors py-[16px]">Investments</Link>
-            <Link href={portfolioId ? `/transactions?pid=${portfolioId}` : '/transactions'} className="hover:text-primary transition-colors py-[16px]">Transactions</Link>
+            <Link href={appHref} className="hover:text-primary transition-colors py-[16px]">Investments</Link>
+            <Link href={transactionsHref} className="hover:text-primary transition-colors py-[16px]">Transactions</Link>
           </nav>
         </div>
         <div className="flex items-center space-x-5">
@@ -528,7 +540,7 @@ export default function StockDetailClient({ stockData }: { stockData: StockData 
             </div>
             <div className="min-w-0">
               <div className="flex items-center gap-1 sm:gap-2 text-secondary text-[11px] sm:text-[13px] font-bold uppercase tracking-widest mb-1 truncate">
-                <Link href="/app" className="hover:text-primary shrink-0">Dashboard</Link>
+                <Link href={appHref} className="hover:text-primary shrink-0">Dashboard</Link>
                 <ChevronRight className="w-3 h-3 shrink-0" />
                 <span className="truncate">{market}</span>
               </div>
@@ -562,7 +574,7 @@ export default function StockDetailClient({ stockData }: { stockData: StockData 
               >
                 <Share2 className="w-4 h-4" />
               </button>
-              <button onClick={() => setIsAddTradeOpen(true)} className="px-4 py-3 sm:px-5 sm:py-2 bg-primary text-on-primary text-[13px] sm:text-[14px] font-bold rounded-xl hover:bg-primary-hover transition-all shadow-md flex items-center gap-1.5">
+              <button onClick={() => setIsAddTradeOpen(true)} disabled={selectedPortfolioIds.length !== 1} className="px-4 py-3 sm:px-5 sm:py-2 bg-primary text-on-primary text-[13px] sm:text-[14px] font-bold rounded-xl hover:bg-primary-hover transition-all shadow-md flex items-center gap-1.5 disabled:opacity-50">
                 <Plus className="w-4 h-4" /> <span className="hidden sm:inline-block">Add Trade</span><span className="sm:hidden">Trade</span>
               </button>
             </div>
@@ -823,7 +835,7 @@ export default function StockDetailClient({ stockData }: { stockData: StockData 
         </div>
       </main>
 
-      {portfolioId && (
+      {portfolioId && selectedPortfolioIds.length === 1 && (
         <AddTransactionModal
           isOpen={isAddTradeOpen}
           onClose={() => setIsAddTradeOpen(false)}

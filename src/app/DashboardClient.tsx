@@ -39,6 +39,8 @@ import { usePreferences } from '@/lib/usePreferences';
 import { usePortfolioDashboard } from '@/lib/ledger/react';
 import type { User as SupabaseUser } from '@supabase/supabase-js';
 import type { PortfolioClientRecord } from '@/lib/portfolio-client';
+import { toPortfolioSelectionHref } from '@/lib/portfolio-links';
+import { buildPortfolioSelectionLabel } from '@/lib/portfolio-selection';
 
 // --- 辅助格式化组件 ---
 interface FormatValueProps {
@@ -97,6 +99,10 @@ interface DashboardClientProps {
   portfolioName: string;
   portfolios: { id: string; name: string }[];
   initialPortfolios?: PortfolioClientRecord[];
+  selectedPortfolioIds?: string[];
+  selectionMode?: 'single' | 'multi';
+  selectionCanWrite?: boolean;
+  isAllPortfoliosSelected?: boolean;
   holdingsData: HoldingsGroup[];
   chartData: ChartPoint[];
   summary: Summary;
@@ -239,6 +245,10 @@ export default function DashboardClient({
   portfolioName,
   portfolios,
   initialPortfolios,
+  selectedPortfolioIds = [],
+  selectionMode = 'single',
+  selectionCanWrite = true,
+  isAllPortfoliosSelected = false,
   holdingsData,
   chartData,
   summary,
@@ -280,14 +290,49 @@ export default function DashboardClient({
   const [localSummary, setLocalSummary] = useState<Summary>(summary);
   const [localChartData, setLocalChartData] = useState<ChartPoint[]>(chartData);
   const [livePrices, setLivePrices] = useState<Record<string, number>>({});
+  const effectiveSelectedPortfolioIds = useMemo(
+    () => (selectedPortfolioIds.length > 0
+      ? selectedPortfolioIds
+      : (portfolioId ? [portfolioId] : [])),
+    [portfolioId, selectedPortfolioIds],
+  );
   const ledgerPortfolioId = isGuest ? undefined : portfolioId;
-  const ledger = usePortfolioDashboard(user, ledgerPortfolioId, livePrices, prefs.costBasisMethod ?? 'FIFO');
+  const ledger = usePortfolioDashboard(
+    user,
+    ledgerPortfolioId,
+    livePrices,
+    prefs.costBasisMethod ?? 'FIFO',
+    effectiveSelectedPortfolioIds,
+  );
   const activePortfolioId = ledger.activePortfolioId ?? portfolioId;
   const isLocalPortfolio = isGuest;
-  const activePortfolioName = ledger.portfolios.find((portfolio) => portfolio.id === activePortfolioId)?.name ?? portfolioName;
+  const activePortfolioName = selectionMode === 'multi'
+    ? buildPortfolioSelectionLabel(
+        {
+          portfolioIds: effectiveSelectedPortfolioIds,
+          primaryPortfolioId: activePortfolioId ?? null,
+          mode: selectionMode,
+          isAllSelected: isAllPortfoliosSelected,
+          canWrite: selectionCanWrite,
+          selectedCount: effectiveSelectedPortfolioIds.length,
+          rawRequestedIds: effectiveSelectedPortfolioIds,
+        },
+        portfolios,
+        {
+          allLabel: 'All Portfolios',
+          countLabel: (count) => `${count} Portfolios`,
+        },
+      )
+    : (ledger.portfolios.find((portfolio) => portfolio.id === activePortfolioId)?.name ?? portfolioName);
   const activePortfolios = ledger.ready && ledger.portfolios.length > 0
     ? ledger.portfolios.map((portfolio) => ({ id: portfolio.id, name: portfolio.name }))
     : portfolios;
+  const selectionHref = !isLocalPortfolio
+    ? toPortfolioSelectionHref('/app', effectiveSelectedPortfolioIds)
+    : '/app';
+  const transactionsHref = !isLocalPortfolio
+    ? toPortfolioSelectionHref('/transactions', effectiveSelectedPortfolioIds)
+    : '/transactions';
   const displayHoldings = ledger.ready ? ledger.holdings : localHoldings;
   const displaySummary = ledger.ready ? ledger.summary : localSummary;
   const displayChartData = useMemo<ChartPoint[]>(() => (
@@ -384,7 +429,7 @@ export default function DashboardClient({
     });
 
     if (tickers.size === 0) return;
-    const priceKey = `${activePortfolioId}:${Array.from(tickers).sort().join(',')}`;
+    const priceKey = `${effectiveSelectedPortfolioIds.join(',')}:${Array.from(tickers).sort().join(',')}`;
     if (fetchedPriceKeyRef.current === priceKey) return;
     fetchedPriceKeyRef.current = priceKey;
 
@@ -449,10 +494,11 @@ export default function DashboardClient({
     return () => {
       window.clearTimeout(timer);
     };
-  }, [activePortfolioId, holdingsData, ledger.holdings, ledger.ready]);
+  }, [activePortfolioId, effectiveSelectedPortfolioIds, holdingsData, ledger.holdings, ledger.ready]);
 
   // 获取待确认分红数量
-  const pendingDividendCount = pendingDividendCountOverride?.portfolioId === activePortfolioId
+  const pendingDividendKey = effectiveSelectedPortfolioIds.join(',');
+  const pendingDividendCount = pendingDividendCountOverride?.portfolioId === pendingDividendKey
     ? pendingDividendCountOverride.count
     : initialPendingDividendCount;
 
@@ -460,7 +506,7 @@ export default function DashboardClient({
     let cancelled = false;
 
     const syncAndRefreshDividendStats = async () => {
-      if (isLocalPortfolio) return;
+      if (isLocalPortfolio || !selectionCanWrite) return;
 
       // 客户端节流：与服务端 6 小时节流保持一致，避免每次加载都发请求
       const THROTTLE_MS = 6 * 60 * 60 * 1000;
@@ -487,7 +533,7 @@ export default function DashboardClient({
         if (!cancelled && response.ok) {
           const data = await response.json();
           setPendingDividendCountOverride({
-            portfolioId: activePortfolioId,
+            portfolioId: pendingDividendKey,
             count: data.pendingCount || 0,
           });
         }
@@ -504,7 +550,7 @@ export default function DashboardClient({
       cancelled = true;
       window.clearTimeout(timer);
     };
-  }, [activePortfolioId, isLocalPortfolio]);
+  }, [activePortfolioId, isLocalPortfolio, pendingDividendKey, selectionCanWrite]);
 
   // 初始化和监听本地数据
   useEffect(() => {
@@ -832,8 +878,8 @@ export default function DashboardClient({
               <span>Folio</span>
             </div>
           <nav className="hidden md:flex space-x-7 text-[14px] font-semibold text-secondary">
-            <a href={`/app${!isLocalPortfolio ? `?pid=${activePortfolioId}` : ''}`} className="text-primary border-b-2 border-primary py-[16px]">{t('nav.investments')}</a>
-            <a href={`/transactions${!isLocalPortfolio ? `?pid=${activePortfolioId}` : ''}`} className="hover:text-primary transition-colors py-[16px]">{t('nav.transactions')}</a>
+            <a href={selectionHref} className="text-primary border-b-2 border-primary py-[16px]">{t('nav.investments')}</a>
+            <a href={transactionsHref} className="hover:text-primary transition-colors py-[16px]">{t('nav.transactions')}</a>
           </nav>
         </div>
         <div className="flex items-center space-x-5">
@@ -855,7 +901,7 @@ export default function DashboardClient({
 
             {/* Mobile Transactions Link */}
             <Link
-              href={`/transactions${!isLocalPortfolio ? `?pid=${activePortfolioId}` : ''}`}
+              href={transactionsHref}
               className="md:hidden w-7 h-7 rounded-full bg-element-hover border border-border flex items-center justify-center text-secondary active:bg-gray-200 transition-colors shadow-sm"
               title={t('nav.transactions')}
             >
@@ -905,7 +951,7 @@ export default function DashboardClient({
             {activePortfolios.length > 1 ? (
               <PortfolioSwitcher
                 portfolios={activePortfolios}
-                currentId={activePortfolioId}
+                selectedIds={effectiveSelectedPortfolioIds}
                 variant="title"
               />
             ) : (
@@ -928,6 +974,7 @@ export default function DashboardClient({
             </button>
             <button
               onClick={() => setIsModalOpen(true)}
+              disabled={!selectionCanWrite}
               className="h-9 px-2.5 sm:px-4 bg-primary text-on-primary text-[13px] font-bold rounded-xl hover:bg-primary-hover transition-all active:scale-95 shadow-sm flex items-center space-x-0 sm:space-x-2"
             >
               <Plus className="w-4 h-4" />
@@ -940,8 +987,12 @@ export default function DashboardClient({
         {pendingDividendCount > 0 && !isLocalPortfolio && (
           <div className="mb-8 animate-in fade-in slide-in-from-top-4 duration-700 ease-out">
             <div 
-              onClick={() => setIsDividendModalOpen(true)}
-              className="group cursor-pointer relative overflow-hidden bg-card/70 backdrop-blur-xl border border-border/50 rounded-3xl p-4 sm:p-5 flex items-center justify-between transition-all hover:scale-[1.01] active:scale-[0.98] shadow-[0_8px_32px_rgba(0,0,0,0.06)] dark:shadow-[0_8px_32px_rgba(0,0,0,0.2)]"
+              onClick={() => {
+                if (selectionCanWrite) {
+                  setIsDividendModalOpen(true);
+                }
+              }}
+              className={`group relative overflow-hidden bg-card/70 backdrop-blur-xl border border-border/50 rounded-3xl p-4 sm:p-5 flex items-center justify-between transition-all shadow-[0_8px_32px_rgba(0,0,0,0.06)] dark:shadow-[0_8px_32px_rgba(0,0,0,0.2)] ${selectionCanWrite ? 'cursor-pointer hover:scale-[1.01] active:scale-[0.98]' : 'cursor-default opacity-80'}`}
             >
               {/* Subtle background glow */}
               <div className="absolute -left-10 -top-10 w-32 h-32 bg-primary/5 rounded-full blur-3xl opacity-0 group-hover:opacity-100 transition-opacity duration-500" />
@@ -952,7 +1003,10 @@ export default function DashboardClient({
                 </div>
                 <div>
                   <h3 className="text-[15px] font-bold text-primary tracking-tight leading-tight mb-0.5">{t('pendingDividends.title')}</h3>
-                  <p className="text-[13px] text-secondary font-medium opacity-80">{t('pendingDividends.description', { count: pendingDividendCount })}</p>
+                  <p className="text-[13px] text-secondary font-medium opacity-80">
+                    {t('pendingDividends.description', { count: pendingDividendCount })}
+                    {!selectionCanWrite ? ' Select a single portfolio to review.' : ''}
+                  </p>
                 </div>
               </div>
               
@@ -980,6 +1034,7 @@ export default function DashboardClient({
             </p>
             <button
               onClick={() => setIsModalOpen(true)}
+              disabled={!selectionCanWrite}
               className="px-8 py-3 bg-primary text-on-primary text-sm font-semibold rounded-full hover:bg-primary-hover transition-all shadow-sm flex items-center space-x-2"
             >
               <Plus className="w-4 h-4" />
@@ -1356,19 +1411,20 @@ export default function DashboardClient({
         user={user}
       />
 
-      <DividendConfirmationModal
-        isOpen={isDividendModalOpen}
-        onClose={() => setIsDividendModalOpen(false)}
-        portfolioId={activePortfolioId}
-        onConfirmed={() => {
-          // Refresh the page to show updated dividend income
-          setPendingDividendCountOverride({
-            portfolioId: activePortfolioId,
-            count: 0,
-          });
-          window.location.reload();
-        }}
-      />
+      {selectionCanWrite && (
+        <DividendConfirmationModal
+          isOpen={isDividendModalOpen}
+          onClose={() => setIsDividendModalOpen(false)}
+          portfolioId={activePortfolioId}
+          onConfirmed={() => {
+            setPendingDividendCountOverride({
+              portfolioId: pendingDividendKey,
+              count: 0,
+            });
+            window.location.reload();
+          }}
+        />
+      )}
     </div>
   );
 }

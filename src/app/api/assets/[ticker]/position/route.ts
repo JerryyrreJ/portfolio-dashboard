@@ -11,7 +11,8 @@ export async function GET(
   const { ticker } = await context.params
   const decodedTicker = decodeURIComponent(ticker).toUpperCase()
   const pid = request.nextUrl.searchParams.get('pid') ?? undefined
-  const perf = createServerProfiler('api/assets.position.GET', `ticker=${decodedTicker}${pid ? ` pid=${pid}` : ''}`)
+  const pids = request.nextUrl.searchParams.get('pids') ?? undefined
+  const perf = createServerProfiler('api/assets.position.GET', `ticker=${decodedTicker}${pids ? ` pids=${pids}` : pid ? ` pid=${pid}` : ''}`)
 
   try {
     const user = await perf.time('getUser', () => getUser())
@@ -34,7 +35,8 @@ export async function GET(
       user.id,
       decodedTicker,
       asset.lastPrice || 0,
-      pid
+      pid,
+      pids
     ))
 
     perf.flush(`user=${user.id} state=${position.personalDataState} tx=${position.transactions.length}`)
