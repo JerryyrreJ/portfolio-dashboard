@@ -3,6 +3,7 @@
 import { motion, type Variants } from "framer-motion";
 import Link from "next/link";
 import { ArrowRight } from "lucide-react";
+import PendingNavLink, { PendingLinkStatus } from "@/app/components/PendingNavLink";
 
 const smoothEase = [0.16, 1, 0.3, 1] as const;
 
@@ -88,7 +89,7 @@ export default function HeroSection() {
           variants={itemVariants}
           className="mt-10 flex w-full flex-col items-center justify-center gap-4 sm:w-auto sm:flex-row md:mt-12"
         >
-          <Link href="/app" className="w-full sm:w-auto">
+          <PendingNavLink href="/app" className="w-full sm:w-auto" showIndicator={false}>
             <motion.button
               whileHover={{ scale: 1.02 }}
               whileTap={{ scale: 0.98 }}
@@ -96,12 +97,16 @@ export default function HeroSection() {
             >
               <span className="relative z-10 flex items-center gap-2">
                 Open Dashboard
+                <PendingLinkStatus
+                  pendingLabel="Opening..."
+                  indicatorClassName="inline-flex items-center gap-1.5 text-on-primary/80"
+                />
                 <ArrowRight className="h-4 w-4 transition-transform duration-300 group-hover:translate-x-1" />
               </span>
               {/* Subtle hover glare moving across the button */}
               <div className="absolute inset-0 -translate-x-full bg-gradient-to-r from-transparent via-white/10 to-transparent transition-transform duration-700 ease-in-out group-hover:translate-x-full dark:via-black/10" />
             </motion.button>
-          </Link>
+          </PendingNavLink>
 
           <Link href="/stock/AAPL" className="w-full sm:w-auto">
             <motion.button

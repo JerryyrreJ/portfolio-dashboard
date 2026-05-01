@@ -5,9 +5,8 @@ import { after } from "next/server";
 import { getLocale, getMessages } from "next-intl/server";
 import DashboardPageShell from './DashboardPageShell'
 import { get12MonthHistory, getIndexHistory } from '@/lib/twelvedata'
-import { getUser } from '@/lib/supabase-server'
+import { getUserWithOptions } from '@/lib/supabase-server'
 import prisma, { withRetry } from '@/lib/prisma'
-import { getPriceOnOrBefore } from '@/lib/portfolio-chart'
 import { createServerProfiler } from '@/lib/perf'
 import { absoluteUrl, siteConfig } from '@/lib/site'
 import {
@@ -150,8 +149,11 @@ async function runIndexHistorySync(
       }))
 
       const yesterday = new Date()
-      yesterday.setDate(yesterday.getDate() - 1)
-      if (latest && latest.date >= yesterday) return
+      yesterday.setUTCDate(yesterday.getUTCDate() - 1)
+      const yesterdayLabel = yesterday.toISOString().split('T')[0]
+      const latestLabel = latest?.date.toISOString().split('T')[0] ?? null
+
+      if (latestLabel && latestLabel >= yesterdayLabel) return
 
       const fromDate = latest
         ? new Date(latest.date.getTime() + 86400000).toISOString().split('T')[0]
@@ -195,7 +197,7 @@ async function runIndexHistorySync(
 
 export default async function Page({ searchParams }: { searchParams: Promise<{ pid?: string; pids?: string }> }) {
   const [user, rawSearchParams, locale, messages] = await Promise.all([
-    getUser(),
+    getUserWithOptions({ retries: 1, delayMs: 150 }),
     searchParams,
     getLocale(),
     getMessages(),
@@ -232,12 +234,12 @@ export default async function Page({ searchParams }: { searchParams: Promise<{ p
   let allPortfolios = await perf.time('portfolio.findMany', () => withRetry(() => prisma.portfolio.findMany({
     where: { userId: user.id },
     orderBy: { createdAt: 'asc' },
-  })))
+  }), 2, 300))
 
   if (allPortfolios.length === 0) {
     const created = await perf.time('portfolio.createDefault', () => withRetry(() => prisma.portfolio.create({
       data: { userId: user.id, name: 'My Portfolio' },
-    })))
+    }), 2, 300))
     allPortfolios = [created]
   }
 
@@ -263,13 +265,13 @@ export default async function Page({ searchParams }: { searchParams: Promise<{ p
       where: { portfolioId: { in: selectedPortfolioIds } },
       ...dashboardTransactionSelect,
       orderBy: { date: 'asc' },
-    }))),
+    }), 2, 300)),
     perf.time('pendingDividend.count', () => withRetry(() => prisma.pendingDividend.count({
       where: {
         portfolioId: { in: selectedPortfolioIds },
         status: 'pending',
       },
-    }))),
+    }), 2, 300)),
   ])
 
   if (transactions.length === 0) {
@@ -373,228 +375,9 @@ export default async function Page({ searchParams }: { searchParams: Promise<{ p
   }))
 
   const summary = derivedDashboard.summary
-  const holdingPriceByTicker = new Map(
-    holdingsData.flatMap((group) => group.holdings.map((holding) => [holding.ticker, holding.price] as const))
-  )
-
-  // 5. 时间轴走势数据 (给折线图)
-
-  // 5a. 从 AssetPriceHistory 表读取所有持仓的日度价格（过去1年）
-  const tickers = Array.from(new Set(transactions.map((transaction) => transaction.asset.ticker)));
-  const oneYearAgo = new Date();
-  oneYearAgo.setFullYear(oneYearAgo.getFullYear() - 1);
-
-  const priceRows = await perf.time('assetPriceHistory.findMany', () => withRetry(() => prisma.assetPriceHistory.findMany({
-    where: {
-      ticker: { in: tickers },
-      date: { gte: oneYearAgo },
-    },
-    orderBy: { date: 'asc' },
-    select: { ticker: true, date: true, close: true },
-  })));
-
-  // 5b. 按 ticker 分组，date 转为 YYYY-MM-DD 字符串
-  const priceHistories: Record<string, { date: string; price: number }[]> = {};
-  for (const row of priceRows) {
-    const dateStr = row.date.toISOString().split('T')[0];
-    if (!priceHistories[row.ticker]) priceHistories[row.ticker] = [];
-    priceHistories[row.ticker].push({ date: dateStr, price: row.close });
-  }
-
-  // 5c. 收集所有出现过的日期标签，按时间排序
-  const allDateLabels = Array.from(
-    new Set(Object.values(priceHistories).flatMap(h => h.map(p => p.date)))
-  ).sort();
-
-  // Fetch index price history covering the same date range
-  const firstChartDate = allDateLabels[0];
-  let indexPriceRows: { ticker: string; date: Date; close: number }[] = [];
-
-  if (firstChartDate && indexPriceHistory) {
-    try {
-      indexPriceRows = await perf.time('indexPriceHistory.findMany', () => withRetry(() => indexPriceHistory.findMany({
-        where: {
-          ticker: { in: ['SPY', 'QQQ'] },
-          date: { gte: new Date(firstChartDate) },
-        },
-        orderBy: { date: 'asc' },
-        select: { ticker: true, date: true, close: true },
-      })));
-    } catch (e) {
-      if (isIndexPriceHistoryUnavailable(e)) {
-        console.warn('[Dashboard] Skipping benchmark series because IndexPriceHistory is not available yet.')
-      } else {
-        throw e;
-      }
-    }
-  }
-
-  const indexPriceHistories: Record<string, { date: string; price: number }[]> = {};
-  for (const row of indexPriceRows) {
-    const dateStr = row.date.toISOString().split('T')[0];
-    if (!indexPriceHistories[row.ticker]) indexPriceHistories[row.ticker] = [];
-    indexPriceHistories[row.ticker].push({ date: dateStr, price: row.close });
-  }
-
-  // 5d. 将交易记录按时间排序，用于逐日回放
-  const sortedTransactions = [...transactions].sort(
-    (a, b) => new Date(a.date).getTime() - new Date(b.date).getTime()
-  );
-
-  // 5e. 对每个日期，回放交易 → 算持仓 → 乘以当日价格 → 得出该日组合市值
-  const holdingsAtDate = new Map<string, number>(); // ticker → qty
-  let txIndex = 0;
-  let cumulativeReturnFactor = 1.0;
-
-  const historicalChartData = allDateLabels.map((dateLabel, i) => {
-    const dayEnd = new Date(dateLabel + 'T23:59:59Z');
-
-    // 在推进交易之前先快照持仓（用于 TWR 权重计算）
-    const holdingsBeforeTx = new Map(holdingsAtDate);
-
-    // 推进交易回放：把截止当天的所有交易都计入
-    while (txIndex < sortedTransactions.length && new Date(sortedTransactions[txIndex].date) <= dayEnd) {
-      const t = sortedTransactions[txIndex];
-      const ticker = t.asset.ticker;
-      const qty = holdingsAtDate.get(ticker) ?? 0;
-      if (t.type === 'BUY') holdingsAtDate.set(ticker, qty + t.quantity);
-      else if (t.type === 'SELL') holdingsAtDate.set(ticker, qty - t.quantity);
-      txIndex++;
-    }
-
-    // 当天收盘市值（用交易后持仓）
-    let total = 0;
-    for (const [ticker, qty] of holdingsAtDate) {
-      if (qty <= 0) continue;
-      const dayPrices = priceHistories[ticker];
-      if (!dayPrices) continue;
-      const price = getPriceOnOrBefore(dayPrices, dateLabel);
-      if (price == null) continue;
-      total += qty * price;
-    }
-
-    // TWR 日收益率：用交易前的持仓权重 × (今天价格 / 昨天价格)
-    // 这样加仓/减仓完全不影响当天的收益率，只影响之后的权重
-    if (i > 0) {
-      const prevLabel = allDateLabels[i - 1];
-      let dailyFactor = 0;
-      let weightSum = 0;
-      for (const [ticker, qty] of holdingsBeforeTx) {
-        if (qty <= 0) continue;
-        const dayPrices = priceHistories[ticker];
-        if (!dayPrices) continue;
-        const todayPrice = getPriceOnOrBefore(dayPrices, dateLabel);
-        const prevPrice = getPriceOnOrBefore(dayPrices, prevLabel);
-        if (todayPrice == null || prevPrice == null || prevPrice === 0) continue;
-        const weight = qty * prevPrice;
-        dailyFactor += (todayPrice / prevPrice) * weight;
-        weightSum += weight;
-      }
-      if (weightSum > 0) {
-        cumulativeReturnFactor *= dailyFactor / weightSum;
-      }
-    }
-
-    return {
-      date: dateLabel,
-      Total: Math.round(total * 100) / 100,
-      Return: Math.round((cumulativeReturnFactor - 1) * 10000) / 100,
-    };
-  }).filter(p => p.Total > 0);
-
-  // Compute index cumulative returns over the same visible portfolio history range.
-  // Anchor every benchmark to the portfolio's first chart day (falling back to the
-  // earliest available index price) so the comparison line starts at 0% on the same
-  // date as the portfolio line, no matter when index history happens to begin.
-  const INDEX_TICKERS = ['SPY', 'QQQ'] as const;
-  const indexReturnsByDate = new Map<string, { SPY: number | null; QQQ: number | null }>();
-
-  const firstChartLabel = historicalChartData[0]?.date;
-  const indexBaselinePrices: Record<string, number | null> = { SPY: null, QQQ: null };
-
-  if (firstChartLabel) {
-    for (const idx of INDEX_TICKERS) {
-      const prices = indexPriceHistories[idx];
-      if (!prices || prices.length === 0) continue;
-      const baseline = getPriceOnOrBefore(prices, firstChartLabel) ?? prices[0]?.price ?? null;
-      if (baseline != null && baseline > 0) {
-        indexBaselinePrices[idx] = baseline;
-      }
-    }
-  }
-
-  for (let i = 0; i < historicalChartData.length; i++) {
-    const dateLabel = historicalChartData[i].date;
-    const pointReturns: { SPY: number | null; QQQ: number | null } = { SPY: null, QQQ: null };
-
-    for (const idx of INDEX_TICKERS) {
-      const baseline = indexBaselinePrices[idx];
-      const prices = indexPriceHistories[idx];
-      if (baseline == null || !prices || prices.length === 0) continue;
-
-      const todayPrice = getPriceOnOrBefore(prices, dateLabel);
-      if (todayPrice == null || todayPrice <= 0) continue;
-
-      pointReturns[idx] = Math.round((todayPrice / baseline - 1) * 10000) / 100;
-    }
-
-    indexReturnsByDate.set(dateLabel, pointReturns);
-  }
-
-  const historicalChartDataWithIndex = historicalChartData.map((point) => {
-    const pointReturns = indexReturnsByDate.get(point.date);
-    return {
-      ...point,
-      SPY: pointReturns?.SPY ?? null,
-      QQQ: pointReturns?.QQQ ?? null,
-    };
-  });
-
-  // 5f. 末尾追加 Today 实时数据
-  // Today 的 TWR：用最后一个历史日的价格作为昨天
-  const lastHistorical = historicalChartDataWithIndex[historicalChartDataWithIndex.length - 1];
-  let todayReturnFactor = cumulativeReturnFactor;
-  if (lastHistorical) {
-    const lastLabel = lastHistorical.date;
-    let dailyFactor = 0;
-    let weightSum = 0;
-    for (const [ticker, qty] of holdingsAtDate) {
-      if (qty <= 0) continue;
-      const dayPrices = priceHistories[ticker];
-      if (!dayPrices) continue;
-      const prevPrice = getPriceOnOrBefore(dayPrices, lastLabel);
-      // 今天实时价格从 holdingsData 里取
-      const livePrice = holdingPriceByTicker.get(ticker);
-      if (prevPrice == null || livePrice == null || prevPrice === 0) continue;
-      const weight = qty * prevPrice;
-      dailyFactor += (livePrice / prevPrice) * weight;
-      weightSum += weight;
-    }
-    if (weightSum > 0) {
-      todayReturnFactor *= dailyFactor / weightSum;
-    }
-  }
-
-  // Index returns for Today point — carry forward the last historical value
-  const todayIndexReturns: Record<string, number | null> = { SPY: null, QQQ: null };
-  for (const idx of INDEX_TICKERS) {
-    const lastVal = historicalChartDataWithIndex[historicalChartDataWithIndex.length - 1]?.[idx] ?? null;
-    if (lastVal != null) todayIndexReturns[idx] = lastVal;
-  }
-
-  const chartData = [
-    ...historicalChartDataWithIndex,
-    {
-      date: 'Today',
-      Total: Math.round(summary.totalValue * 100) / 100,
-      Return: Math.round((todayReturnFactor - 1) * 10000) / 100,
-      SPY: todayIndexReturns['SPY'],
-      QQQ: todayIndexReturns['QQQ'],
-    },
-  ];
 
   // 6. 将所有算好的数据作为 Props 传递给客户端组件渲染
-  perf.flush(`user=${user.id} tx=${transactions.length} holdings=${holdingsData.reduce((sum, group) => sum + group.holdings.length, 0)} chart=${historicalChartData.length}`);
+  perf.flush(`user=${user.id} tx=${transactions.length} holdings=${holdingsData.reduce((sum, group) => sum + group.holdings.length, 0)} chart=deferred`);
   return renderDashboard({
     portfolioId: primaryPortfolio.id,
     portfolioName: selectionLabel,
@@ -605,7 +388,7 @@ export default async function Page({ searchParams }: { searchParams: Promise<{ p
     selectionCanWrite: selection.canWrite,
     isAllPortfoliosSelected: selection.isAllSelected,
     holdingsData,
-    chartData,
+    chartData: [],
     summary,
     initialPendingDividendCount,
     userDisplayName,

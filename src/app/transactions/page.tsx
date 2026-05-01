@@ -1,7 +1,7 @@
 import type { Prisma } from '@prisma/client';
 import { createServerProfiler } from '@/lib/perf';
 import type { PortfolioClientRecord } from '@/lib/portfolio-client';
-import { getUser } from '@/lib/supabase-server';
+import { getUserWithOptions } from '@/lib/supabase-server';
 import prisma, { withRetry } from '@/lib/prisma';
 import TransactionsClient from './TransactionsClient';
 import {
@@ -100,7 +100,7 @@ export default async function TransactionsPage(props: {
   const perf = createServerProfiler('transactions/page');
   // Parallelize user auth and searchParams resolution
   const [user, searchParams] = await Promise.all([
-    getUser(),
+    getUserWithOptions({ retries: 1, delayMs: 150 }),
     props.searchParams,
   ]);
   const isLoggedIn = !!user;
@@ -125,7 +125,7 @@ export default async function TransactionsPage(props: {
           preferences: true,
           settingsUpdatedAt: true,
         },
-      })));
+      }), 2, 300));
       initialPortfolios = portfolios.map((portfolio) => ({
         id: portfolio.id,
         name: portfolio.name,

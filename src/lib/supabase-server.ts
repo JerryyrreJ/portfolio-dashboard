@@ -61,11 +61,20 @@ export async function createSupabaseServerClient(profiler?: ServerProfilerLike) 
 }
 
 export async function getUser() {
+  return getUserWithOptions();
+}
+
+export async function getUserWithOptions(options?: {
+  retries?: number;
+  delayMs?: number;
+}) {
   const perf = createServerProfiler('supabase.getUser')
+  const retries = Math.max(1, options?.retries ?? 3)
+  const delayMs = options?.delayMs ?? 1500
   try {
     const supabase = await createSupabaseServerClient(perf)
 
-    for (let attempt = 1; attempt <= 3; attempt++) {
+    for (let attempt = 1; attempt <= retries; attempt++) {
       try {
         const { data: { user } } = await perf.time(`auth.getUser#${attempt}`, () => supabase.auth.getUser())
         perf.flush(`result=${user ? 'user' : 'null'} attempt=${attempt}`)
@@ -77,9 +86,9 @@ export async function getUser() {
           error.cause?.code === 'ECONNRESET' ||
           error.cause?.code === 'UND_ERR_CONNECT_TIMEOUT' ||
           error.__isAuthError === true
-        if (isNetworkError && attempt < 3) {
-          const delayMs = 1500 * attempt
-          await perf.time(`retryDelay#${attempt}`, () => new Promise<void>(res => setTimeout(res, delayMs)))
+        if (isNetworkError && attempt < retries) {
+          const retryDelayMs = delayMs * attempt
+          await perf.time(`retryDelay#${attempt}`, () => new Promise<void>(res => setTimeout(res, retryDelayMs)))
         } else {
           console.warn('getUser failed after retries:', error.message)
           perf.flush(`result=error attempt=${attempt}`)
@@ -87,7 +96,7 @@ export async function getUser() {
         }
       }
     }
-    perf.flush('result=null attempts=3')
+    perf.flush(`result=null attempts=${retries}`)
     return null
   } catch (error) {
     perf.flush('result=throw')

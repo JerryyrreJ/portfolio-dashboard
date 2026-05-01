@@ -283,13 +283,19 @@ export async function get12MonthHistory(symbol: string): Promise<{ date: string;
  * @param fromDate 开始日期 YYYY-MM-DD
  */
 export async function getIndexHistory(symbol: string, fromDate: string): Promise<{ date: string; price: number }[]> {
-  const today = new Date().toISOString().split('T')[0];
+  const endDate = new Date();
+  endDate.setUTCDate(endDate.getUTCDate() - 1);
+  const endDateLabel = endDate.toISOString().split('T')[0];
+
+  if (fromDate > endDateLabel) {
+    return [];
+  }
 
   const data = await fetchTwelveData<TDTimeSeriesResponse>('/time_series', {
     symbol: symbol.toUpperCase(),
     interval: '1day',
     start_date: fromDate,
-    end_date: today,
+    end_date: endDateLabel,
     outputsize: '5000',
   });
 

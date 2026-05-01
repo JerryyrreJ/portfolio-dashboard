@@ -34,6 +34,7 @@ import DividendConfirmationModal from './components/DividendConfirmationModal';
 import CachedAssetLogo from './components/CachedAssetLogo';
 import DashboardSkeleton from './components/DashboardSkeleton';
 import Link from 'next/link';
+import PendingNavLink from './components/PendingNavLink';
 import { useCurrency } from '@/lib/useCurrency';
 import { usePreferences } from '@/lib/usePreferences';
 import { usePortfolioDashboard } from '@/lib/ledger/react';
@@ -41,6 +42,7 @@ import type { User as SupabaseUser } from '@supabase/supabase-js';
 import type { PortfolioClientRecord } from '@/lib/portfolio-client';
 import { toPortfolioSelectionHref } from '@/lib/portfolio-links';
 import { buildPortfolioSelectionLabel } from '@/lib/portfolio-selection';
+import type { DashboardChartPoint } from '@/lib/dashboard-chart';
 
 // --- 辅助格式化组件 ---
 interface FormatValueProps {
@@ -104,21 +106,14 @@ interface DashboardClientProps {
   selectionCanWrite?: boolean;
   isAllPortfoliosSelected?: boolean;
   holdingsData: HoldingsGroup[];
-  chartData: ChartPoint[];
+  chartData: DashboardChartPoint[];
   summary: Summary;
   initialPendingDividendCount?: number;
   userDisplayName?: string;
   user?: SupabaseUser | null;
 }
 
-interface ChartPoint {
-  date: string;
-  Total?: number;
-  Local?: number;
-  Return?: number;
-  SPY?: number | null;
-  QQQ?: number | null;
-}
+type ChartPoint = DashboardChartPoint;
 
 interface XAxisTickProps {
   x?: number;
@@ -289,6 +284,8 @@ export default function DashboardClient({
   const [localHoldings, setLocalHoldings] = useState<HoldingsGroup[]>(holdingsData);
   const [localSummary, setLocalSummary] = useState<Summary>(summary);
   const [localChartData, setLocalChartData] = useState<ChartPoint[]>(chartData);
+  const [serverChartData, setServerChartData] = useState<ChartPoint[]>(chartData);
+  const [isChartLoading, setIsChartLoading] = useState(false);
   const [livePrices, setLivePrices] = useState<Record<string, number>>({});
   const effectiveSelectedPortfolioIds = useMemo(
     () => (selectedPortfolioIds.length > 0
@@ -324,22 +321,40 @@ export default function DashboardClient({
         },
       )
     : (ledger.portfolios.find((portfolio) => portfolio.id === activePortfolioId)?.name ?? portfolioName);
-  const activePortfolios = ledger.ready && ledger.portfolios.length > 0
-    ? ledger.portfolios.map((portfolio) => ({ id: portfolio.id, name: portfolio.name }))
-    : portfolios;
+  const activePortfolios = useMemo(
+    () => {
+      const merged = new Map(portfolios.map((portfolio) => [portfolio.id, portfolio]));
+
+      ledger.portfolios.forEach((portfolio) => {
+        merged.set(portfolio.id, { id: portfolio.id, name: portfolio.name });
+      });
+
+      return merged.size > 0 ? Array.from(merged.values()) : portfolios;
+    },
+    [ledger.portfolios, portfolios],
+  );
+  const hasServerDashboardData = holdingsData.some((group) => group.holdings.length > 0)
+    || chartData.length > 0
+    || summary.totalValue !== 0
+    || summary.totalCapGain !== 0
+    || summary.totalCapGainPercentage !== 0
+    || summary.totalRealizedGain !== 0
+    || summary.totalDividendIncome !== 0;
+  const shouldUseLedgerDashboardData = isLocalPortfolio
+    || (ledger.ready && (ledger.transactions.length > 0 || !hasServerDashboardData));
   const selectionHref = !isLocalPortfolio
     ? toPortfolioSelectionHref('/app', effectiveSelectedPortfolioIds)
     : '/app';
   const transactionsHref = !isLocalPortfolio
     ? toPortfolioSelectionHref('/transactions', effectiveSelectedPortfolioIds)
     : '/transactions';
-  const displayHoldings = ledger.ready ? ledger.holdings : localHoldings;
-  const displaySummary = ledger.ready ? ledger.summary : localSummary;
+  const displayHoldings = shouldUseLedgerDashboardData ? ledger.holdings : localHoldings;
+  const displaySummary = shouldUseLedgerDashboardData ? ledger.summary : localSummary;
   const displayChartData = useMemo<ChartPoint[]>(() => (
-    ledger.ready
+    shouldUseLedgerDashboardData && localChartData.length === 0
       ? [{ date: 'Today', Local: ledger.summary.totalValue, Total: ledger.summary.totalValue }]
-      : localChartData
-  ), [ledger.ready, ledger.summary.totalValue, localChartData]);
+      : (serverChartData.length > 0 ? serverChartData : localChartData)
+  ), [ledger.summary.totalValue, localChartData, serverChartData, shouldUseLedgerDashboardData]);
 
   // 切换 portfolio 时显示骨架屏，同步 props → state
   const [isSwitching, setIsSwitching] = useState(false);
@@ -348,7 +363,7 @@ export default function DashboardClient({
   const refreshedProfileLogosForPortfolioRef = useRef<string | null>(null);
 
   useEffect(() => {
-    if (ledger.ready && ledger.portfolios.length > 0) {
+    if (shouldUseLedgerDashboardData) {
       return;
     }
 
@@ -362,6 +377,8 @@ export default function DashboardClient({
       setLocalHoldings(holdingsData);
       setLocalSummary(summary);
       setLocalChartData(chartData);
+      setServerChartData(chartData);
+      setIsChartLoading(chartData.length === 0);
       // 给 React 一帧渲染骨架屏，再关闭
       closeFrame = requestAnimationFrame(() => setIsSwitching(false));
     });
@@ -369,7 +386,51 @@ export default function DashboardClient({
       cancelAnimationFrame(openFrame);
       cancelAnimationFrame(closeFrame);
     };
-  }, [chartData, holdingsData, ledger.portfolios.length, ledger.ready, portfolioId, summary]);
+  }, [chartData, holdingsData, ledger.portfolios.length, portfolioId, shouldUseLedgerDashboardData, summary]);
+
+  useEffect(() => {
+    if (isLocalPortfolio || shouldUseLedgerDashboardData) {
+      return;
+    }
+
+    const controller = new AbortController();
+    const params = new URLSearchParams();
+
+    if (effectiveSelectedPortfolioIds.length > 0) {
+      params.set('pids', effectiveSelectedPortfolioIds.join(','));
+    }
+
+    setIsChartLoading(true);
+
+    const loadChartData = async () => {
+      try {
+        const response = await fetch(`/api/dashboard/chart?${params.toString()}`, {
+          signal: controller.signal,
+          cache: 'no-store',
+        });
+        if (!response.ok) {
+          throw new Error(`Chart request failed with ${response.status}`);
+        }
+
+        const payload = await response.json() as { chartData?: ChartPoint[] };
+        if (!controller.signal.aborted) {
+          setServerChartData(payload.chartData ?? []);
+        }
+      } catch (error) {
+        if (!controller.signal.aborted) {
+          console.warn('Failed to load deferred dashboard chart data:', error);
+        }
+      } finally {
+        if (!controller.signal.aborted) {
+          setIsChartLoading(false);
+        }
+      }
+    };
+
+    void loadChartData();
+
+    return () => controller.abort();
+  }, [effectiveSelectedPortfolioIds, isLocalPortfolio, shouldUseLedgerDashboardData]);
 
   useEffect(() => {
     if (!activePortfolioId || isLocalPortfolio) return;
@@ -423,7 +484,7 @@ export default function DashboardClient({
     // 直接用服务端传下来的 holdingsData 作为 source of truth，避免从
     // displayHoldings 读（那会在 effect 自身的 setState 后再触发一次读到自己的脏输出）。
     const tickers = new Set<string>();
-    const sourceHoldings = ledger.ready ? ledger.holdings : holdingsData;
+    const sourceHoldings = shouldUseLedgerDashboardData ? ledger.holdings : holdingsData;
     sourceHoldings.forEach(group => {
       group.holdings.forEach(h => tickers.add(h.ticker));
     });
@@ -494,7 +555,7 @@ export default function DashboardClient({
     return () => {
       window.clearTimeout(timer);
     };
-  }, [activePortfolioId, effectiveSelectedPortfolioIds, holdingsData, ledger.holdings, ledger.ready]);
+  }, [activePortfolioId, effectiveSelectedPortfolioIds, holdingsData, ledger.holdings, shouldUseLedgerDashboardData]);
 
   // 获取待确认分红数量
   const pendingDividendKey = effectiveSelectedPortfolioIds.join(',');
@@ -878,8 +939,22 @@ export default function DashboardClient({
               <span>Folio</span>
             </div>
           <nav className="hidden md:flex space-x-7 text-[14px] font-semibold text-secondary">
-            <a href={selectionHref} className="text-primary border-b-2 border-primary py-[16px]">{t('nav.investments')}</a>
-            <a href={transactionsHref} className="hover:text-primary transition-colors py-[16px]">{t('nav.transactions')}</a>
+            <PendingNavLink
+              href={selectionHref}
+              className="text-primary border-b-2 border-primary py-[16px]"
+              pendingLabel="Opening..."
+              indicatorClassName="inline-flex items-center gap-1 text-primary/70"
+            >
+              {t('nav.investments')}
+            </PendingNavLink>
+            <PendingNavLink
+              href={transactionsHref}
+              className="hover:text-primary transition-colors py-[16px]"
+              pendingLabel="Loading..."
+              indicatorClassName="inline-flex items-center gap-1 text-current/70"
+            >
+              {t('nav.transactions')}
+            </PendingNavLink>
           </nav>
         </div>
         <div className="flex items-center space-x-5">
@@ -900,13 +975,14 @@ export default function DashboardClient({
             </button>
 
             {/* Mobile Transactions Link */}
-            <Link
+            <PendingNavLink
               href={transactionsHref}
               className="md:hidden w-7 h-7 rounded-full bg-element-hover border border-border flex items-center justify-center text-secondary active:bg-gray-200 transition-colors shadow-sm"
               title={t('nav.transactions')}
+              showIndicator={false}
             >
               <HistoryIcon className="w-3.5 h-3.5" />
-            </Link>
+            </PendingNavLink>
 
             {/* Account Link - Direct navigation to settings */}
             <Link
@@ -1176,6 +1252,9 @@ export default function DashboardClient({
               </div>
 
               <div className="flex-1 min-h-[300px] w-full relative">
+                {isChartLoading && chartDisplayData.length === 0 ? (
+                  <div className="absolute inset-0 rounded-xl border border-border/40 bg-element-hover/30 animate-pulse" />
+                ) : null}
                 {/* 自定义 Y 轴数字，绝对定位贴右边框 */}
                 <div className="absolute right-0 top-[10px] bottom-[20px] flex flex-col-reverse justify-between items-end pointer-events-none z-10">
                   {yTicks.map((v, i) => (
@@ -1184,7 +1263,8 @@ export default function DashboardClient({
                     </span>
                   ))}
                 </div>
-                <ResponsiveContainer width="100%" height="100%">
+                {chartDisplayData.length > 0 ? (
+                  <ResponsiveContainer width="100%" height="100%">
                   {(() => {
                     const firstPoint = chartDisplayData.find((point: ChartPoint) => point.date !== 'Today');
                     const lastPoint = chartDisplayData[chartDisplayData.length - 1];
@@ -1255,7 +1335,12 @@ export default function DashboardClient({
                       </AreaChart>
                     );
                   })()}
-                </ResponsiveContainer>
+                  </ResponsiveContainer>
+                ) : (
+                  <div className="flex h-full items-center justify-center rounded-xl border border-border/40 bg-element-hover/20 text-[12px] font-medium text-secondary">
+                    {isChartLoading ? t('chart.loading') : t('chart.totalPortfolioValue')}
+                  </div>
+                )}
               </div>
 
               {/* Bottom Time Range Switcher */}

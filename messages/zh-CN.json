@@ -47,6 +47,7 @@
       "returnPercent": "回报",
       "today": "今天",
       "all": "全部",
+      "loading": "正在加载图表...",
       "totalReturnSuffix": "总回报",
       "returnSince": "自 {date} 以来的回报",
       "returnOver": "{range} 区间回报",

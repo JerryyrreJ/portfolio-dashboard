@@ -47,6 +47,7 @@
       "returnPercent": "Return",
       "today": "Today",
       "all": "All",
+      "loading": "Loading chart...",
       "totalReturnSuffix": "total return",
       "returnSince": "return since {date}",
       "returnOver": "return over {range}",

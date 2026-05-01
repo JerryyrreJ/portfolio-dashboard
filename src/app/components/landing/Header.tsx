@@ -1,8 +1,9 @@
 "use client";
 
-import Link from "next/link";
 import { motion } from "framer-motion";
 import { TrendingUp, ChevronDown } from "lucide-react";
+import Link from "next/link";
+import PendingNavLink, { PendingLinkStatus } from "@/app/components/PendingNavLink";
 
 export default function Header() {
   return (
@@ -53,15 +54,19 @@ export default function Header() {
           >
             Sign In
           </Link>
-          <Link href="/app">
+          <PendingNavLink href="/app" showIndicator={false}>
             <motion.button
               whileHover={{ scale: 1.02 }}
               whileTap={{ scale: 0.98 }}
-              className="rounded-full bg-primary px-5 py-2.5 text-[13px] font-bold tracking-wide text-on-primary shadow-[0_1px_3px_rgba(0,0,0,0.3)] hover:opacity-90 transition-opacity"
+              className="inline-flex items-center gap-2 rounded-full bg-primary px-5 py-2.5 text-[13px] font-bold tracking-wide text-on-primary shadow-[0_1px_3px_rgba(0,0,0,0.3)] transition-opacity hover:opacity-90"
             >
               Open Dashboard
+              <PendingLinkStatus
+                pendingLabel="Opening..."
+                indicatorClassName="inline-flex items-center gap-1.5 text-on-primary/80"
+              />
             </motion.button>
-          </Link>
+          </PendingNavLink>
         </div>
       </div>
     </header>
