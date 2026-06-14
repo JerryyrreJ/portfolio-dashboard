@@ -28,6 +28,7 @@ export interface LedgerTransactionRecord {
   id: string;
   portfolioId: string;
   type: 'BUY' | 'SELL' | 'DIVIDEND';
+  pendingDividendId?: string | null;
   eventId?: string | null;
   source?: string | null;
   subtype?: string | null;
@@ -68,6 +69,7 @@ export interface LedgerBootstrapPayload {
     id: string;
     portfolioId: string;
     type: 'BUY' | 'SELL' | 'DIVIDEND';
+    pendingDividendId?: string | null;
     eventId?: string | null;
     source?: string | null;
     subtype?: string | null;
@@ -106,6 +108,7 @@ export interface CreateLedgerTransactionInput {
   namespace: LedgerNamespace;
   portfolioId: string;
   type: 'BUY' | 'SELL' | 'DIVIDEND';
+  pendingDividendId?: string | null;
   eventId?: string | null;
   source?: string | null;
   subtype?: string | null;

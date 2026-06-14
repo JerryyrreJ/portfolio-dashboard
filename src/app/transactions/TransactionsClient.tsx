@@ -26,6 +26,7 @@ import { toPortfolioSelectionHref } from '@/lib/portfolio-links';
 interface TransactionWithAsset {
   id: string;
   type: string;
+  pendingDividendId?: string | null;
   eventId?: string | null;
   source?: string | null;
   subtype?: string | null;

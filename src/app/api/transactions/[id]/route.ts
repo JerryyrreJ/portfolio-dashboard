@@ -7,6 +7,10 @@ import {
   findOwnedTransaction,
   requireAuthenticatedUser,
 } from '@/lib/ownership';
+import {
+  PENDING_DIVIDEND_STATUS_CONFIRMED,
+  PENDING_DIVIDEND_STATUS_VOIDED,
+} from '@/lib/pending-dividends';
 
 function isManagedDripTransaction(transaction: {
   source?: string | null;
@@ -31,6 +35,22 @@ function parseOptionalNumber(value: unknown) {
 
 function isSameNumber(a: number, b: number, epsilon: number = 1e-9) {
   return Math.abs(a - b) <= epsilon;
+}
+
+async function voidLinkedPendingDividend(
+  txClient: Pick<typeof prisma, 'pendingDividend'>,
+  pendingDividendId: string
+) {
+  return txClient.pendingDividend.updateMany({
+    where: {
+      id: pendingDividendId,
+      status: PENDING_DIVIDEND_STATUS_CONFIRMED,
+    },
+    data: {
+      status: PENDING_DIVIDEND_STATUS_VOIDED,
+      voidedAt: new Date(),
+    },
+  });
 }
 
 // PATCH /api/transactions/[id] - 编辑交易
@@ -213,9 +233,10 @@ export async function PATCH(
 
     const nextPrice = isFiniteNumber(parsedPrice) ? parsedPrice : existingTransaction.price;
     const nextFee = isFiniteNumber(parsedFee) ? parsedFee : existingTransaction.fee;
+    const isDividendTransaction = existingTransaction.type === 'DIVIDEND';
 
     if (
-      (isFiniteNumber(parsedQuantity) && parsedQuantity <= 0) ||
+      (!isDividendTransaction && isFiniteNumber(parsedQuantity) && parsedQuantity <= 0) ||
       (isFiniteNumber(parsedPrice) && parsedPrice <= 0) ||
       (isFiniteNumber(parsedFee) && parsedFee < 0)
     ) {
@@ -244,7 +265,9 @@ export async function PATCH(
       where: { id: existingTransaction.id },
       data: {
         date: requestedDate,
-        quantity: isFiniteNumber(parsedQuantity) ? parsedQuantity : undefined,
+        quantity: !isDividendTransaction && isFiniteNumber(parsedQuantity)
+          ? parsedQuantity
+          : undefined,
         price: isFiniteNumber(parsedPrice) ? parsedPrice : undefined,
         priceUSD: fx.priceUSD,
         exchangeRate: fx.exchangeRate,
@@ -298,11 +321,18 @@ export async function DELETE(
         );
       }
 
-      await prisma.transaction.deleteMany({
-        where: {
-          portfolioId: existingTransaction.portfolioId,
-          eventId: existingTransaction.eventId,
-        },
+      const linkedPendingDividendId = existingTransaction.pendingDividendId;
+      await prisma.$transaction(async (tx) => {
+        await tx.transaction.deleteMany({
+          where: {
+            portfolioId: existingTransaction.portfolioId,
+            eventId: existingTransaction.eventId,
+          },
+        });
+
+        if (linkedPendingDividendId) {
+          await voidLinkedPendingDividend(tx, linkedPendingDividendId);
+        }
       });
 
       revalidatePath('/transactions');
@@ -311,13 +341,22 @@ export async function DELETE(
         success: true,
         linked: true,
         eventId: existingTransaction.eventId,
+        voidedPendingDividendId: linkedPendingDividendId,
         message: 'DRIP event deleted successfully',
       });
     }
 
-    // 删除交易
-    await prisma.transaction.delete({
-      where: { id },
+    let legacyUnlinked = false;
+    await prisma.$transaction(async (tx) => {
+      await tx.transaction.delete({
+        where: { id },
+      });
+
+      if (existingTransaction.pendingDividendId) {
+        await voidLinkedPendingDividend(tx, existingTransaction.pendingDividendId);
+      } else if (existingTransaction.type === 'DIVIDEND' && existingTransaction.source === 'dividend_sync') {
+        legacyUnlinked = true;
+      }
     });
 
     revalidatePath('/transactions');
@@ -325,6 +364,8 @@ export async function DELETE(
     return NextResponse.json({
       success: true,
       message: 'Transaction deleted successfully',
+      voidedPendingDividendId: existingTransaction.pendingDividendId,
+      legacyUnlinked,
     });
 
   } catch (error) {

@@ -72,6 +72,7 @@ model Transaction {
   id           String    @id @default(cuid())
   portfolioId  String
   assetId      String
+  pendingDividendId String?
   type         String
   eventId      String?
   source       String?
@@ -88,10 +89,12 @@ model Transaction {
   updatedAt    DateTime  @updatedAt
   notes        String?
   asset        Asset     @relation(fields: [assetId], references: [id])
+  pendingDividend PendingDividend? @relation(fields: [pendingDividendId], references: [id], onDelete: SetNull)
   portfolio    Portfolio @relation(fields: [portfolioId], references: [id], onDelete: Cascade)
 
   @@index([portfolioId, date])
   @@index([assetId, date])
+  @@index([pendingDividendId])
 }
 
 model PendingDividend {
@@ -105,10 +108,16 @@ model PendingDividend {
   dividendPerShare Float
   calculatedAmount Float
   currency         String    @default("USD")
-  status           String    @default("pending") // pending, confirmed, ignored
+  status           String    @default("pending") // pending, confirmed, ignored, voided
+  confirmedAmount  Float?
+  confirmationMode String?
+  confirmedAt      DateTime?
+  ignoredAt        DateTime?
+  voidedAt         DateTime?
   createdAt        DateTime  @default(now())
   updatedAt        DateTime  @updatedAt
   portfolio        Portfolio @relation(fields: [portfolioId], references: [id], onDelete: Cascade)
+  transactions     Transaction[]
 
   @@unique([portfolioId, ticker, exDate, sourceKey])
   @@index([portfolioId, status])

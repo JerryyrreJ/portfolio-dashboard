@@ -6,11 +6,17 @@ import {
   findOwnedPendingDividends,
   requireAuthenticatedUser,
 } from '@/lib/ownership';
+import {
+  PENDING_DIVIDEND_CONFIRMATION_MODE_CASH,
+  PENDING_DIVIDEND_CONFIRMATION_MODE_REINVEST,
+  PENDING_DIVIDEND_STATUS_CONFIRMED,
+  PENDING_DIVIDEND_STATUS_PENDING,
+} from '@/lib/pending-dividends';
 
 function parseDividendAmount(rawAmount: unknown) {
   const amount = typeof rawAmount === 'number' ? rawAmount : Number(rawAmount);
 
-  if (!Number.isFinite(amount) || amount < 0) {
+  if (!Number.isFinite(amount) || amount <= 0) {
     return null;
   }
 
@@ -60,7 +66,9 @@ export async function POST(request: NextRequest) {
     const ids = Array.from(new Set<string>(requestedIds));
     const adjustments = body.adjustments || {};
     const finalAmount = body.finalAmount; // 单个确认时的金额调整
-    const requestedMode = body.mode === 'reinvest' ? 'reinvest' : 'cash';
+    const requestedMode = body.mode === PENDING_DIVIDEND_CONFIRMATION_MODE_REINVEST
+      ? PENDING_DIVIDEND_CONFIRMATION_MODE_REINVEST
+      : PENDING_DIVIDEND_CONFIRMATION_MODE_CASH;
     const reinvestPrice = parseReinvestPrice(body.reinvestPrice);
     const reinvestDate = parseReinvestDate(body.reinvestDate);
 
@@ -121,6 +129,7 @@ export async function POST(request: NextRequest) {
           mode: requestedMode,
           reinvestPrice,
           reinvestDate,
+          confirmedAt: new Date(),
           ...fx,
         };
       })
@@ -164,16 +173,32 @@ export async function POST(request: NextRequest) {
     const results = await prisma.$transaction(async (tx) => {
       const confirmedResults = [];
 
-      for (const { dividend, amount, priceUSD, exchangeRate, mode, reinvestPrice: normalizedReinvestPrice, reinvestDate: normalizedReinvestDate } of normalizedDividends) {
+      for (const {
+        dividend,
+        amount,
+        priceUSD,
+        exchangeRate,
+        mode,
+        reinvestPrice: normalizedReinvestPrice,
+        reinvestDate: normalizedReinvestDate,
+        confirmedAt,
+      } of normalizedDividends) {
         const asset = assetByTicker.get(dividend.ticker)!;
-        const eventId = mode === 'reinvest' ? randomUUID() : null;
+        const eventId = mode === PENDING_DIVIDEND_CONFIRMATION_MODE_REINVEST ? randomUUID() : null;
 
         const statusUpdate = await tx.pendingDividend.updateMany({
           where: {
             id: dividend.id,
-            status: 'pending',
+            status: PENDING_DIVIDEND_STATUS_PENDING,
           },
-          data: { status: 'confirmed' },
+          data: {
+            status: PENDING_DIVIDEND_STATUS_CONFIRMED,
+            confirmedAmount: amount,
+            confirmationMode: mode,
+            confirmedAt,
+            ignoredAt: null,
+            voidedAt: null,
+          },
         });
 
         if (statusUpdate.count !== 1) {
@@ -184,10 +209,11 @@ export async function POST(request: NextRequest) {
           data: {
             portfolioId: dividend.portfolioId,
             assetId: asset.id,
+            pendingDividendId: dividend.id,
             type: 'DIVIDEND',
             eventId,
-            source: mode === 'reinvest' ? 'drip' : 'dividend_sync',
-            subtype: mode === 'reinvest' ? 'REINVESTED_DIVIDEND' : null,
+            source: mode === PENDING_DIVIDEND_CONFIRMATION_MODE_REINVEST ? 'drip' : 'dividend_sync',
+            subtype: mode === PENDING_DIVIDEND_CONFIRMATION_MODE_REINVEST ? 'REINVESTED_DIVIDEND' : null,
             isSystemGenerated: false,
             quantity: 1,
             price: amount,
@@ -196,14 +222,14 @@ export async function POST(request: NextRequest) {
             fee: 0,
             currency: dividend.currency,
             date: dividend.payDate || dividend.exDate,
-            notes: `${mode === 'reinvest' ? 'Reinvested dividend' : 'Dividend'}: ${dividend.sharesHeld} shares × ${dividend.dividendPerShare} per share`,
+            notes: `${mode === PENDING_DIVIDEND_CONFIRMATION_MODE_REINVEST ? 'Reinvested dividend' : 'Dividend'}: ${dividend.sharesHeld} shares × ${dividend.dividendPerShare} per share`,
           },
         });
 
         let reinvestmentTransactionId: string | null = null;
         let reinvestmentQuantity: number | null = null;
 
-        if (mode === 'reinvest' && normalizedReinvestPrice) {
+        if (mode === PENDING_DIVIDEND_CONFIRMATION_MODE_REINVEST && normalizedReinvestPrice) {
           const reinvestFx = reinvestFxByDividendId.get(dividend.id);
           if (!reinvestFx) {
             throw new Error(`Missing reinvest fx for dividend ${dividend.id}`);
@@ -214,6 +240,7 @@ export async function POST(request: NextRequest) {
             data: {
               portfolioId: dividend.portfolioId,
               assetId: asset.id,
+              pendingDividendId: dividend.id,
               type: 'BUY',
               eventId,
               source: 'drip',

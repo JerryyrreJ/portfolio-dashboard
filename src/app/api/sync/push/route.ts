@@ -9,6 +9,7 @@ type TransactionPayload = {
   id: string;
   portfolioId: string;
   type: 'BUY' | 'SELL' | 'DIVIDEND';
+  pendingDividendId?: string | null;
   eventId?: string | null;
   source?: string | null;
   subtype?: string | null;
@@ -75,6 +76,7 @@ function toTransactionPayload(payload: Record<string, unknown>): TransactionPayl
     id: payload.id,
     portfolioId: payload.portfolioId,
     type: payload.type as TransactionPayload['type'],
+    pendingDividendId: typeof payload.pendingDividendId === 'string' ? payload.pendingDividendId : null,
     eventId: typeof payload.eventId === 'string' ? payload.eventId : null,
     source: typeof payload.source === 'string' ? payload.source : null,
     subtype: typeof payload.subtype === 'string' ? payload.subtype : null,
@@ -224,6 +226,7 @@ export async function POST(request: NextRequest) {
             id: payload.id,
             portfolioId: payload.portfolioId,
             assetId: asset.id,
+            pendingDividendId: payload.pendingDividendId,
             type: payload.type,
             eventId: payload.eventId,
             source: payload.source,
@@ -251,6 +254,7 @@ export async function POST(request: NextRequest) {
         where: { id: payload.id },
         data: {
           assetId: asset.id,
+          pendingDividendId: payload.pendingDividendId,
           type: payload.type,
           eventId: payload.eventId,
           source: payload.source,

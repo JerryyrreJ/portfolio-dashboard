@@ -567,11 +567,11 @@ export default function DashboardClient({
     let cancelled = false;
 
     const syncAndRefreshDividendStats = async () => {
-      if (isLocalPortfolio || !selectionCanWrite) return;
+      if (isLocalPortfolio || effectiveSelectedPortfolioIds.length === 0) return;
 
       // 客户端节流：与服务端 6 小时节流保持一致，避免每次加载都发请求
       const THROTTLE_MS = 6 * 60 * 60 * 1000;
-      const storageKey = `dividend_sync_at_${activePortfolioId}`;
+      const storageKey = `dividend_sync_at_${pendingDividendKey}`;
       const lastSyncAt = Number(localStorage.getItem(storageKey) || 0);
       const shouldSync = Date.now() - lastSyncAt >= THROTTLE_MS;
 
@@ -581,7 +581,11 @@ export default function DashboardClient({
         await fetch('/api/transactions/dividends/sync', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ portfolioId: activePortfolioId }),
+          body: JSON.stringify(
+            effectiveSelectedPortfolioIds.length === 1
+              ? { portfolioId: effectiveSelectedPortfolioIds[0] }
+              : { portfolioIds: effectiveSelectedPortfolioIds }
+          ),
         });
         localStorage.setItem(storageKey, String(Date.now()));
       } catch (err) {
@@ -590,7 +594,13 @@ export default function DashboardClient({
       }
 
       try {
-        const response = await fetch(`/api/transactions/dividends/stats?portfolioId=${activePortfolioId}`);
+        const params = new URLSearchParams();
+        if (effectiveSelectedPortfolioIds.length === 1) {
+          params.set('portfolioId', effectiveSelectedPortfolioIds[0]);
+        } else {
+          params.set('pids', effectiveSelectedPortfolioIds.join(','));
+        }
+        const response = await fetch(`/api/transactions/dividends/stats?${params.toString()}`);
         if (!cancelled && response.ok) {
           const data = await response.json();
           setPendingDividendCountOverride({
@@ -611,7 +621,7 @@ export default function DashboardClient({
       cancelled = true;
       window.clearTimeout(timer);
     };
-  }, [activePortfolioId, isLocalPortfolio, pendingDividendKey, selectionCanWrite]);
+  }, [effectiveSelectedPortfolioIds, isLocalPortfolio, pendingDividendKey]);
 
   // 初始化和监听本地数据
   useEffect(() => {
@@ -1064,11 +1074,11 @@ export default function DashboardClient({
           <div className="mb-8 animate-in fade-in slide-in-from-top-4 duration-700 ease-out">
             <div 
               onClick={() => {
-                if (selectionCanWrite) {
+                if (!isLocalPortfolio) {
                   setIsDividendModalOpen(true);
                 }
               }}
-              className={`group relative overflow-hidden bg-card/70 backdrop-blur-xl border border-border/50 rounded-3xl p-4 sm:p-5 flex items-center justify-between transition-all shadow-[0_8px_32px_rgba(0,0,0,0.06)] dark:shadow-[0_8px_32px_rgba(0,0,0,0.2)] ${selectionCanWrite ? 'cursor-pointer hover:scale-[1.01] active:scale-[0.98]' : 'cursor-default opacity-80'}`}
+              className="group relative overflow-hidden bg-card/70 backdrop-blur-xl border border-border/50 rounded-3xl p-4 sm:p-5 flex items-center justify-between transition-all shadow-[0_8px_32px_rgba(0,0,0,0.06)] dark:shadow-[0_8px_32px_rgba(0,0,0,0.2)] cursor-pointer hover:scale-[1.01] active:scale-[0.98]"
             >
               {/* Subtle background glow */}
               <div className="absolute -left-10 -top-10 w-32 h-32 bg-primary/5 rounded-full blur-3xl opacity-0 group-hover:opacity-100 transition-opacity duration-500" />
@@ -1081,7 +1091,6 @@ export default function DashboardClient({
                   <h3 className="text-[15px] font-bold text-primary tracking-tight leading-tight mb-0.5">{t('pendingDividends.title')}</h3>
                   <p className="text-[13px] text-secondary font-medium opacity-80">
                     {t('pendingDividends.description', { count: pendingDividendCount })}
-                    {!selectionCanWrite ? ' Select a single portfolio to review.' : ''}
                   </p>
                 </div>
               </div>
@@ -1496,17 +1505,17 @@ export default function DashboardClient({
         user={user}
       />
 
-      {selectionCanWrite && (
+      {!isLocalPortfolio && (
         <DividendConfirmationModal
           isOpen={isDividendModalOpen}
           onClose={() => setIsDividendModalOpen(false)}
-          portfolioId={activePortfolioId}
-          onConfirmed={() => {
+          portfolioIds={effectiveSelectedPortfolioIds}
+          onConfirmed={(nextPendingCount) => {
             setPendingDividendCountOverride({
               portfolioId: pendingDividendKey,
-              count: 0,
+              count: nextPendingCount,
             });
-            window.location.reload();
+            void router.refresh();
           }}
         />
       )}

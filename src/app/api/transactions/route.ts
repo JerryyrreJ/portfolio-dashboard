@@ -134,6 +134,7 @@ export async function POST(request: NextRequest) {
       transaction: {
         id: transaction.id,
         type: transaction.type,
+        pendingDividendId: transaction.pendingDividendId,
         eventId: transaction.eventId,
         source: transaction.source,
         subtype: transaction.subtype,
@@ -224,6 +225,7 @@ export async function GET(request: NextRequest) {
       transactions: transactions.map(t => ({
         id: t.id,
         type: t.type,
+        pendingDividendId: t.pendingDividendId,
         eventId: t.eventId,
         source: t.source,
         subtype: t.subtype,

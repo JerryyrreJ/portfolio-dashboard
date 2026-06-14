@@ -4,6 +4,10 @@ import {
   findOwnedPendingDividends,
   requireAuthenticatedUser,
 } from '@/lib/ownership';
+import {
+  PENDING_DIVIDEND_STATUS_IGNORED,
+  PENDING_DIVIDEND_STATUS_PENDING,
+} from '@/lib/pending-dividends';
 
 /**
  * POST /api/transactions/dividends/ignore
@@ -51,10 +55,11 @@ export async function POST(request: NextRequest) {
     const result = await prisma.pendingDividend.updateMany({
       where: {
         id: { in: pendingIds },
-        status: 'pending',
+        status: PENDING_DIVIDEND_STATUS_PENDING,
       },
       data: {
-        status: 'ignored',
+        status: PENDING_DIVIDEND_STATUS_IGNORED,
+        ignoredAt: new Date(),
       },
     });
 

@@ -12,6 +12,7 @@ import {
 interface TransactionWithAsset {
   id: string;
   type: string;
+  pendingDividendId?: string | null;
   eventId?: string | null;
   source?: string | null;
   subtype?: string | null;
@@ -67,6 +68,7 @@ async function getPortfolioWithTransactions(
     transactions: transactions.map((transaction) => ({
       id: transaction.id,
       type: transaction.type,
+      pendingDividendId: transaction.pendingDividendId,
       eventId: transaction.eventId,
       source: transaction.source,
       subtype: transaction.subtype,

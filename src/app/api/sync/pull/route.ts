@@ -33,6 +33,7 @@ export async function GET() {
       id: transaction.id,
       portfolioId: transaction.portfolioId,
       type: transaction.type as 'BUY' | 'SELL' | 'DIVIDEND',
+      pendingDividendId: transaction.pendingDividendId,
       eventId: transaction.eventId,
       source: transaction.source,
       subtype: transaction.subtype,

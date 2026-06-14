@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import prisma from '@/lib/prisma';
-import { findOwnedPortfolio, requireAuthenticatedUser } from '@/lib/ownership';
+import { requireAuthenticatedUser } from '@/lib/ownership';
+import { resolveOwnedPortfolioIds } from '@/lib/owned-portfolios';
 
 /**
  * GET /api/transactions/dividends/pending
@@ -15,31 +16,28 @@ export async function GET(request: NextRequest) {
 
     const searchParams = request.nextUrl.searchParams;
     const portfolioId = searchParams.get('portfolioId');
+    const pids = searchParams.get('pids');
 
-    if (!portfolioId) {
+    const ownedPortfolios = await resolveOwnedPortfolioIds(user.id, { portfolioId, pids });
+    if (ownedPortfolios.length === 0) {
       return NextResponse.json(
-        { error: 'Missing portfolioId parameter' },
-        { status: 400 }
+        { error: portfolioId || pids ? 'Portfolio not found' : 'Missing portfolioId or pids parameter' },
+        { status: portfolioId || pids ? 404 : 400 }
       );
     }
-
-    const portfolio = await findOwnedPortfolio(user.id, portfolioId);
-    if (!portfolio) {
-      return NextResponse.json(
-        { error: 'Portfolio not found' },
-        { status: 404 }
-      );
-    }
+    const portfolioIds = ownedPortfolios.map((portfolio) => portfolio.id);
+    const portfolioNameById = new Map(ownedPortfolios.map((portfolio) => [portfolio.id, portfolio.name]));
 
     // 获取所有待确认的分红
     const pendingDividends = await prisma.pendingDividend.findMany({
       where: {
-        portfolioId,
+        portfolioId: { in: portfolioIds },
         status: 'pending',
       },
-      orderBy: {
-        exDate: 'desc',
-      },
+      orderBy: [
+        { portfolioId: 'asc' },
+        { exDate: 'desc' },
+      ],
     });
 
     if (pendingDividends.length === 0) {
@@ -72,6 +70,8 @@ export async function GET(request: NextRequest) {
         ticker: d.ticker,
         name: asset?.name || d.ticker,
         logo: asset?.logo,
+        portfolioId: d.portfolioId,
+        portfolioName: portfolioNameById.get(d.portfolioId) || d.portfolioId,
         exDate: d.exDate,
         payDate: d.payDate,
         sharesHeld: d.sharesHeld,
