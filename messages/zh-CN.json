@@ -374,8 +374,6 @@
       "lastUsed": "上次使用于 {date}",
       "remove": "移除",
       "addAnother": "添加另一个 Passkey",
-      "initFailed": "初始化 Passkey 注册失败",
-      "finalizeFailed": "完成 Passkey 注册失败",
       "setupCancelled": "设置已取消。准备好后再试一次。",
       "registerFailed": "注册 Passkey 失败",
       "removeFailed": "移除 Passkey 失败"

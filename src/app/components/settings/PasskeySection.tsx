@@ -2,9 +2,9 @@
 
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { Fingerprint, Loader2, CheckCircle2, AlertCircle, Plus, Trash2 } from 'lucide-react';
-import { create } from '@github/webauthn-json';
 import { User } from '@supabase/supabase-js';
 import { useLocale, useTranslations } from 'next-intl';
+import { createClient } from '@/lib/supabase';
 
 interface PasskeySectionProps {
   user: User | null;
@@ -16,6 +16,13 @@ interface Credential {
   created_at: string;
   last_used_at?: string;
 }
+
+type SupabasePasskey = {
+  id: string;
+  friendly_name?: string | null;
+  created_at: string;
+  last_used_at?: string | null;
+};
 
 function getDeviceLabel(): string {
   const ua = navigator.userAgent;
@@ -31,6 +38,15 @@ function getDeviceLabel(): string {
     : ua.includes('Edg') ? 'Edge'
     : 'Browser';
   return `${os} · ${browser}`;
+}
+
+function mapPasskeys(passkeys: SupabasePasskey[]): Credential[] {
+  return passkeys.map((passkey) => ({
+    id: passkey.id,
+    name: passkey.friendly_name ?? undefined,
+    created_at: passkey.created_at,
+    last_used_at: passkey.last_used_at ?? undefined,
+  }));
 }
 
 const CACHE_KEY = 'passkey_credentials';
@@ -89,18 +105,18 @@ async function fetchCredentialList(userId: string, options?: { force?: boolean }
     return inFlight;
   }
 
-  const request = fetch('/api/passkeys/credentials')
-    .then(async (res) => {
-      if (!res.ok) {
-        throw new Error('Failed to fetch passkeys');
-      }
-      const cloud = await res.json() as Credential[];
-      saveCache(cloud, userId);
-      return cloud;
-    })
-    .finally(() => {
-      inFlightCredentialRequests.delete(userId);
-    });
+  const request = (async () => {
+    const supabase = createClient();
+    const { data, error } = await supabase.auth.passkey.list();
+    if (error) {
+      throw error;
+    }
+    const mapped = mapPasskeys((data ?? []) as SupabasePasskey[]);
+    saveCache(mapped, userId);
+    return mapped;
+  })().finally(() => {
+    inFlightCredentialRequests.delete(userId);
+  });
 
   inFlightCredentialRequests.set(userId, request);
   return request;
@@ -126,10 +142,10 @@ export default function PasskeySection({ user }: PasskeySectionProps) {
     day: 'numeric',
   });
 
-  const fetchCredentials = useCallback(async () => {
+  const fetchCredentials = useCallback(async (force = false) => {
     if (!userId) return;
     try {
-      const cloud = await fetchCredentialList(userId);
+      const cloud = await fetchCredentialList(userId, { force });
       setCredentials(cloud);
     } catch {
       // silently fail — cached list stays
@@ -164,29 +180,28 @@ export default function PasskeySection({ user }: PasskeySectionProps) {
     setError(null);
 
     try {
-      const initRes = await fetch('/api/passkeys/register/initialize', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ displayName: newPasskeyName.trim() }),
-      });
-      if (!initRes.ok) throw new Error(t('initFailed'));
+      const supabase = createClient();
+      const friendlyName = newPasskeyName.trim();
+      const { data, error: registerError } = await supabase.auth.registerPasskey();
+      if (registerError) throw registerError;
+      if (!data?.id) throw new Error(t('registerFailed'));
 
-      const options = await initRes.json();
-      const credential = await create(options as Parameters<typeof create>[0]);
-
-      const finalRes = await fetch('/api/passkeys/register/finalize', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(credential),
-      });
-      if (!finalRes.ok) throw new Error(t('finalizeFailed'));
+      if (friendlyName) {
+        const { error: updateError } = await supabase.auth.passkey.update({
+          passkeyId: data.id,
+          friendlyName,
+        });
+        if (updateError) {
+          console.warn('Passkey registered but rename failed:', updateError.message);
+        }
+      }
 
       setIsAddingNew(false);
       setNewPasskeyName('');
       setSuccess(true);
       setTimeout(() => setSuccess(false), 3000);
       clearCredentialCache(userId);
-      await fetchCredentials();
+      await fetchCredentials(true);
     } catch (err: unknown) {
       if (err instanceof Error && err.name === 'NotAllowedError') {
         setError(t('setupCancelled'));
@@ -206,8 +221,11 @@ export default function PasskeySection({ user }: PasskeySectionProps) {
     setCredentials(next);
     saveCache(next, userId);
     try {
-      const res = await fetch(`/api/passkeys/credentials/${credentialId}`, { method: 'DELETE' });
-      if (!res.ok) throw new Error(t('removeFailed'));
+      const supabase = createClient();
+      const { error: deleteError } = await supabase.auth.passkey.delete({
+        passkeyId: credentialId,
+      });
+      if (deleteError) throw deleteError;
     } catch (err: unknown) {
       // Rollback on failure
       setCredentials(prev);
@@ -403,7 +421,8 @@ export default function PasskeySection({ user }: PasskeySectionProps) {
                     >
                       {isRegistering && <Loader2 className="w-4 h-4 animate-spin" />}
                       {isRegistering ? t('settingUp') : t('register')}
-                    </button>                  </div>
+                    </button>
+                  </div>
                 </div>
               )}
             </div>

@@ -374,8 +374,6 @@
       "lastUsed": "Last used {date}",
       "remove": "Remove",
       "addAnother": "Add Another Passkey",
-      "initFailed": "Failed to initialize passkey registration",
-      "finalizeFailed": "Failed to finalize passkey registration",
       "setupCancelled": "Setup cancelled. Try again when you're ready.",
       "registerFailed": "Failed to register passkey",
       "removeFailed": "Failed to remove passkey"

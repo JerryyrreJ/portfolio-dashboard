@@ -11,12 +11,10 @@
   "workspace": {
     "packageJson": {
       "dependencies": [
-        "npm:@github/webauthn-json@^2.1.1",
         "npm:@prisma/client@^6.19.2",
         "npm:@supabase/ssr@0.9",
-        "npm:@supabase/supabase-js@^2.98.0",
+        "npm:@supabase/supabase-js@^2.116.0",
         "npm:@tailwindcss/postcss@4",
-        "npm:@teamhanko/passkeys-next-auth-provider@~0.3.1",
         "npm:@types/node@20",
         "npm:@types/react-dom@19",
         "npm:@types/react@19",

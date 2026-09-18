@@ -1,7 +1,19 @@
+const DEFAULT_SITE_URL = "https://folio.jerrylu.xyz";
+
+function resolveSiteUrl() {
+  const fromEnv = process.env.NEXT_PUBLIC_APP_URL?.trim();
+  if (!fromEnv) return DEFAULT_SITE_URL;
+  try {
+    return new URL(fromEnv).origin;
+  } catch {
+    return DEFAULT_SITE_URL;
+  }
+}
+
 export const siteConfig = {
   name: "Folio",
   shortName: "Folio",
-  url: "https://folio.jerrylu.app",
+  url: resolveSiteUrl(),
   description:
     "Folio is a portfolio tracker for monitoring holdings, transactions, dividends, and stock performance in one place.",
   locale: "en_US",
