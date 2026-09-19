@@ -4,7 +4,6 @@ import React, { useState } from 'react';
 import { Mail, Lock, ArrowRight, AlertCircle, Shield, Fingerprint, Loader2 } from 'lucide-react';
 import { createClient } from '@/lib/supabase';
 import Notification from '../Notification';
-import { get } from '@github/webauthn-json';
 import { useTranslations } from 'next-intl';
 
 interface AuthPanelProps {
@@ -101,18 +100,9 @@ export default function AuthPanel({ onLogin }: AuthPanelProps) {
     setPasskeyLoading(true);
     setError(null);
     try {
-      const initRes = await fetch('/api/passkeys/login/initialize', { method: 'POST' });
-      if (!initRes.ok) throw new Error('Failed to initialize passkey login');
-      const options = await initRes.json();
-
-      const credential = await get(options as Parameters<typeof get>[0]);
-
-      const finalRes = await fetch('/api/passkeys/login/finalize', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(credential),
-      });
-      if (!finalRes.ok) throw new Error(t('passkeyAuthFailed'));
+      const { data, error: passkeyError } = await supabase.auth.signInWithPasskey();
+      if (passkeyError) throw passkeyError;
+      if (!data.session) throw new Error(t('passkeyAuthFailed'));
 
       onLogin();
     } catch (err: unknown) {
