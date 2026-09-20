@@ -24,7 +24,7 @@
       font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
       -webkit-font-smoothing: antialiased;
     }
-    body { min-height: 1000px; }
+    body { height: 900px; overflow: hidden; }
     header {
       height: 56px;
       display: flex;
@@ -50,9 +50,9 @@
       border: 1px solid var(--border-subtle); display: flex; align-items: center; justify-content: center;
       font-size: 11px; font-weight: 700;
     }
-    main { max-width: 1400px; margin: 0 auto; padding: 24px; }
-    .title-row { display: flex; justify-content: space-between; align-items: center; margin-bottom: 24px; }
-    h1 { font-size: 28px; letter-spacing: -0.03em; }
+    main { max-width: 1400px; margin: 0 auto; padding: 16px 24px 12px; }
+    .title-row { display: flex; justify-content: space-between; align-items: center; margin-bottom: 14px; }
+    h1 { font-size: 24px; letter-spacing: -0.03em; }
     .live { font-size: 13px; font-weight: 500; color: var(--text-secondary); background: var(--bg-element-hover); padding: 2px 8px; border-radius: 6px; margin-left: 12px; }
     .actions { display: flex; gap: 10px; }
     .icon-btn, .primary-btn {
@@ -61,17 +61,17 @@
     }
     .icon-btn { width: 36px; background: var(--bg-card); color: var(--text-secondary); }
     .primary-btn { padding: 0 16px; background: #000; color: #fff; gap: 8px; }
-    .grid { display: grid; grid-template-columns: 3fr 9fr; gap: 20px; margin-bottom: 20px; }
+    .grid { display: grid; grid-template-columns: 3fr 9fr; gap: 14px; margin-bottom: 14px; }
     .card { background: var(--bg-card); border: 1px solid var(--border-subtle); border-radius: 16px; box-shadow: 0 1px 2px rgba(0,0,0,0.03); }
-    .stack { display: flex; flex-direction: column; gap: 16px; }
-    .pad { padding: 20px; }
+    .stack { display: flex; flex-direction: column; gap: 10px; }
+    .pad { padding: 14px 16px; }
     .label { font-size: 11px; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; color: var(--text-secondary); margin-bottom: 4px; }
-    .value { font-size: 28px; font-weight: 700; letter-spacing: -0.03em; font-variant-numeric: tabular-nums; }
-    .subvalue { font-size: 20px; font-weight: 700; letter-spacing: -0.03em; font-variant-numeric: tabular-nums; }
+    .value { font-size: 24px; font-weight: 700; letter-spacing: -0.03em; font-variant-numeric: tabular-nums; }
+    .subvalue { font-size: 18px; font-weight: 700; letter-spacing: -0.03em; font-variant-numeric: tabular-nums; }
     .chip { font-size: 12px; font-weight: 700; color: var(--gain); background: var(--gain-bg); padding: 2px 6px; border-radius: 4px; }
     .muted { font-size: 12px; color: var(--text-secondary); font-weight: 500; }
     .tiny { font-size: 11px; color: var(--text-secondary); font-weight: 500; margin-top: 2px; }
-    .divider { height: 1px; background: var(--border-subtle); margin: 16px 0; }
+    .divider { height: 1px; background: var(--border-subtle); margin: 10px 0; }
     .assets-row { display: flex; justify-content: space-between; align-items: center; }
     .avatars { display: flex; }
     .avatars span {
@@ -85,8 +85,8 @@
     .seg { display: flex; background: var(--bg-element); border: 1px solid var(--border-subtle); border-radius: 8px; padding: 2px; }
     .seg b { font-size: 11px; padding: 6px 12px; border-radius: 6px; color: var(--text-secondary); font-weight: 700; }
     .seg b.on { background: #fff; color: #000; box-shadow: 0 1px 2px rgba(0,0,0,0.08); }
-    svg.chart { width: 100%; height: 290px; display: block; }
-    .ranges { display: flex; justify-content: center; margin-top: 16px; }
+    svg.chart { width: 100%; height: 188px; display: block; }
+    .ranges { display: flex; justify-content: center; margin-top: 8px; }
     .range { display: flex; background: rgba(249,250,251,0.8); border: 1px solid rgba(243,244,246,0.8); border-radius: 16px; padding: 4px; gap: 4px; }
     .range span { padding: 6px 16px; font-size: 12px; font-weight: 500; color: var(--text-secondary); border-radius: 12px; }
     .range span.on { background: #fff; color: #000; box-shadow: 0 1px 3px rgba(0,0,0,0.1); }
@@ -96,7 +96,7 @@
       color: var(--text-secondary); padding: 12px 24px; background: rgba(249,250,251,0.5); border-bottom: 1px solid var(--border-subtle);
     }
     th.r, td.r { text-align: right; }
-    td { padding: 12px 24px; font-size: 13px; font-variant-numeric: tabular-nums; }
+    td { padding: 7px 24px; font-size: 13px; font-variant-numeric: tabular-nums; }
     .market td { padding: 8px 24px; font-size: 10px; font-weight: 700; color: var(--text-secondary); background: rgba(249,250,251,0.35); }
     .asset { display: flex; align-items: center; gap: 12px; }
     .dot {
@@ -176,7 +176,7 @@
         <div class="card pad assets-row">
           <div>
             <div class="label">Assets</div>
-            <div class="subvalue">5</div>
+            <div class="subvalue">4</div>
           </div>
           <div class="avatars">
             <span>A</span>
@@ -275,14 +275,6 @@
             <td class="r">90<div class="shares">shares</div></td>
             <td class="r">$10,677.60</td>
             <td class="r"><span class="gain">↗ 18.90%</span><div class="shares">since purchase</div></td>
-          </tr>
-          <tr class="market"><td colspan="5">NYSE</td></tr>
-          <tr>
-            <td><div class="asset"><div class="dot">V</div><div><div class="ticker">VTI</div><div class="name">Vanguard Total Stock Market ETF</div></div></div></td>
-            <td class="r">$272.10</td>
-            <td class="r">43<div class="shares">shares</div></td>
-            <td class="r">$11,700.30</td>
-            <td class="r"><span class="gain">↗ 4.80%</span><div class="shares">since purchase</div></td>
           </tr>
         </tbody>
         <tfoot>
