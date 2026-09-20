@@ -12,8 +12,6 @@ export interface Preferences {
   colorScheme: 'Emerald' | 'Rose';
   chartType: 'Area Chart' | 'Line Chart' | 'Bar Chart';
   theme: 'Light' | 'Dark' | 'System';
-  hideSmallBalances: boolean;
-  realTimeSync: boolean;
   costBasisMethod: 'FIFO' | 'AVCO';
 }
 
@@ -21,13 +19,37 @@ const DEFAULT_PREFERENCES: Preferences = {
   colorScheme: 'Emerald',
   chartType: 'Area Chart',
   theme: 'System',
-  hideSmallBalances: false,
-  realTimeSync: true,
   costBasisMethod: 'FIFO',
 };
 
 const LOCAL_KEY = 'user_preferences';
 const SETTINGS_UPDATED_AT_KEY = 'settings_updated_at';
+
+function isColorScheme(value: unknown): value is Preferences['colorScheme'] {
+  return value === 'Emerald' || value === 'Rose';
+}
+
+function isChartType(value: unknown): value is Preferences['chartType'] {
+  return value === 'Area Chart' || value === 'Line Chart' || value === 'Bar Chart';
+}
+
+function isTheme(value: unknown): value is Preferences['theme'] {
+  return value === 'Light' || value === 'Dark' || value === 'System';
+}
+
+function isCostBasisMethod(value: unknown): value is Preferences['costBasisMethod'] {
+  return value === 'FIFO' || value === 'AVCO';
+}
+
+function normalizePreferences(raw: unknown): Preferences {
+  const parsed = raw && typeof raw === 'object' ? raw as Record<string, unknown> : {};
+  return {
+    colorScheme: isColorScheme(parsed.colorScheme) ? parsed.colorScheme : DEFAULT_PREFERENCES.colorScheme,
+    chartType: isChartType(parsed.chartType) ? parsed.chartType : DEFAULT_PREFERENCES.chartType,
+    theme: isTheme(parsed.theme) ? parsed.theme : DEFAULT_PREFERENCES.theme,
+    costBasisMethod: isCostBasisMethod(parsed.costBasisMethod) ? parsed.costBasisMethod : DEFAULT_PREFERENCES.costBasisMethod,
+  };
+}
 
 function loadLocal(): Preferences {
   if (typeof window === 'undefined') {
@@ -36,7 +58,7 @@ function loadLocal(): Preferences {
   try {
     const raw = localStorage.getItem(LOCAL_KEY);
     if (!raw) return DEFAULT_PREFERENCES;
-    return { ...DEFAULT_PREFERENCES, ...JSON.parse(raw) };
+    return normalizePreferences(JSON.parse(raw));
   } catch {
     return DEFAULT_PREFERENCES;
   }
@@ -97,8 +119,8 @@ export function usePreferences(options?: UsePreferencesOptions) {
 
         if (cloudMs > localMs) {
           // 云端更新，覆盖本地
-          const cloudPrefs: Preferences = cloudPrefsRaw
-            ? { ...DEFAULT_PREFERENCES, ...JSON.parse(cloudPrefsRaw) }
+          const cloudPrefs = cloudPrefsRaw
+            ? normalizePreferences(JSON.parse(cloudPrefsRaw))
             : DEFAULT_PREFERENCES;
           setPrefs(cloudPrefs);
           localStorage.setItem(LOCAL_KEY, JSON.stringify(cloudPrefs));

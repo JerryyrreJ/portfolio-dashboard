@@ -196,7 +196,6 @@
     "navigation": {
       "portfolio": "Portfolio",
       "preferences": "Preferences",
-      "notifications": "Notifications",
       "account": "Account & Security"
     },
     "actions": {
@@ -208,7 +207,6 @@
       "update": "Update",
       "done": "Done",
       "enable": "Enable",
-      "manage": "Manage",
       "preparing": "Preparing...",
       "downloadFormat": "Download {format}"
     },
@@ -267,26 +265,10 @@
       "chartAreaFull": "Area Chart",
       "chartLineFull": "Line Chart",
       "chartBarFull": "Bar Chart",
-      "hideSmallBalances": "Hide Small Balances",
-      "hideSmallBalancesDesc": "Hide holdings under $10",
-      "performance": "Performance",
-      "realTimeSync": "Real-time Sync",
-      "realTimeSyncDesc": "Faster updates",
       "taxAccounting": "Tax & Accounting",
       "costBasisMethod": "Cost Basis Method",
       "costBasisFifoDesc": "First In, First Out",
       "costBasisAvcoDesc": "Average Cost"
-    },
-    "notificationCenter": {
-      "title": "Notifications",
-      "marketAlerts": "Market Alerts",
-      "priceVolatility": "Price Volatility",
-      "priceVolatilityDesc": "Alert on >5% moves",
-      "reporting": "Reporting",
-      "dailyDigest": "Daily Digest",
-      "dailyDigestDesc": "Post-market summary",
-      "weeklyNewsletter": "Weekly Newsletter",
-      "weeklyNewsletterDesc": "Insights and returns"
     },
     "account": {
       "title": "Account & Security",
@@ -318,9 +300,7 @@
       "updating": "Updating...",
       "accessControl": "Access Control",
       "twoFactorAuth": "Two-Factor Auth",
-      "disabled": "Disabled",
-      "apiManagement": "API Management",
-      "finnhubApiKey": "Finnhub API Key"
+      "disabled": "Disabled"
     },
     "authPanel": {
       "checkEmailTitle": "Check your email",
@@ -354,6 +334,25 @@
       "signInWithPasskey": "Sign in with Passkey",
       "noAccount": "Don't have an account? ",
       "haveAccount": "Already have an account? "
+    },
+    "mfa": {
+      "enabled": "Enabled",
+      "challengeTitle": "Two-factor authentication",
+      "challengeDescription": "Enter the 6-digit code from your authenticator app.",
+      "scanQr": "Scan this QR code with your authenticator app.",
+      "qrAlt": "Two-factor authentication QR code",
+      "secretLabel": "Can't scan? Enter this key instead",
+      "codeLabel": "Authentication code",
+      "codePlaceholder": "000000",
+      "verify": "Verify",
+      "verifying": "Verifying...",
+      "disable": "Disable",
+      "disableDescription": "Enter a code from your authenticator app to turn off two-factor authentication.",
+      "preparing": "Preparing authenticator setup...",
+      "enrollFailed": "Could not start two-factor setup.",
+      "verifyFailed": "That code didn't work. Try again.",
+      "disableFailed": "Could not disable two-factor authentication.",
+      "backToSignIn": "Back to sign in"
     },
     "passkeys": {
       "title": "Passkeys",

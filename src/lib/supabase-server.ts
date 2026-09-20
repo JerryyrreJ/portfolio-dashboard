@@ -60,6 +60,13 @@ export async function createSupabaseServerClient(profiler?: ServerProfilerLike) 
     )
 }
 
+export async function getMfaAssuranceLevel() {
+  const supabase = await createSupabaseServerClient()
+  const { data, error } = await supabase.auth.mfa.getAuthenticatorAssuranceLevel()
+  if (error) return null
+  return data
+}
+
 export async function getUser() {
   return getUserWithOptions();
 }

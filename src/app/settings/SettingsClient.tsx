@@ -11,16 +11,13 @@ import {
   ChevronLeft, 
   Wallet, 
   Settings, 
-  Bell,
   Download,
   Monitor,
   BarChart2,
   EyeOff,
-  Zap,
   ShieldCheck,
   Lock,
   Mail,
-  Key,
   TrendingUp,
   FileText,
   UserCircle,
@@ -32,6 +29,7 @@ import {
 } from 'lucide-react';
 import AuthPanel from '@/app/components/settings/AuthPanel';
 import PasskeySection from '@/app/components/settings/PasskeySection';
+import TwoFactorSection from '@/app/components/settings/TwoFactorSection';
 import { fetchPortfolioList, invalidatePortfolioListCache } from '@/lib/portfolio-client';
 import { createClient } from '@/lib/supabase';
 import { User } from '@supabase/supabase-js';
@@ -283,7 +281,6 @@ export default function SettingsClient({ initialUser, initialPortfolios }: Setti
   const t = useTranslations('settings');
   const tPortfolio = useTranslations('settings.portfolio');
   const tPreferences = useTranslations('settings.preferences');
-  const tNotificationCenter = useTranslations('settings.notificationCenter');
   const tAccount = useTranslations('settings.account');
   const tNotifications = useTranslations('settings.notifications');
   const locale = useLocale();
@@ -761,12 +758,10 @@ export default function SettingsClient({ initialUser, initialPortfolios }: Setti
   const accountRef = useRef<HTMLDivElement>(null);
   const portfolioRef = useRef<HTMLDivElement>(null);
   const preferencesRef = useRef<HTMLDivElement>(null);
-  const notificationsRef = useRef<HTMLDivElement>(null);
 
   const navItems = React.useMemo(() => [
     { id: 'portfolio', name: t('navigation.portfolio'), icon: <Wallet className="w-4 h-4" />, ref: portfolioRef },
     { id: 'preferences', name: t('navigation.preferences'), icon: <Settings className="w-4 h-4" />, ref: preferencesRef },
-    { id: 'notifications', name: t('navigation.notifications'), icon: <Bell className="w-4 h-4" />, ref: notificationsRef },
     { id: 'account', name: t('navigation.account'), icon: <UserCircle className="w-4 h-4" />, ref: accountRef },
   ], [t]);
 
@@ -1068,12 +1063,6 @@ export default function SettingsClient({ initialUser, initialPortfolios }: Setti
       window.scrollTo({ top: y, behavior: 'smooth' });
     }
   };
-
-  const renderToggle = (enabled: boolean = false) => (
-    <button className={`w-10 h-5 ${enabled ? 'bg-primary' : 'bg-element shadow-inner'} rounded-full relative transition-all border border-border/50`}>
-      <div className={`absolute ${enabled ? 'left-[22px]' : 'left-0.5'} top-0.5 w-4 h-4 bg-white dark:bg-zinc-100 rounded-full shadow-[0_1px_3px_rgba(0,0,0,0.4)] transition-all`}></div>
-    </button>
-  );
 
   return (
     <div className="min-h-screen bg-page text-primary font-sans antialiased flex flex-col">
@@ -1495,7 +1484,7 @@ export default function SettingsClient({ initialUser, initialPortfolios }: Setti
                   </div>
 
                   {/* Chart Type Row */}
-                  <div className="border-b border-border bg-card sm:bg-transparent">
+                  <div className="bg-card sm:bg-transparent">
                     <div className="px-4 md:px-5 py-4 flex items-center justify-between group/item">
                       <div className="flex items-center space-x-3 md:space-x-4">
                         <div className={`w-8 h-8 rounded-lg bg-card border border-border shadow-sm flex items-center justify-center transition-all duration-300 ${openPreferencesEditor === 'chartType' ? 'scale-110 border-border ring-4 ring-black/5' : 'group-hover/item:border-border'}`}>
@@ -1551,26 +1540,6 @@ export default function SettingsClient({ initialUser, initialPortfolios }: Setti
                         </div>
                       </div>
                     </div>
-                  </div>
-
-                  {/* Toggle Row: Hide Small Balances */}
-                  <div className="px-4 md:px-5 py-4 flex items-center justify-between group/item">
-                    <div className="flex items-center space-x-3 md:space-x-4">
-                      <div className="w-8 h-8 rounded-lg bg-card border border-border shadow-sm flex items-center justify-center transition-all duration-300 group-hover/item:scale-110 group-hover/item:ring-4 group-hover/item:ring-black/5">
-                        <EyeOff className="w-4 h-4 text-secondary transition-colors group-hover/item:text-primary" />
-                      </div>
-                      <div>
-                        <div className="text-[14px] font-bold text-primary leading-tight">{tPreferences('hideSmallBalances')}</div>
-                        <div className="text-[12px] text-secondary font-medium mt-0.5">{tPreferences('hideSmallBalancesDesc')}</div>
-                      </div>
-                    </div>
-                    <button
-                      onClick={() => updatePreference('hideSmallBalances', !prefs.hideSmallBalances)}
-                      className={`w-10 h-5 ${prefs.hideSmallBalances ? 'bg-primary' : 'bg-element shadow-inner'} rounded-full relative transition-all active:scale-90 border border-border/50`}
-                    >
-                      <div className={`absolute ${prefs.hideSmallBalances ? 'left-[22px]' : 'left-0.5'} top-0.5 w-4 h-4 bg-white dark:bg-zinc-100 rounded-full shadow-[0_1px_3px_rgba(0,0,0,0.4)] transition-all`}></div>
-                    </button>
-
                   </div>
                 </div>
               </div>
@@ -1651,30 +1620,6 @@ export default function SettingsClient({ initialUser, initialPortfolios }: Setti
                 </div>
               </div>
 
-              {/* Performance Group */}
-              <div className="space-y-4">
-                <h3 className="text-[11px] font-bold text-secondary uppercase tracking-[0.1em] pl-1">{tPreferences('performance')}</h3>
-                <div className="bg-element/50 rounded-2xl border border-border overflow-hidden">
-                  <div className="px-4 md:px-5 py-4 flex items-center justify-between group/item">
-                    <div className="flex items-center space-x-3 md:space-x-4">
-                      <div className="w-8 h-8 rounded-lg bg-card border border-border shadow-sm flex items-center justify-center transition-all duration-300 group-hover/item:scale-110 group-hover/item:ring-4 group-hover/item:ring-black/5">
-                        <Zap className="w-4 h-4 text-secondary transition-colors group-hover/item:text-primary" />
-                      </div>
-                      <div>
-                        <div className="text-[14px] font-bold text-primary leading-tight">{tPreferences('realTimeSync')}</div>
-                        <div className="text-[12px] text-secondary font-medium mt-0.5">{tPreferences('realTimeSyncDesc')}</div>
-                      </div>
-                    </div>
-                    <button
-                      onClick={() => updatePreference('realTimeSync', !prefs.realTimeSync)}
-                      className={`w-10 h-5 ${prefs.realTimeSync ? 'bg-primary' : 'bg-element shadow-inner'} rounded-full relative transition-all active:scale-90 border border-border/50`}
-                    >
-                      <div className={`absolute ${prefs.realTimeSync ? 'left-[22px]' : 'left-0.5'} top-0.5 w-4 h-4 bg-white dark:bg-zinc-100 rounded-full shadow-[0_1px_3px_rgba(0,0,0,0.4)] transition-all`}></div>
-                    </button>
-                  </div>
-                </div>
-              </div>
-
               {/* Tax & Accounting Group */}
               <div className="space-y-4">
                 <h3 className="text-[11px] font-bold text-secondary uppercase tracking-[0.1em] pl-1">{tPreferences('taxAccounting')}</h3>
@@ -1730,56 +1675,6 @@ export default function SettingsClient({ initialUser, initialPortfolios }: Setti
                         ))}
                       </div>
                     </div>
-                  </div>
-                </div>
-              </div>
-            </div>
-          </div>
-
-          {/* SECTION: NOTIFICATIONS */}
-          <div id="notifications" ref={notificationsRef} className="scroll-mt-24 md:scroll-mt-32">
-            <div className="mb-6 flex items-center gap-3">
-              <h2 className="text-[18px] md:text-[20px] font-bold text-primary tracking-tight">{tNotificationCenter('title')}</h2>
-            </div>
-            
-            <div className="space-y-6 bg-card rounded-2xl md:rounded-[32px] p-5 md:p-8 shadow-sm border border-border mb-12 md:mb-16">
-              <div className="space-y-4">
-                <h3 className="text-[11px] font-bold text-secondary uppercase tracking-[0.1em] pl-1">{tNotificationCenter('marketAlerts')}</h3>
-                <div className="bg-element/50 rounded-2xl border border-border overflow-hidden">
-                  <div className="px-4 md:px-5 py-4 flex items-center justify-between">
-                    <div className="flex items-center space-x-3 md:space-x-4">
-                      <div className="w-8 h-8 rounded-lg bg-card border border-border shadow-sm flex items-center justify-center"><TrendingUp className="w-4 h-4 text-secondary" /></div>
-                      <div>
-                        <div className="text-[14px] font-bold text-primary leading-tight">{tNotificationCenter('priceVolatility')}</div>
-                        <div className="text-[12px] text-secondary font-medium mt-0.5">{tNotificationCenter('priceVolatilityDesc')}</div>
-                      </div>
-                    </div>
-                    {renderToggle(true)}
-                  </div>
-                </div>
-              </div>
-              <div className="space-y-4">
-                <h3 className="text-[11px] font-bold text-secondary uppercase tracking-[0.1em] pl-1">{tNotificationCenter('reporting')}</h3>
-                <div className="bg-element/50 rounded-2xl border border-border overflow-hidden">
-                  <div className="px-4 md:px-5 py-4 flex items-center justify-between border-b border-border">
-                    <div className="flex items-center space-x-3 md:space-x-4">
-                      <div className="w-8 h-8 rounded-lg bg-card border border-border shadow-sm flex items-center justify-center"><FileText className="w-4 h-4 text-secondary" /></div>
-                      <div>
-                        <div className="text-[14px] font-bold text-primary leading-tight">{tNotificationCenter('dailyDigest')}</div>
-                        <div className="text-[12px] text-secondary font-medium mt-0.5">{tNotificationCenter('dailyDigestDesc')}</div>
-                      </div>
-                    </div>
-                    {renderToggle(false)}
-                  </div>
-                  <div className="px-4 md:px-5 py-4 flex items-center justify-between">
-                    <div className="flex items-center space-x-3 md:space-x-4">
-                      <div className="w-8 h-8 rounded-lg bg-card border border-border shadow-sm flex items-center justify-center"><Mail className="w-4 h-4 text-secondary" /></div>
-                      <div>
-                        <div className="text-[14px] font-bold text-primary leading-tight">{tNotificationCenter('weeklyNewsletter')}</div>
-                        <div className="text-[12px] text-secondary font-medium mt-0.5">{tNotificationCenter('weeklyNewsletterDesc')}</div>
-                      </div>
-                    </div>
-                    {renderToggle(true)}
                   </div>
                 </div>
               </div>
@@ -2098,34 +1993,8 @@ export default function SettingsClient({ initialUser, initialPortfolios }: Setti
                   <div className="space-y-4 select-none">
                     <h3 className="text-[11px] font-bold text-secondary uppercase tracking-[0.1em] pl-1">{tAccount('accessControl')}</h3>
                     <div className="bg-element/50 rounded-2xl border border-border overflow-hidden">
-                      <div className="px-4 md:px-5 py-4 flex items-center justify-between border-b border-border">
-                        <div className="flex items-center space-x-3 md:space-x-4">
-                          <div className="w-8 h-8 rounded-lg bg-card border border-border shadow-sm flex items-center justify-center"><ShieldCheck className="w-4 h-4 text-secondary" /></div>
-                          <div>
-                            <div className="text-[14px] font-bold text-primary leading-tight">{tAccount('twoFactorAuth')}</div>
-                            <div className="text-[13px] text-secondary font-medium mt-0.5">{tAccount('disabled')}</div>
-                          </div>
-                        </div>
-                        <button className="text-[12px] md:text-[13px] font-bold text-primary border border-border bg-card hover:bg-element-hover px-3 py-1.5 rounded-lg transition-colors shadow-sm active:scale-95">{t('actions.enable')}</button>
-                      </div>
+                      <TwoFactorSection user={user} />
                       <PasskeySection user={user} />
-                    </div>
-                  </div>
-
-                  {/* API Management */}
-                  <div className="space-y-4 select-none">
-                    <h3 className="text-[11px] font-bold text-secondary uppercase tracking-[0.1em] pl-1">{tAccount('apiManagement')}</h3>
-                    <div className="bg-element/50 rounded-2xl border border-border overflow-hidden">
-                      <div className="px-4 md:px-5 py-4 flex items-center justify-between">
-                        <div className="flex items-center space-x-3 md:space-x-4 min-w-0 mr-3">
-                          <div className="w-8 h-8 rounded-lg bg-card border border-border shadow-sm flex items-center justify-center shrink-0 transition-all duration-300 transition-all duration-300"><Key className="w-4 h-4 text-secondary transition-colors duration-300" /></div>
-                          <div className="min-w-0">
-                            <div className="text-[14px] font-bold text-primary leading-tight">{tAccount('finnhubApiKey')}</div>
-                            <div className="text-[13px] text-secondary font-medium mt-0.5 tracking-widest mt-1 truncate">••••••••••••</div>
-                          </div>
-                        </div>
-                        <button className="text-[12px] md:text-[13px] font-bold text-primary border border-border bg-card hover:bg-element-hover px-3 py-1.5 rounded-lg transition-colors shadow-sm active:scale-95 shrink-0">{t('actions.manage')}</button>
-                      </div>
                     </div>
                   </div>
                 </div>

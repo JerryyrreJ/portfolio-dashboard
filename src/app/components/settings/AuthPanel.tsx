@@ -3,7 +3,9 @@
 import React, { useState } from 'react';
 import { Mail, Lock, ArrowRight, AlertCircle, Shield, Fingerprint, Loader2 } from 'lucide-react';
 import { createClient } from '@/lib/supabase';
+import { needsMfaStepUp } from '@/lib/mfa';
 import Notification from '../Notification';
+import MfaChallengeForm from './MfaChallengeForm';
 import { useTranslations } from 'next-intl';
 
 interface AuthPanelProps {
@@ -12,7 +14,7 @@ interface AuthPanelProps {
 
 export default function AuthPanel({ onLogin }: AuthPanelProps) {
   const t = useTranslations('settings.authPanel');
-  const [mode, setMode] = useState<'login' | 'signup'>('login');
+  const [mode, setMode] = useState<'login' | 'signup' | 'mfa'>('login');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
@@ -38,13 +40,28 @@ export default function AuthPanel({ onLogin }: AuthPanelProps) {
   const strength = getPasswordStrength(password);
   const strengthColors = ['bg-element-hover', 'bg-rose-400', 'bg-amber-400', 'bg-emerald-400', 'bg-emerald-600'];
 
-  // Load remembered email on mount
+  // Load remembered email on mount, and resume an in-progress MFA challenge.
   React.useEffect(() => {
     const savedEmail = localStorage.getItem('folio_remember_email');
     if (savedEmail) {
       setEmail(savedEmail);
       setRememberMe(true);
     }
+
+    let cancelled = false;
+    const resumeMfa = async () => {
+      const client = createClient();
+      const { data: { session } } = await client.auth.getSession();
+      if (!session || cancelled) return;
+      const { data } = await client.auth.mfa.getAuthenticatorAssuranceLevel();
+      if (!cancelled && needsMfaStepUp(data)) {
+        setMode('mfa');
+      }
+    };
+    void resumeMfa();
+    return () => {
+      cancelled = true;
+    };
   }, []);
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -70,6 +87,12 @@ export default function AuthPanel({ onLogin }: AuthPanelProps) {
           localStorage.setItem('folio_remember_email', email);
         } else {
           localStorage.removeItem('folio_remember_email');
+        }
+
+        const { data: aal } = await supabase.auth.mfa.getAuthenticatorAssuranceLevel();
+        if (needsMfaStepUp(aal)) {
+          setMode('mfa');
+          return;
         }
         
         onLogin();
@@ -103,6 +126,12 @@ export default function AuthPanel({ onLogin }: AuthPanelProps) {
       const { data, error: passkeyError } = await supabase.auth.signInWithPasskey();
       if (passkeyError) throw passkeyError;
       if (!data.session) throw new Error(t('passkeyAuthFailed'));
+
+      const { data: aal } = await supabase.auth.mfa.getAuthenticatorAssuranceLevel();
+      if (needsMfaStepUp(aal)) {
+        setMode('mfa');
+        return;
+      }
 
       onLogin();
     } catch (err: unknown) {
@@ -145,6 +174,23 @@ export default function AuthPanel({ onLogin }: AuthPanelProps) {
       setLoading(false);
     }
   };
+
+  const handleCancelMfa = async () => {
+    await supabase.auth.signOut();
+    setMode('login');
+    setError(null);
+  };
+
+  if (mode === 'mfa') {
+    return (
+      <div className="space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-700">
+        <MfaChallengeForm
+          onVerified={onLogin}
+          onCancel={handleCancelMfa}
+        />
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-700">
