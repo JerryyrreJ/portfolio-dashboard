@@ -1,39 +1,14 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { getPriceUSD } from '@/lib/exchange-rate';
 import prisma from '@/lib/prisma';
 import { findOwnedPortfolio, requireAuthenticatedUser } from '@/lib/ownership';
+import {
+  parseIsoDate,
+  parseNonNegativeNumber,
+  parsePositiveNumber,
+} from '@/lib/transactions/parse';
+import { persistSessionTrade } from '@/lib/transactions/import';
 
 const MAX_LIMIT = 200;
-
-function parsePositiveNumber(value: unknown): number | null {
-  const parsed = typeof value === 'number' ? value : Number(value);
-  if (!Number.isFinite(parsed) || parsed <= 0) {
-    return null;
-  }
-  return parsed;
-}
-
-function parseNonNegativeNumber(value: unknown, fallback = 0): number | null {
-  if (value === undefined || value === null || value === '') {
-    return fallback;
-  }
-  const parsed = typeof value === 'number' ? value : Number(value);
-  if (!Number.isFinite(parsed) || parsed < 0) {
-    return null;
-  }
-  return parsed;
-}
-
-function parseIsoDate(value: unknown): Date | null {
-  if (typeof value !== 'string' || !value.trim()) {
-    return null;
-  }
-  const parsed = new Date(value);
-  if (Number.isNaN(parsed.getTime())) {
-    return null;
-  }
-  return parsed;
-}
 
 function parsePaginationValue(value: string | null, fallback: number) {
   if (value === null) return fallback;
@@ -96,9 +71,7 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // 服务端计算 priceUSD 和 exchangeRate
     const currency = body.currency || 'USD';
-    const { priceUSD, exchangeRate } = await getPriceUSD(price, currency);
 
     const portfolio = await findOwnedPortfolio(user.id, body.portfolioId);
     if (!portfolio) {
@@ -108,25 +81,16 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // 创建交易记录
-    const transaction = await prisma.transaction.create({
-      data: {
-        portfolioId: body.portfolioId,
-        assetId: body.assetId,
-        type: body.type,
-        quantity,
-        price,
-        fee,
-        date,
-        currency,
-        exchangeRate,
-        priceUSD,
-        notes: body.notes || null,
-      },
-      include: {
-        asset: true,
-        portfolio: true,
-      },
+    const transaction = await persistSessionTrade({
+      portfolioId: body.portfolioId,
+      assetId: body.assetId,
+      type: body.type,
+      quantity,
+      price,
+      fee,
+      date,
+      currency,
+      notes: body.notes || null,
     });
 
     return NextResponse.json({

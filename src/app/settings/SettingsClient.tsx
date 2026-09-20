@@ -30,6 +30,7 @@ import {
 import AuthPanel from '@/app/components/settings/AuthPanel';
 import PasskeySection from '@/app/components/settings/PasskeySection';
 import TwoFactorSection from '@/app/components/settings/TwoFactorSection';
+import ApiKeysSection from '@/app/components/settings/ApiKeysSection';
 import { fetchPortfolioList, invalidatePortfolioListCache } from '@/lib/portfolio-client';
 import { createClient } from '@/lib/supabase';
 import { User } from '@supabase/supabase-js';
@@ -1995,6 +1996,14 @@ export default function SettingsClient({ initialUser, initialPortfolios }: Setti
                     <div className="bg-element/50 rounded-2xl border border-border overflow-hidden">
                       <TwoFactorSection user={user} />
                       <PasskeySection user={user} />
+                    </div>
+                  </div>
+
+                  {/* API Management */}
+                  <div className="space-y-4 select-none">
+                    <h3 className="text-[11px] font-bold text-secondary uppercase tracking-[0.1em] pl-1">{tAccount('apiManagement')}</h3>
+                    <div className="bg-element/50 rounded-2xl border border-border overflow-hidden">
+                      <ApiKeysSection />
                     </div>
                   </div>
                 </div>

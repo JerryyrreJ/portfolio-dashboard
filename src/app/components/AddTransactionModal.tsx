@@ -11,19 +11,7 @@ import { getCurrencySymbol, USD_RATES } from '@/lib/currency';
 import { createTransaction, getNamespaceForUser } from '@/lib/ledger/db';
 import type { User as SupabaseUser } from '@supabase/supabase-js';
 import CachedAssetLogo from './CachedAssetLogo';
-
-function inferCurrencyFromTicker(symbol: string): string {
-  const s = symbol.toUpperCase();
-  if (s.endsWith('.HK'))               return 'HKD';
-  if (s.endsWith('.SS') || s.endsWith('.SZ')) return 'CNY';
-  if (s.endsWith('.L') || s.endsWith('.LON')) return 'GBP';
-  if (s.endsWith('.T'))                return 'JPY';
-  if (s.endsWith('.AX'))               return 'AUD';
-  if (s.endsWith('.TO') || s.endsWith('.V')) return 'CAD';
-  if (s.endsWith('.SW'))               return 'CHF';
-  if (s.endsWith('.SI'))               return 'SGD';
-  return 'USD';
-}
+import { inferCurrencyFromTicker } from '@/lib/transactions/ticker';
 
 const CURRENCIES = [
   { code: 'USD', name: 'US Dollar' },

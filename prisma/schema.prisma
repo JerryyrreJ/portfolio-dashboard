@@ -88,13 +88,44 @@ model Transaction {
   createdAt    DateTime  @default(now())
   updatedAt    DateTime  @updatedAt
   notes        String?
+  importKey    String?
   asset        Asset     @relation(fields: [assetId], references: [id])
   pendingDividend PendingDividend? @relation(fields: [pendingDividendId], references: [id], onDelete: SetNull)
   portfolio    Portfolio @relation(fields: [portfolioId], references: [id], onDelete: Cascade)
 
+  @@unique([portfolioId, importKey])
   @@index([portfolioId, date])
   @@index([assetId, date])
   @@index([pendingDividendId])
+}
+
+model ApiKey {
+  id         String    @id @default(cuid())
+  userId     String
+  name       String    @default("Default")
+  prefix     String
+  lastFour   String
+  keyHash    String    @unique
+  lastUsedAt DateTime?
+  createdAt  DateTime  @default(now())
+  revokedAt  DateTime?
+
+  @@index([userId, createdAt])
+  @@index([userId, revokedAt])
+}
+
+model ApiIdempotencyRecord {
+  id           String   @id @default(cuid())
+  userId       String
+  key          String
+  requestHash  String
+  statusCode   Int
+  responseJson String
+  createdAt    DateTime @default(now())
+  expiresAt    DateTime
+
+  @@unique([userId, key])
+  @@index([expiresAt])
 }
 
 model PendingDividend {
