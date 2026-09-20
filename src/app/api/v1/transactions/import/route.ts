@@ -157,7 +157,7 @@ export async function POST(request: NextRequest) {
   }
 
   try {
-    const { results, conflicts } = await importTransactionsAtomically({
+    const { results, conflicts, importBatchId } = await importTransactionsAtomically({
       portfolioId: portfolio.id,
       items: parsed.items,
     });
@@ -178,6 +178,7 @@ export async function POST(request: NextRequest) {
     const payload = {
       success: true,
       dryRun: false,
+      importBatchId,
       imported: results.filter((result) => result.status === 'created').length,
       replayed: results.filter((result) => result.status === 'existing').length,
       results,

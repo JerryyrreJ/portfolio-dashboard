@@ -89,6 +89,7 @@ model Transaction {
   updatedAt    DateTime  @updatedAt
   notes        String?
   importKey    String?
+  importBatchId String?
   asset        Asset     @relation(fields: [assetId], references: [id])
   pendingDividend PendingDividend? @relation(fields: [pendingDividendId], references: [id], onDelete: SetNull)
   portfolio    Portfolio @relation(fields: [portfolioId], references: [id], onDelete: Cascade)
@@ -97,6 +98,7 @@ model Transaction {
   @@index([portfolioId, date])
   @@index([assetId, date])
   @@index([pendingDividendId])
+  @@index([importBatchId])
 }
 
 model ApiKey {
