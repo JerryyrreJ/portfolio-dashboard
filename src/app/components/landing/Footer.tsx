@@ -1,5 +1,6 @@
 import Link from "next/link";
-import { TrendingUp, Twitter, Github, Mail } from "lucide-react";
+import { TrendingUp, Github, Mail } from "lucide-react";
+import { siteConfig } from "@/lib/site";
 
 export default function Footer() {
   const currentYear = new Date().getFullYear();
@@ -22,13 +23,20 @@ export default function Footer() {
             A cleaner portfolio tracker for holdings, dividends, transactions, and the return that ties them together.
           </p>
           <div className="flex gap-4 text-secondary mt-2">
-            <a href="#" className="hover:text-primary transition-colors">
-              <Twitter className="h-4 w-4" />
-            </a>
-            <a href="#" className="hover:text-primary transition-colors">
+            <a
+              href={siteConfig.githubUrl}
+              target="_blank"
+              rel="noreferrer"
+              aria-label="Folio on GitHub"
+              className="hover:text-primary transition-colors"
+            >
               <Github className="h-4 w-4" />
             </a>
-            <a href="#" className="hover:text-primary transition-colors">
+            <a
+              href={`mailto:${siteConfig.contactEmail}`}
+              aria-label={`Email ${siteConfig.contactEmail}`}
+              className="hover:text-primary transition-colors"
+            >
               <Mail className="h-4 w-4" />
             </a>
           </div>
@@ -39,8 +47,8 @@ export default function Footer() {
           <div className="flex flex-col gap-4">
             <h4 className="text-[12px] font-bold uppercase tracking-wider text-primary">Platform</h4>
             <ul className="flex flex-col gap-3 text-[13px] font-medium text-secondary">
-              <li><Link href="#features" className="hover:text-primary transition-colors">Features</Link></li>
-              <li><Link href="#workflow" className="hover:text-primary transition-colors">Workflow</Link></li>
+              <li><Link href="/#features" className="hover:text-primary transition-colors">Features</Link></li>
+              <li><Link href="/#workflow" className="hover:text-primary transition-colors">Workflow</Link></li>
               <li><Link href="/stock/AAPL" className="hover:text-primary transition-colors">Explore</Link></li>
               <li><Link href="/login" className="hover:text-primary transition-colors">Sign In</Link></li>
             </ul>
@@ -48,8 +56,8 @@ export default function Footer() {
           <div className="flex flex-col gap-4">
             <h4 className="text-[12px] font-bold uppercase tracking-wider text-primary">Legal</h4>
             <ul className="flex flex-col gap-3 text-[13px] font-medium text-secondary">
-              <li><Link href="#" className="hover:text-primary transition-colors">Privacy</Link></li>
-              <li><Link href="#" className="hover:text-primary transition-colors">Terms of Service</Link></li>
+              <li><Link href="/privacy" className="hover:text-primary transition-colors">Privacy</Link></li>
+              <li><Link href="/terms" className="hover:text-primary transition-colors">Terms of Service</Link></li>
             </ul>
           </div>
         </div>
@@ -59,12 +67,8 @@ export default function Footer() {
       {/* Bottom Copyright Bar */}
       <div className="mx-auto mt-16 max-w-6xl flex flex-col md:flex-row items-center justify-between border-t border-border/50 pt-8 gap-4">
         <p className="text-[12px] font-medium text-secondary">
-          &copy; {currentYear} Folio Inc. All rights reserved.
+          &copy; {currentYear} Folio
         </p>
-        <div className="flex items-center gap-2">
-          <span className="flex h-2 w-2 rounded-full bg-emerald-500 animate-pulse"></span>
-          <span className="text-[12px] font-medium text-secondary">All systems operational</span>
-        </div>
       </div>
     </footer>
   );

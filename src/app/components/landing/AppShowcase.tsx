@@ -1,6 +1,7 @@
 "use client";
 
 import { useRef } from "react";
+import Image from "next/image";
 import { motion, useScroll, useTransform } from "framer-motion";
 
 export default function AppShowcase() {
@@ -71,40 +72,15 @@ export default function AppShowcase() {
               </div>
             </div>
 
-            {/* Application Screenshot */}
-            {/* 
-              This aspect-video forces a 16:9 ratio. 
-              Replace the 'src' with the absolute path to your actual application screenshot (e.g. /dashboard-preview.png)
-            */}
-            <div className="relative aspect-[16/10] w-full sm:aspect-video bg-element/50 flex items-center justify-center">
-              
-              {/* === PLACEHOLDER CONTENT : Remove when you add your real Image === */}
-              <div className="absolute inset-0 flex flex-col items-center justify-center gap-4 text-secondary/60 opacity-80 backdrop-blur-sm">
-                <div className="border border-dashed border-border/80 rounded-2xl p-10 flex flex-col items-center">
-                  <svg className="w-12 h-12 mb-4 opacity-50" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
-                  </svg>
-                  <p className="font-medium text-sm">Dashboard preview goes here</p>
-                  <p className="text-xs mt-1">Recommended: a clean portfolio overview screenshot</p>
-                  <code className="mt-4 px-2 py-1 bg-black/20 rounded text-[11px] font-mono">
-                    src=&quot;/dashboard-preview.png&quot;
-                  </code>
-                </div>
-              </div>
-              {/* ============================================================= */}
-
-              {/* 
-                Uncomment this and add your image into the public/ folder:
-                <Image 
-                  src="/dashboard-preview.webp" 
-                  alt="Folio App Interface"
-                  fill
-                  priority
-                  className="object-cover object-top"
-                  sizes="(max-width: 1200px) 100vw, 1200px"
-                /> 
-              */}
-              
+            <div className="relative aspect-[16/10] w-full bg-element/50 sm:aspect-video">
+              <Image
+                src="/dashboard-preview.png"
+                alt="Folio dashboard with portfolio totals, a performance chart, and holdings"
+                fill
+                priority
+                className="object-cover object-top"
+                sizes="(max-width: 1200px) 100vw, 1200px"
+              />
             </div>
             
             {/* 
