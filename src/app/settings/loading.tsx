@@ -1,5 +1,5 @@
 import React from 'react';
-import { ChevronLeft, Wallet, Settings, Bell, UserCircle, Download, Plus } from 'lucide-react';
+import { ChevronLeft, Wallet, Settings, UserCircle, Download, Plus } from 'lucide-react';
 
 function PortfolioRowSkeleton() {
   return (
@@ -35,7 +35,6 @@ export default function SettingsLoading() {
             {[
               { name: 'Portfolio', icon: <Wallet className="w-4 h-4" /> },
               { name: 'Preferences', icon: <Settings className="w-4 h-4" /> },
-              { name: 'Notifications', icon: <Bell className="w-4 h-4" /> },
               { name: 'Account', icon: <UserCircle className="w-4 h-4" /> },
             ].map((item, i) => (
               <div 

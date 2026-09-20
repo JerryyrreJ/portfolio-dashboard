@@ -4,6 +4,7 @@ import { NextIntlClientProvider } from "next-intl";
 import { getLocale, getMessages } from "next-intl/server";
 import { absoluteUrl, getSiteJsonLd, siteConfig } from "@/lib/site";
 import { ThemeProvider } from "./components/ThemeProvider";
+import MfaSessionGate from "./components/settings/MfaSessionGate";
 import "./globals.css";
 
 const geistSans = Geist({
@@ -88,7 +89,9 @@ export default async function RootLayout({
             enableSystem
             disableTransitionOnChange
           >
-            {children}
+            <MfaSessionGate>
+              {children}
+            </MfaSessionGate>
           </ThemeProvider>
         </NextIntlClientProvider>
       </body>

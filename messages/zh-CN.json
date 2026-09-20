@@ -196,7 +196,6 @@
     "navigation": {
       "portfolio": "投资组合",
       "preferences": "偏好设置",
-      "notifications": "通知",
       "account": "账户与安全"
     },
     "actions": {
@@ -208,7 +207,6 @@
       "update": "更新",
       "done": "完成",
       "enable": "启用",
-      "manage": "管理",
       "preparing": "正在准备...",
       "downloadFormat": "下载 {format}"
     },
@@ -267,26 +265,10 @@
       "chartAreaFull": "面积图",
       "chartLineFull": "折线图",
       "chartBarFull": "柱状图",
-      "hideSmallBalances": "隐藏小额持仓",
-      "hideSmallBalancesDesc": "隐藏低于 $10 的持仓",
-      "performance": "性能",
-      "realTimeSync": "实时同步",
-      "realTimeSyncDesc": "更快地更新数据",
       "taxAccounting": "税务与会计",
       "costBasisMethod": "成本计算方式",
       "costBasisFifoDesc": "先进先出",
       "costBasisAvcoDesc": "平均成本"
-    },
-    "notificationCenter": {
-      "title": "通知",
-      "marketAlerts": "市场提醒",
-      "priceVolatility": "价格波动",
-      "priceVolatilityDesc": "当涨跌幅超过 5% 时提醒",
-      "reporting": "报告",
-      "dailyDigest": "每日摘要",
-      "dailyDigestDesc": "收盘后总结",
-      "weeklyNewsletter": "每周通讯",
-      "weeklyNewsletterDesc": "洞察与收益回顾"
     },
     "account": {
       "title": "账户与安全",
@@ -318,9 +300,7 @@
       "updating": "正在更新...",
       "accessControl": "访问控制",
       "twoFactorAuth": "双重验证",
-      "disabled": "未启用",
-      "apiManagement": "API 管理",
-      "finnhubApiKey": "Finnhub API Key"
+      "disabled": "未启用"
     },
     "authPanel": {
       "checkEmailTitle": "请查看你的邮箱",
@@ -354,6 +334,25 @@
       "signInWithPasskey": "使用 Passkey 登录",
       "noAccount": "还没有账户？",
       "haveAccount": "已经有账户了？"
+    },
+    "mfa": {
+      "enabled": "已启用",
+      "challengeTitle": "双重验证",
+      "challengeDescription": "请输入身份验证应用中的 6 位验证码。",
+      "scanQr": "使用身份验证应用扫描此二维码。",
+      "qrAlt": "双重验证二维码",
+      "secretLabel": "无法扫描？请改用此密钥",
+      "codeLabel": "验证码",
+      "codePlaceholder": "000000",
+      "verify": "验证",
+      "verifying": "正在验证...",
+      "disable": "关闭",
+      "disableDescription": "请输入身份验证应用中的验证码以关闭双重验证。",
+      "preparing": "正在准备身份验证设置...",
+      "enrollFailed": "无法开始双重验证设置。",
+      "verifyFailed": "验证码不正确，请重试。",
+      "disableFailed": "无法关闭双重验证。",
+      "backToSignIn": "返回登录"
     },
     "passkeys": {
       "title": "Passkeys",

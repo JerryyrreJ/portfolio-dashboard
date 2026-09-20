@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { redirect } from "next/navigation";
-import { getUser } from "@/lib/supabase-server";
+import { needsMfaStepUp } from "@/lib/mfa";
+import { getMfaAssuranceLevel, getUser } from "@/lib/supabase-server";
 import LoginClient from "./LoginClient";
 
 export const metadata: Metadata = {
@@ -18,7 +19,10 @@ export const metadata: Metadata = {
 export default async function LoginPage() {
   const user = await getUser().catch(() => null);
   if (user) {
-    redirect("/app");
+    const aal = await getMfaAssuranceLevel();
+    if (!needsMfaStepUp(aal)) {
+      redirect("/app");
+    }
   }
 
   return <LoginClient />;
