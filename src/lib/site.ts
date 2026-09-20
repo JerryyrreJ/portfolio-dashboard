@@ -18,6 +18,8 @@ export const siteConfig = {
     "Folio is a portfolio tracker for monitoring holdings, transactions, dividends, and stock performance in one place.",
   locale: "en_US",
   organizationName: "Folio",
+  githubUrl: "https://github.com/JerryyrreJ/portfolio-dashboard",
+  contactEmail: "jerryno153@gmail.com",
 };
 
 export function absoluteUrl(path: string) {
@@ -44,6 +46,8 @@ export function getSiteJsonLd() {
       "@id": `${siteConfig.url}/#organization`,
       name: siteConfig.organizationName,
       url: siteConfig.url,
+      sameAs: [siteConfig.githubUrl],
+      email: siteConfig.contactEmail,
       logo: {
         "@type": "ImageObject",
         url: absoluteUrl("/icon"),

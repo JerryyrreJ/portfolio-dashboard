@@ -27,7 +27,7 @@ export default function Header() {
           <nav className="hidden md:block">
             <ul className="flex items-center gap-8 text-[13px] font-medium text-secondary">
               <li>
-                <Link href="#features" className="flex items-center gap-1 transition-colors hover:text-primary">
+                <Link href="/#features" className="flex items-center gap-1 transition-colors hover:text-primary">
                   Features
                   <ChevronDown className="w-3.5 h-3.5 opacity-50" />
                 </Link>
@@ -38,7 +38,7 @@ export default function Header() {
                 </Link>
               </li>
               <li>
-                <Link href="#workflow" className="transition-colors hover:text-primary">
+                <Link href="/#workflow" className="transition-colors hover:text-primary">
                   Workflow
                 </Link>
               </li>
