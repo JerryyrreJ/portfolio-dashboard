@@ -5,6 +5,8 @@ type RateLimitConfig = {
   keyPrefix: string;
   limit: number;
   windowMs: number;
+  /** Override the default per-IP identity (e.g. API key id or user id). */
+  identifier?: string;
 };
 
 type RateLimitHeaders = Record<string, string>;
@@ -37,8 +39,8 @@ export async function applyRateLimit(
   config: RateLimitConfig
 ): Promise<{ allowed: boolean; headers: RateLimitHeaders }> {
   const now = Date.now();
-  const clientIp = getClientIp(request);
-  const key = `${config.keyPrefix}:${clientIp}`;
+  const identity = config.identifier?.trim() || getClientIp(request);
+  const key = `${config.keyPrefix}:${identity}`;
   const nowDate = new Date(now);
 
   try {

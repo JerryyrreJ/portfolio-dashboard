@@ -4,6 +4,8 @@ A personal portfolio tracker for holdings, transactions, dividends, and stock pe
 
 Live site: [https://folio.jerrylu.xyz](https://folio.jerrylu.xyz)
 
+Public REST import (API keys, dry-run preview, bulk trades): [docs/api-transactions.md](docs/api-transactions.md).
+
 ## Getting Started
 
 ### Prerequisites
