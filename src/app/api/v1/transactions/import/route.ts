@@ -1,20 +1,24 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { authenticateApiKey } from '@/lib/api/auth';
 import { withPublicApiHeaders, publicApiOptionsResponse } from '@/lib/api/cors';
-import { apiError } from '@/lib/api/errors';
+import { apiError, type ApiErrorDetail } from '@/lib/api/errors';
 import {
-  completeIdempotencyRecord,
-  findIdempotencyRecord,
+  IdempotencyConflict,
+  runIdempotentImport,
   hashRequestPayload,
   readIdempotencyKey,
-  releaseIdempotencyRecord,
-  saveIdempotencyRecord,
   MAX_IDEMPOTENCY_KEY_LENGTH,
 } from '@/lib/api/idempotency';
 import { applyRateLimit } from '@/lib/rate-limit';
 import { findOwnedPortfolio } from '@/lib/ownership';
-import { importTransactionsAtomically, previewImportItems } from '@/lib/transactions/import';
+import { importTransactionsInTransaction, previewImportItems, ratesByCurrency } from '@/lib/transactions/import';
 import { isRecord, parseImportRequest } from '@/lib/transactions/parse';
+
+class ClientKeyConflict extends Error {
+  constructor(public readonly details: ApiErrorDetail[]) {
+    super('One or more clientKey values already exist on different transactions.');
+  }
+}
 
 export function OPTIONS() {
   return publicApiOptionsResponse();
@@ -82,70 +86,6 @@ export async function POST(request: NextRequest) {
     transactions: body.transactions,
   });
 
-  let reservedIdempotencyKey: string | null = null;
-
-  if (idempotencyKey && !parsed.dryRun) {
-    const existing = await findIdempotencyRecord(apiKey.userId, idempotencyKey);
-    if (existing) {
-      if (existing.requestHash !== requestHash) {
-        return apiError(
-          409,
-          'IDEMPOTENCY_KEY_REUSED',
-          'Idempotency-Key was already used with a different request body.',
-          undefined,
-          withPublicApiHeaders(keyLimit.headers)
-        );
-      }
-      if (existing.statusCode === 202) {
-        return apiError(
-          409,
-          'IDEMPOTENCY_IN_PROGRESS',
-          'A request with this Idempotency-Key is already in progress. Retry shortly.',
-          undefined,
-          withPublicApiHeaders(keyLimit.headers)
-        );
-      }
-      return NextResponse.json(JSON.parse(existing.responseJson), {
-        status: existing.statusCode,
-        headers: withPublicApiHeaders({
-          ...keyLimit.headers,
-          'Idempotency-Replayed': 'true',
-        }),
-      });
-    }
-
-    const reserved = await saveIdempotencyRecord({
-      userId: apiKey.userId,
-      key: idempotencyKey,
-      requestHash,
-      statusCode: 202,
-      responseJson: JSON.stringify({ pending: true }),
-    });
-
-    if (!reserved) {
-      return apiError(409, 'IDEMPOTENCY_IN_PROGRESS', 'A request with this Idempotency-Key is already in progress. Retry shortly.', undefined, withPublicApiHeaders(keyLimit.headers));
-    }
-    if (reserved.requestHash !== requestHash) {
-      return apiError(
-        409,
-        'IDEMPOTENCY_KEY_REUSED',
-        'Idempotency-Key was already used with a different request body.',
-        undefined,
-        withPublicApiHeaders(keyLimit.headers)
-      );
-    }
-    if (reserved.statusCode !== 202) {
-      return NextResponse.json(JSON.parse(reserved.responseJson), {
-        status: reserved.statusCode,
-        headers: withPublicApiHeaders({
-          ...keyLimit.headers,
-          'Idempotency-Replayed': 'true',
-        }),
-      });
-    }
-    reservedIdempotencyKey = idempotencyKey;
-  }
-
   if (parsed.dryRun) {
     const results = previewImportItems(parsed.items);
     return NextResponse.json({
@@ -157,46 +97,40 @@ export async function POST(request: NextRequest) {
   }
 
   try {
-    const { results, conflicts, importBatchId } = await importTransactionsAtomically({
-      portfolioId: portfolio.id,
-      items: parsed.items,
+    // External FX requests stay outside the database transaction/lock.
+    const rates = await ratesByCurrency(parsed.items);
+    const result = await runIdempotentImport(
+      idempotencyKey ? { userId: apiKey.userId, key: idempotencyKey, requestHash } : null,
+      async (tx) => {
+        const { results, conflicts, importBatchId } = await importTransactionsInTransaction(tx, {
+          portfolioId: portfolio.id,
+          items: parsed.items,
+          rates,
+        });
+        if (conflicts.length > 0) throw new ClientKeyConflict(conflicts);
+        return {
+          success: true,
+          dryRun: false,
+          importBatchId,
+          imported: results.filter((item) => item.status === 'created').length,
+          replayed: results.filter((item) => item.status === 'existing').length,
+          results,
+        };
+      },
+    );
+    return NextResponse.json(result.payload, {
+      status: result.statusCode,
+      headers: withPublicApiHeaders({
+        ...keyLimit.headers,
+        ...(result.replayed ? { 'Idempotency-Replayed': 'true' } : {}),
+      }),
     });
-
-    if (conflicts.length > 0) {
-      if (reservedIdempotencyKey) {
-        await releaseIdempotencyRecord(apiKey.userId, reservedIdempotencyKey);
-      }
-      return apiError(
-        409,
-        'CLIENT_KEY_CONFLICT',
-        'One or more clientKey values already exist on different transactions.',
-        conflicts,
-        withPublicApiHeaders(keyLimit.headers)
-      );
-    }
-
-    const payload = {
-      success: true,
-      dryRun: false,
-      importBatchId,
-      imported: results.filter((result) => result.status === 'created').length,
-      replayed: results.filter((result) => result.status === 'existing').length,
-      results,
-    };
-
-    if (reservedIdempotencyKey) {
-      await completeIdempotencyRecord({
-        userId: apiKey.userId,
-        key: reservedIdempotencyKey,
-        statusCode: 200,
-        responseJson: JSON.stringify(payload),
-      });
-    }
-
-    return NextResponse.json(payload, { headers: withPublicApiHeaders(keyLimit.headers) });
   } catch (error) {
-    if (reservedIdempotencyKey) {
-      await releaseIdempotencyRecord(apiKey.userId, reservedIdempotencyKey).catch(() => undefined);
+    if (error instanceof IdempotencyConflict) {
+      return apiError(409, error.code, error.message, undefined, withPublicApiHeaders(keyLimit.headers));
+    }
+    if (error instanceof ClientKeyConflict) {
+      return apiError(409, 'CLIENT_KEY_CONFLICT', error.message, error.details, withPublicApiHeaders(keyLimit.headers));
     }
     console.error('Failed to import transactions:', error);
     const prismaCode = (error as { code?: string }).code;
@@ -204,7 +138,7 @@ export async function POST(request: NextRequest) {
       return apiError(
         409,
         'CLIENT_KEY_CONFLICT',
-        'A clientKey in this request collided with an existing transaction. Retry with a new clientKey or fetch the existing trade.',
+        'A clientKey collided with an existing transaction. Retry with the same clientKey or fetch the existing trade.',
         undefined,
         withPublicApiHeaders(keyLimit.headers)
       );

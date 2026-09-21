@@ -1,29 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { createServerClient } from '@supabase/ssr';
-import { cookies } from 'next/headers';
+import { getUser } from '@/lib/supabase-server';
 
 import { createServerProfiler } from '@/lib/perf';
 import prisma from '@/lib/prisma';
-
-async function getUser() {
-  const perf = createServerProfiler('api/portfolio.auth');
-  const cookieStore = await perf.time('cookies', () => cookies());
-  const supabase = await perf.time('createServerClient', async () => createServerClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
-    {
-      cookies: {
-        getAll() { return cookieStore.getAll() },
-        setAll(cookiesToSet) {
-          try { cookiesToSet.forEach(({ name, value, options }) => cookieStore.set(name, value, options)) } catch {}
-        },
-      },
-    }
-  ));
-  const { data: { user } } = await perf.time('auth.getUser', () => supabase.auth.getUser());
-  perf.flush(`result=${user ? 'user' : 'null'}`);
-  return user;
-}
 
 // GET /api/portfolio — 返回用户所有 portfolios
 export async function GET() {

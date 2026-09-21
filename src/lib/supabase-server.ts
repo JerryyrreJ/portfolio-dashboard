@@ -1,5 +1,6 @@
 import { createServerClient } from '@supabase/ssr'
 import { cookies } from 'next/headers'
+import { getMfaAuthenticatedUser } from '@/lib/session-auth'
 import { createServerProfiler } from '@/lib/perf'
 
 interface NetworkLikeError {
@@ -83,7 +84,7 @@ export async function getUserWithOptions(options?: {
 
     for (let attempt = 1; attempt <= retries; attempt++) {
       try {
-        const { data: { user } } = await perf.time(`auth.getUser#${attempt}`, () => supabase.auth.getUser())
+        const user = await perf.time(`auth.getUser#${attempt}`, () => getMfaAuthenticatedUser(supabase))
         perf.flush(`result=${user ? 'user' : 'null'} attempt=${attempt}`)
         return user
       } catch (err: unknown) {

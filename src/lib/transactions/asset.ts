@@ -1,35 +1,26 @@
 import type { Prisma } from '@prisma/client';
+import { inferCurrencyFromTicker, inferMarketFromTicker, normalizeTicker } from './ticker';
 
 type AssetWriter = {
-  asset: {
-    upsert: Prisma.AssetDelegate['upsert'];
-  };
+  asset: { upsert: Prisma.AssetDelegate['upsert'] };
 };
 
-export async function resolveOrCreateAsset(
-  db: AssetWriter,
-  input: {
-    ticker: string;
-    name: string;
-    market: string;
-    currency: string;
-  }
-) {
-  // Match sync/push: ticker is the identity. Existing asset profile fields stay server-owned.
+export async function resolveOrCreateAsset(db: AssetWriter, input: { ticker: string }) {
+  const ticker = normalizeTicker(input.ticker);
+  if (!ticker) throw new Error('Invalid asset ticker');
+
+  // Shared profiles must never come from user-supplied trade metadata.
+  // Use a neutral ticker label and deterministic server defaults until provider sync.
+  // Trade currency remains on the user's transaction, independently of this profile.
   return db.asset.upsert({
-    where: { ticker: input.ticker },
+    where: { ticker },
     create: {
-      ticker: input.ticker,
-      name: input.name || input.ticker,
-      market: input.market || 'US',
-      currency: input.currency || 'USD',
+      ticker,
+      name: ticker,
+      market: inferMarketFromTicker(ticker),
+      currency: inferCurrencyFromTicker(ticker),
     },
     update: {},
-    select: {
-      id: true,
-      ticker: true,
-      name: true,
-      market: true,
-    },
+    select: { id: true, ticker: true, name: true, market: true, currency: true },
   });
 }

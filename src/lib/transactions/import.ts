@@ -1,5 +1,6 @@
 import { getPriceUSD } from '@/lib/exchange-rate';
 import prisma from '@/lib/prisma';
+import type { Prisma } from '@prisma/client';
 import { resolveOrCreateAsset } from '@/lib/transactions/asset';
 import { createImportBatchId } from '@/lib/transactions/batch';
 import {
@@ -92,7 +93,7 @@ function matchesExisting(item: ParsedImportItem, existing: TradeSnapshot) {
   );
 }
 
-async function ratesByCurrency(items: ParsedImportItem[]) {
+export async function ratesByCurrency(items: ParsedImportItem[]) {
   const unique = [...new Set(items.map((item) => item.currency))];
   const entries = await Promise.all(
     unique.map(async (currency) => {
@@ -121,22 +122,23 @@ function sharedExistingBatchId(results: ImportItemResult[]) {
   return [...batchIds][0];
 }
 
-export async function importTransactionsAtomically(input: {
+export async function importTransactionsInTransaction(tx: Prisma.TransactionClient, input: {
   portfolioId: string;
   items: ParsedImportItem[];
+  rates: Record<string, number>;
 }): Promise<{
   importBatchId: string | null;
   results: ImportItemResult[];
   conflicts: Array<{ index: number; field: string; code: string; message: string }>;
 }> {
-  const rates = await ratesByCurrency(input.items);
+  const rates = input.rates;
   const clientKeys = input.items
     .map((item) => item.clientKey)
     .filter((key): key is string => Boolean(key));
 
   const existing = clientKeys.length === 0
     ? []
-    : await prisma.transaction.findMany({
+    : await tx.transaction.findMany({
         where: {
           portfolioId: input.portfolioId,
           importKey: { in: clientKeys },
@@ -170,89 +172,81 @@ export async function importTransactionsAtomically(input: {
 
   const importBatchId = createImportBatchId();
 
-  const created = await prisma.$transaction(async (tx) => {
-    const results: ImportItemResult[] = [];
-    const seenByKey = new Map(existingByKey);
-    let createdCount = 0;
+  const results: ImportItemResult[] = [];
+  const seenByKey = new Map(existingByKey);
+  let createdCount = 0;
 
-    for (const item of input.items) {
-      if (item.clientKey) {
-        const previous = seenByKey.get(item.clientKey);
-        if (previous) {
-          results.push({
-            index: item.index,
-            status: 'existing',
-            transaction: serializeTrade(previous),
-          });
-          continue;
-        }
+  for (const item of input.items) {
+    if (item.clientKey) {
+      const previous = seenByKey.get(item.clientKey);
+      if (previous) {
+        results.push({
+          index: item.index,
+          status: 'existing',
+          transaction: serializeTrade(previous),
+        });
+        continue;
       }
-
-      const asset = await resolveOrCreateAsset(tx, {
-        ticker: item.ticker,
-        name: item.name,
-        market: item.market,
-        currency: item.currency,
-      });
-
-      const exchangeRate = rates[item.currency] ?? 1;
-      const transaction = await tx.transaction.create({
-        data: {
-          portfolioId: input.portfolioId,
-          assetId: asset.id,
-          type: item.type,
-          quantity: item.quantity,
-          price: item.price,
-          fee: item.fee,
-          date: item.date,
-          currency: item.currency,
-          exchangeRate,
-          priceUSD: item.price / exchangeRate,
-          notes: item.notes,
-          source: IMPORT_SOURCE,
-          importKey: item.clientKey,
-          importBatchId,
-        },
-        select: {
-          id: true,
-          type: true,
-          quantity: true,
-          price: true,
-          fee: true,
-          date: true,
-          currency: true,
-          notes: true,
-          importKey: true,
-          importBatchId: true,
-        },
-      });
-      createdCount += 1;
-
-      const snapshot: TradeSnapshot = {
-        ...transaction,
-        asset,
-      };
-
-      if (item.clientKey) {
-        seenByKey.set(item.clientKey, snapshot);
-      }
-
-      results.push({
-        index: item.index,
-        status: 'created',
-        transaction: serializeTrade(snapshot),
-      });
     }
 
-    return {
-      importBatchId: createdCount > 0 ? importBatchId : sharedExistingBatchId(results),
-      results,
-    };
-  }, {
-    timeout: 15_000,
-  });
+    const asset = await resolveOrCreateAsset(tx, {
+      ticker: item.ticker,
+    });
 
-  return { importBatchId: created.importBatchId, results: created.results, conflicts: [] };
+    const exchangeRate = rates[item.currency] ?? 1;
+    const transaction = await tx.transaction.create({
+      data: {
+        portfolioId: input.portfolioId,
+        assetId: asset.id,
+        type: item.type,
+        quantity: item.quantity,
+        price: item.price,
+        fee: item.fee,
+        date: item.date,
+        currency: item.currency,
+        exchangeRate,
+        priceUSD: item.price / exchangeRate,
+        notes: item.notes,
+        source: IMPORT_SOURCE,
+        importKey: item.clientKey,
+        importBatchId,
+      },
+      select: {
+        id: true,
+        type: true,
+        quantity: true,
+        price: true,
+        fee: true,
+        date: true,
+        currency: true,
+        notes: true,
+        importKey: true,
+        importBatchId: true,
+      },
+    });
+    createdCount += 1;
+
+    const snapshot: TradeSnapshot = {
+      ...transaction,
+      asset,
+    };
+
+    if (item.clientKey) {
+      seenByKey.set(item.clientKey, snapshot);
+    }
+
+    results.push({
+      index: item.index,
+      status: 'created',
+      transaction: serializeTrade(snapshot),
+    });
+  }
+
+  return {
+    importBatchId: createdCount > 0 ? importBatchId : sharedExistingBatchId(results),
+    results,
+    conflicts: [],
+  };
 }
 
 export type PersistSessionTradeInput = {

@@ -1,5 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import prisma from '@/lib/prisma';
+import { resolveOrCreateAsset } from '@/lib/transactions/asset';
+import { normalizeTicker } from '@/lib/transactions/ticker';
 import { requireAuthenticatedUser } from '@/lib/ownership';
 import type { LedgerSyncOperation } from '@/lib/ledger/types';
 
@@ -196,19 +198,9 @@ export async function POST(request: NextRequest) {
       });
       if (!portfolio) continue;
 
-      // Do not trust client-provided asset metadata in sync payloads.
-      // Asset profile fields are server-owned and updated by provider sync routes.
-      const asset = await prisma.asset.upsert({
-        where: { ticker: payload.asset.ticker },
-        create: {
-          ticker: payload.asset.ticker,
-          name: payload.asset.ticker,
-          market: 'US',
-          currency: 'USD',
-        },
-        update: {},
-        select: { id: true },
-      });
+      const ticker = normalizeTicker(payload.asset.ticker);
+      if (!ticker) continue;
+      const asset = await resolveOrCreateAsset(prisma, { ticker });
 
       const existingTransaction = await prisma.transaction.findUnique({
         where: { id: payload.id },
