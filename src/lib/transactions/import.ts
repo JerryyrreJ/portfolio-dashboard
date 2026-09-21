@@ -1,6 +1,7 @@
 import { getPriceUSD } from '@/lib/exchange-rate';
 import prisma from '@/lib/prisma';
 import { resolveOrCreateAsset } from '@/lib/transactions/asset';
+import { createImportBatchId } from '@/lib/transactions/batch';
 import {
   IMPORT_SOURCE,
   type ParsedImportItem,
@@ -8,6 +9,26 @@ import {
 } from '@/lib/transactions/parse';
 
 const NUMBER_EPSILON = 1e-9;
+
+const TRADE_SELECT = {
+  id: true,
+  type: true,
+  quantity: true,
+  price: true,
+  fee: true,
+  date: true,
+  currency: true,
+  notes: true,
+  importKey: true,
+  importBatchId: true,
+  asset: {
+    select: {
+      ticker: true,
+      name: true,
+      market: true,
+    },
+  },
+} as const;
 
 type TradeSnapshot = {
   id: string;
@@ -19,6 +40,7 @@ type TradeSnapshot = {
   currency: string;
   notes: string | null;
   importKey: string | null;
+  importBatchId: string | null;
   asset: {
     ticker: string;
     name: string;
@@ -48,6 +70,7 @@ function serializeTrade(transaction: TradeSnapshot) {
     currency: transaction.currency,
     notes: transaction.notes,
     clientKey: transaction.importKey,
+    importBatchId: transaction.importBatchId,
     asset: {
       ticker: transaction.asset.ticker,
       name: transaction.asset.name,
@@ -88,10 +111,24 @@ export function previewImportItems(items: ParsedImportItem[]): ImportItemResult[
   }));
 }
 
+function sharedExistingBatchId(results: ImportItemResult[]) {
+  const batchIds = new Set(
+    results
+      .map((result) => result.transaction?.importBatchId)
+      .filter((batchId): batchId is string => Boolean(batchId))
+  );
+  if (batchIds.size !== 1) return null;
+  return [...batchIds][0];
+}
+
 export async function importTransactionsAtomically(input: {
   portfolioId: string;
   items: ParsedImportItem[];
-}): Promise<{ results: ImportItemResult[]; conflicts: Array<{ index: number; field: string; code: string; message: string }> }> {
+}): Promise<{
+  importBatchId: string | null;
+  results: ImportItemResult[];
+  conflicts: Array<{ index: number; field: string; code: string; message: string }>;
+}> {
   const rates = await ratesByCurrency(input.items);
   const clientKeys = input.items
     .map((item) => item.clientKey)
@@ -104,24 +141,7 @@ export async function importTransactionsAtomically(input: {
           portfolioId: input.portfolioId,
           importKey: { in: clientKeys },
         },
-        select: {
-          id: true,
-          type: true,
-          quantity: true,
-          price: true,
-          fee: true,
-          date: true,
-          currency: true,
-          notes: true,
-          importKey: true,
-          asset: {
-            select: {
-              ticker: true,
-              name: true,
-              market: true,
-            },
-          },
-        },
+        select: TRADE_SELECT,
       });
 
   const existingByKey = new Map(
@@ -145,15 +165,19 @@ export async function importTransactionsAtomically(input: {
   }
 
   if (conflicts.length > 0) {
-    return { results: [], conflicts };
+    return { importBatchId: null, results: [], conflicts };
   }
+
+  const importBatchId = createImportBatchId();
 
   const created = await prisma.$transaction(async (tx) => {
     const results: ImportItemResult[] = [];
+    const seenByKey = new Map(existingByKey);
+    let createdCount = 0;
 
     for (const item of input.items) {
       if (item.clientKey) {
-        const previous = existingByKey.get(item.clientKey);
+        const previous = seenByKey.get(item.clientKey);
         if (previous) {
           results.push({
             index: item.index,
@@ -187,6 +211,7 @@ export async function importTransactionsAtomically(input: {
           notes: item.notes,
           source: IMPORT_SOURCE,
           importKey: item.clientKey,
+          importBatchId,
         },
         select: {
           id: true,
@@ -198,8 +223,10 @@ export async function importTransactionsAtomically(input: {
           currency: true,
           notes: true,
           importKey: true,
+          importBatchId: true,
         },
       });
+      createdCount += 1;
 
       const snapshot: TradeSnapshot = {
         ...transaction,
@@ -207,7 +234,7 @@ export async function importTransactionsAtomically(input: {
       };
 
       if (item.clientKey) {
-        existingByKey.set(item.clientKey, snapshot);
+        seenByKey.set(item.clientKey, snapshot);
       }
 
       results.push({
@@ -217,12 +244,15 @@ export async function importTransactionsAtomically(input: {
       });
     }
 
-    return results;
+    return {
+      importBatchId: createdCount > 0 ? importBatchId : sharedExistingBatchId(results),
+      results,
+    };
   }, {
     timeout: 15_000,
   });
 
-  return { results: created, conflicts: [] };
+  return { importBatchId: created.importBatchId, results: created.results, conflicts: [] };
 }
 
 export type PersistSessionTradeInput = {
