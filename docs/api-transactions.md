@@ -73,8 +73,8 @@ There is a single write shape: `transactions` is always an array. A single trade
 | `transactions[].fee` | no | Non-negative, default `0` |
 | `transactions[].currency` | no | 3-letter code; inferred from ticker suffix when omitted |
 | `transactions[].notes` | no | Max 2000 characters |
-| `transactions[].name` | no | Used only when creating a new asset |
-| `transactions[].market` | no | Inferred from ticker suffix when omitted |
+| `transactions[].name` | no | Accepted for compatibility; never used for shared asset profiles |
+| `transactions[].market` | no | Accepted for compatibility; shared market is inferred server-side from ticker |
 | `transactions[].clientKey` | no | Per-item idempotency fingerprint, unique per portfolio |
 | `dryRun` | no | `true` validates and returns per-item results without writing |
 | `idempotencyKey` | no | Same as the `Idempotency-Key` header |
@@ -109,7 +109,7 @@ After an undo, a replay of the same `Idempotency-Key` still returns the original
 
 Retries should not duplicate trades:
 
-1. **Request key** — send `Idempotency-Key` (header or body). Folio reserves the key before writing so concurrent retries cannot double-insert. Replays of the same body return the original response for 24 hours (`Idempotency-Replayed: true`). A reused key with a different body returns `409 IDEMPOTENCY_KEY_REUSED`. A retry that arrives while the first request is still writing returns `409 IDEMPOTENCY_IN_PROGRESS`. Dry-run requests do not store the key.
+1. **Request key** — send `Idempotency-Key` (header or body). Folio takes a nonblocking PostgreSQL transaction lock for the user/key pair. Trade writes and the replay response commit together, so concurrent retries cannot double-insert and response-storage failures roll back the trades. Replays of the same body return the original response for 24 hours (`Idempotency-Replayed: true`). A reused key with a different body returns `409 IDEMPOTENCY_KEY_REUSED`. A retry that arrives while the first request is still writing returns `409 IDEMPOTENCY_IN_PROGRESS`. Dry-run requests do not store the key.
 2. **Per-item `clientKey`** — unique per `(portfolioId, clientKey)`. An exact match is returned as `status: "existing"` instead of inserting a second row.
 
 ### Limits
@@ -333,3 +333,19 @@ This public API is import + reconcile only. The following are **not** available 
 - Webhooks
 - Holdings, quotes, charts, or in-app dividend confirmation/sync
 - Session-cookie auth on `/api/v1` (Bearer API keys only)
+
+## Security behavior
+
+- Session-authenticated pages and APIs, including API key creation, require a verified
+  AAL2 token when the Auth server reports an enrolled, verified MFA factor. Accounts
+  without an enrolled factor can still use AAL1. Bearer API keys remain usable for automation.
+- Shared asset metadata is never populated from caller-supplied `name`, `market`, or
+  trade `currency`. New assets use the ticker as a neutral name and server-inferred
+  market/currency until a trusted provider sync updates them. This also applies to
+  in-app asset creation and ledger sync. Existing shared profiles are not overwritten.
+- Import `currency` still describes the individual trade. Dry-run `normalized` fields
+  describe the submitted trade metadata, not a promise to update the shared asset profile.
+- No schema migration is required for these changes. The idempotency lock uses
+  PostgreSQL transaction-scoped advisory locks and works with transaction pooling.
+  Legacy pending records retain their prior 24-hour expiry and return an in-progress
+  conflict until expiry; do not blindly clear them because old writes may have committed.

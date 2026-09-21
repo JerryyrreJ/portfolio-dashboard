@@ -61,3 +61,9 @@ email/
 
 # Local Netlify folder
 .netlify
+
+# Keep security regression tests in version control.
+!/tests/
+/tests/*
+!/tests/security/
+!/tests/security/*.test.ts

@@ -2,6 +2,8 @@ import { NextRequest, NextResponse } from 'next/server';
 import type { Prisma } from '@prisma/client';
 import prisma from '@/lib/prisma';
 import { requireAuthenticatedUser } from '@/lib/ownership';
+import { resolveOrCreateAsset } from '@/lib/transactions/asset';
+import { normalizeTicker } from '@/lib/transactions/ticker';
 
 interface CreateAssetRequest {
   ticker?: string;
@@ -73,7 +75,10 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const ticker = body.ticker.toUpperCase();
+    const ticker = normalizeTicker(body.ticker);
+    if (!ticker) {
+      return NextResponse.json({ error: 'Invalid ticker' }, { status: 400 });
+    }
 
     // 检查是否已存在相同 ticker 的资产
     const existingAsset = await prisma.asset.findUnique({
@@ -92,14 +97,7 @@ export async function POST(request: NextRequest) {
     }
 
     // 创建新资产
-    const asset = await prisma.asset.create({
-      data: {
-        ticker,
-        name: body.name,
-        market: body.market || 'US',
-        currency: body.currency || 'USD',
-      },
-    });
+    const asset = await resolveOrCreateAsset(prisma, { ticker });
 
     return NextResponse.json({
       success: true,
