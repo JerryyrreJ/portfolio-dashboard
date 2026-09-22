@@ -8,6 +8,14 @@ export const USD_RATES: Record<string, number> = {
   HKD: 7.82, AUD: 1.53, CAD: 1.36, CHF: 0.90, SGD: 1.34,
 };
 
+export const SUPPORTED_CURRENCIES = Object.freeze(Object.keys(USD_RATES));
+
+export function normalizeSupportedCurrency(value: unknown): string | null {
+  if (typeof value !== 'string') return null;
+  const currency = value.trim().toUpperCase();
+  return Object.prototype.hasOwnProperty.call(USD_RATES, currency) ? currency : null;
+}
+
 export function getFallbackRates(base: string): Record<string, number> {
   if (base === 'USD') return USD_RATES;
   const baseRate = USD_RATES[base];

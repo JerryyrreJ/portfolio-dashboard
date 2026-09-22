@@ -2,10 +2,13 @@ import { NextRequest, NextResponse } from 'next/server';
 import prisma from '@/lib/prisma';
 import { findOwnedPortfolio, requireAuthenticatedUser } from '@/lib/ownership';
 import {
+  isTransactionTotalWithinLimit,
+  MAX_TRANSACTION_QUANTITY,
   parseIsoDate,
   parseNonNegativeNumber,
   parsePositiveNumber,
 } from '@/lib/transactions/parse';
+import { normalizeSupportedCurrency, SUPPORTED_CURRENCIES } from '@/lib/currency';
 import { persistSessionTrade } from '@/lib/transactions/import';
 
 const MAX_LIMIT = 200;
@@ -46,7 +49,7 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const quantity = parsePositiveNumber(body.quantity);
+    const quantity = parsePositiveNumber(body.quantity, MAX_TRANSACTION_QUANTITY);
     const price = parsePositiveNumber(body.price);
     const fee = parseNonNegativeNumber(body.fee, 0);
     const date = parseIsoDate(body.date);
@@ -71,7 +74,20 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const currency = body.currency || 'USD';
+    if (!isTransactionTotalWithinLimit(quantity, price, fee)) {
+      return NextResponse.json(
+        { error: 'Transaction value is too large' },
+        { status: 400 }
+      );
+    }
+
+    const currency = normalizeSupportedCurrency(body.currency ?? 'USD');
+    if (!currency) {
+      return NextResponse.json(
+        { error: `Currency must be one of: ${SUPPORTED_CURRENCIES.join(', ')}` },
+        { status: 400 }
+      );
+    }
 
     const portfolio = await findOwnedPortfolio(user.id, body.portfolioId);
     if (!portfolio) {

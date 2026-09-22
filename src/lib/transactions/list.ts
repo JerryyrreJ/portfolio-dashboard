@@ -35,9 +35,10 @@ function parseLimit(value: string | null) {
 
 function parseBoundaryInstant(value: string, edge: 'start' | 'end') {
   if (DATE_ONLY.test(value)) {
-    const suffix = edge === 'start' ? 'T00:00:00.000Z' : 'T23:59:59.999Z';
-    const parsed = new Date(`${value}${suffix}`);
-    return Number.isNaN(parsed.getTime()) ? null : parsed;
+    const parsed = parseIsoDate(value);
+    if (!parsed) return null;
+    if (edge === 'end') parsed.setUTCHours(23, 59, 59, 999);
+    return parsed;
   }
   return parseIsoDate(value);
 }

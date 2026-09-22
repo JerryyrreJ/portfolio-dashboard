@@ -1,4 +1,4 @@
-import { getPriceUSD } from '@/lib/exchange-rate';
+import { ExchangeRateUnavailableError, getPriceUSD } from '@/lib/exchange-rate';
 import prisma from '@/lib/prisma';
 import type { Prisma } from '@prisma/client';
 import { resolveOrCreateAsset } from '@/lib/transactions/asset';
@@ -104,6 +104,14 @@ export async function ratesByCurrency(items: ParsedImportItem[]) {
   return Object.fromEntries(entries) as Record<string, number>;
 }
 
+function requireExchangeRate(rates: Record<string, number>, currency: string) {
+  const rate = rates[currency];
+  if (!Number.isFinite(rate) || rate <= 0) {
+    throw new ExchangeRateUnavailableError(currency);
+  }
+  return rate;
+}
+
 export function previewImportItems(items: ParsedImportItem[]): ImportItemResult[] {
   return items.map((item) => ({
     index: item.index,
@@ -132,6 +140,10 @@ export async function importTransactionsInTransaction(tx: Prisma.TransactionClie
   conflicts: Array<{ index: number; field: string; code: string; message: string }>;
 }> {
   const rates = input.rates;
+  const validatedRates = new Map(
+    [...new Set(input.items.map((item) => item.currency))]
+      .map((currency) => [currency, requireExchangeRate(rates, currency)] as const),
+  );
   const clientKeys = input.items
     .map((item) => item.clientKey)
     .filter((key): key is string => Boolean(key));
@@ -193,7 +205,11 @@ export async function importTransactionsInTransaction(tx: Prisma.TransactionClie
       ticker: item.ticker,
     });
 
-    const exchangeRate = rates[item.currency] ?? 1;
+    const exchangeRate = validatedRates.get(item.currency)!;
+    const priceUSD = item.price / exchangeRate;
+    if (!Number.isFinite(priceUSD)) {
+      throw new ExchangeRateUnavailableError(item.currency);
+    }
     const transaction = await tx.transaction.create({
       data: {
         portfolioId: input.portfolioId,
@@ -205,7 +221,7 @@ export async function importTransactionsInTransaction(tx: Prisma.TransactionClie
         date: item.date,
         currency: item.currency,
         exchangeRate,
-        priceUSD: item.price / exchangeRate,
+        priceUSD,
         notes: item.notes,
         source: IMPORT_SOURCE,
         importKey: item.clientKey,
