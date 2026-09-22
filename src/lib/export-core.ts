@@ -142,11 +142,18 @@ export function buildTransactionExportPayload(
   };
 }
 
-function escapeCsvValue(value: string | number) {
+const CSV_FORMULA_PREFIX = /^[\u0000-\u0020\u007f-\u009f\ufeff]*[=+\-@]/u;
+const CSV_LEADING_CONTROL = /^[\u0000-\u001f\u007f-\u009f\ufeff]/u;
+
+export function escapeCsvValue(value: string | number) {
   const raw = String(value);
-  return raw.includes(',') || raw.includes('"') || raw.includes('\n')
-    ? `"${raw.replace(/"/g, '""')}"`
+  const neutralized = typeof value === 'string'
+    && (CSV_FORMULA_PREFIX.test(raw) || CSV_LEADING_CONTROL.test(raw))
+    ? `'${raw}`
     : raw;
+  return /[",\r\n]/.test(neutralized)
+    ? `"${neutralized.replace(/"/g, '""')}"`
+    : neutralized;
 }
 
 function formatCsvAmount(value: number) {
@@ -158,18 +165,18 @@ export function serializeTransactionExportCsv(payload: TransactionExportPayload)
   const header = 'Date,Portfolio,Ticker,Name,Market,Type,Quantity,Price,Currency,Fee,Total Value,Notes\n';
   const rows = payload.transactions.map((transaction) => ([
     transaction.date,
-    escapeCsvValue(transaction.portfolioName),
-    escapeCsvValue(transaction.ticker),
-    escapeCsvValue(transaction.name),
-    escapeCsvValue(transaction.market),
+    transaction.portfolioName,
+    transaction.ticker,
+    transaction.name,
+    transaction.market,
     transaction.type,
     transaction.quantity,
     formatCsvAmount(transaction.price),
     transaction.currency,
     formatCsvAmount(transaction.fee),
     formatCsvAmount(transaction.grossAmount),
-    escapeCsvValue(transaction.notes),
-  ].join(',')));
+    transaction.notes,
+  ].map(escapeCsvValue).join(',')));
 
   return header + rows.join('\n');
 }

@@ -10,6 +10,7 @@ import {
   MAX_IDEMPOTENCY_KEY_LENGTH,
 } from '@/lib/api/idempotency';
 import { applyRateLimit } from '@/lib/rate-limit';
+import { ExchangeRateUnavailableError } from '@/lib/exchange-rate';
 import { findOwnedPortfolio } from '@/lib/ownership';
 import { importTransactionsInTransaction, previewImportItems, ratesByCurrency } from '@/lib/transactions/import';
 import { isRecord, parseImportRequest } from '@/lib/transactions/parse';
@@ -131,6 +132,9 @@ export async function POST(request: NextRequest) {
     }
     if (error instanceof ClientKeyConflict) {
       return apiError(409, 'CLIENT_KEY_CONFLICT', error.message, error.details, withPublicApiHeaders(keyLimit.headers));
+    }
+    if (error instanceof ExchangeRateUnavailableError) {
+      return apiError(422, error.code, error.message, undefined, withPublicApiHeaders(keyLimit.headers));
     }
     console.error('Failed to import transactions:', error);
     const prismaCode = (error as { code?: string }).code;

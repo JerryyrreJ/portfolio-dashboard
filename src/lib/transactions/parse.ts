@@ -1,34 +1,55 @@
 import type { ApiErrorDetail } from '@/lib/api/errors';
+import { normalizeSupportedCurrency, SUPPORTED_CURRENCIES } from '@/lib/currency';
 import { inferCurrencyFromTicker, inferMarketFromTicker, normalizeTicker } from '@/lib/transactions/ticker';
 
 export const MAX_IMPORT_TRANSACTIONS = 100;
 export const MAX_NOTES_LENGTH = 2000;
 export const MAX_CLIENT_KEY_LENGTH = 128;
+export const MAX_TRANSACTION_QUANTITY = 1_000_000_000_000;
+export const MAX_TRANSACTION_MONEY = 1_000_000_000_000;
+export const MAX_TRANSACTION_TOTAL = 1_000_000_000_000_000;
 export const IMPORT_SOURCE = 'api';
 
 export type TradeType = 'BUY' | 'SELL';
 
-export function parsePositiveNumber(value: unknown): number | null {
-  const parsed = typeof value === 'number' ? value : Number(value);
-  if (!Number.isFinite(parsed) || parsed <= 0) {
+export function parsePositiveNumber(value: unknown, maximum = MAX_TRANSACTION_MONEY): number | null {
+  if (typeof value !== 'number' || !Number.isFinite(value) || value <= 0 || value > maximum) {
     return null;
   }
-  return parsed;
+  return value;
 }
 
-export function parseNonNegativeNumber(value: unknown, fallback = 0): number | null {
-  if (value === undefined || value === null || value === '') {
+export function parseNonNegativeNumber(
+  value: unknown,
+  fallback = 0,
+  maximum = MAX_TRANSACTION_MONEY,
+): number | null {
+  if (value === undefined || value === null) {
     return fallback;
   }
-  const parsed = typeof value === 'number' ? value : Number(value);
-  if (!Number.isFinite(parsed) || parsed < 0) {
+  if (typeof value !== 'number' || !Number.isFinite(value) || value < 0 || value > maximum) {
     return null;
   }
-  return parsed;
+  return value;
+}
+
+const ISO_DATE_ONLY = /^\d{4}-\d{2}-\d{2}$/;
+const ISO_DATE_TIME = /^\d{4}-\d{2}-\d{2}T(?:[01]\d|2[0-3]):[0-5]\d(?::[0-5]\d(?:\.\d{1,9})?)?(?:Z|[+-](?:0\d|1[0-4]):[0-5]\d)$/;
+
+function hasValidCalendarDate(value: string) {
+  const datePart = value.slice(0, 10);
+  const parsed = new Date(`${datePart}T00:00:00.000Z`);
+  return !Number.isNaN(parsed.getTime()) && parsed.toISOString().slice(0, 10) === datePart;
 }
 
 export function parseIsoDate(value: unknown): Date | null {
-  if (typeof value !== 'string' || !value.trim()) {
+  if (typeof value !== 'string' || value !== value.trim()) {
+    return null;
+  }
+  if (!ISO_DATE_ONLY.test(value) && !ISO_DATE_TIME.test(value)) {
+    return null;
+  }
+  if (!hasValidCalendarDate(value)) {
     return null;
   }
   const parsed = new Date(value);
@@ -36,6 +57,15 @@ export function parseIsoDate(value: unknown): Date | null {
     return null;
   }
   return parsed;
+}
+
+export function isTransactionTotalWithinLimit(quantity: number, price: number, fee = 0) {
+  const grossAmount = quantity * price;
+  const totalAmount = grossAmount + fee;
+  return Number.isFinite(grossAmount)
+    && Number.isFinite(totalAmount)
+    && grossAmount <= MAX_TRANSACTION_TOTAL
+    && totalAmount <= MAX_TRANSACTION_TOTAL;
 }
 
 export function isRecord(value: unknown): value is Record<string, unknown> {
@@ -78,10 +108,7 @@ function parseCurrency(value: unknown, ticker: string) {
   if (value === undefined || value === null || value === '') {
     return inferCurrencyFromTicker(ticker);
   }
-  if (typeof value !== 'string') return null;
-  const currency = value.trim().toUpperCase();
-  if (!/^[A-Z]{3}$/.test(currency)) return null;
-  return currency;
+  return normalizeSupportedCurrency(value);
 }
 
 function parseMarket(value: unknown, ticker: string) {
@@ -109,7 +136,10 @@ export function parseImportItem(value: unknown, index: number): {
     };
   }
 
-  if (!['BUY', 'SELL'].includes(String(value.type))) {
+  const tradeType = typeof value.type === 'string' && ['BUY', 'SELL'].includes(value.type)
+    ? value.type as TradeType
+    : null;
+  if (!tradeType) {
     errors.push({
       index,
       field: 'type',
@@ -128,13 +158,13 @@ export function parseImportItem(value: unknown, index: number): {
     });
   }
 
-  const quantity = parsePositiveNumber(value.quantity);
+  const quantity = parsePositiveNumber(value.quantity, MAX_TRANSACTION_QUANTITY);
   if (quantity === null) {
     errors.push({
       index,
       field: 'quantity',
       code: 'INVALID_QUANTITY',
-      message: 'quantity must be a positive number.',
+      message: `quantity must be a positive number no greater than ${MAX_TRANSACTION_QUANTITY}.`,
     });
   }
 
@@ -144,7 +174,7 @@ export function parseImportItem(value: unknown, index: number): {
       index,
       field: 'price',
       code: 'INVALID_PRICE',
-      message: 'price must be a positive number.',
+      message: `price must be a positive number no greater than ${MAX_TRANSACTION_MONEY}.`,
     });
   }
 
@@ -154,7 +184,7 @@ export function parseImportItem(value: unknown, index: number): {
       index,
       field: 'fee',
       code: 'INVALID_FEE',
-      message: 'fee must be a non-negative number.',
+      message: `fee must be a non-negative number no greater than ${MAX_TRANSACTION_MONEY}.`,
     });
   }
 
@@ -174,7 +204,7 @@ export function parseImportItem(value: unknown, index: number): {
       index,
       field: 'currency',
       code: 'INVALID_CURRENCY',
-      message: 'currency must be a 3-letter ISO code when provided.',
+      message: `currency must be one of: ${SUPPORTED_CURRENCIES.join(', ')}.`,
     });
   }
 
@@ -218,14 +248,28 @@ export function parseImportItem(value: unknown, index: number): {
     });
   }
 
-  if (errors.length > 0 || !ticker || quantity === null || price === null || fee === null || date === null || !currency || !market) {
+  if (
+    quantity !== null
+    && price !== null
+    && fee !== null
+    && !isTransactionTotalWithinLimit(quantity, price, fee)
+  ) {
+    errors.push({
+      index,
+      field: 'quantity',
+      code: 'TRANSACTION_VALUE_TOO_LARGE',
+      message: `quantity × price + fee must not exceed ${MAX_TRANSACTION_TOTAL}.`,
+    });
+  }
+
+  if (errors.length > 0 || !tradeType || !ticker || quantity === null || price === null || fee === null || date === null || !currency || !market) {
     return { errors };
   }
 
   return {
     item: {
       index,
-      type: value.type as TradeType,
+      type: tradeType,
       date,
       quantity,
       price,

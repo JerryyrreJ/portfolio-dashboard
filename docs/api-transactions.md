@@ -66,12 +66,12 @@ There is a single write shape: `transactions` is always an array. A single trade
 | `portfolioId` | yes | Must belong to the API key's user |
 | `transactions` | yes | Array, length 1–100 |
 | `transactions[].type` | yes | `BUY` or `SELL` |
-| `transactions[].date` | yes | ISO-8601 date or datetime |
-| `transactions[].quantity` | yes | Positive number |
-| `transactions[].price` | yes | Positive number |
+| `transactions[].date` | yes | Valid ISO-8601 date or datetime; impossible dates such as `2026-02-30` are rejected |
+| `transactions[].quantity` | yes | JSON number, greater than 0 and at most 1,000,000,000,000 |
+| `transactions[].price` | yes | JSON number, greater than 0 and at most 1,000,000,000,000 |
 | `transactions[].ticker` or `symbol` | yes | Resolved/created the same way as in-app sync (`Asset.ticker` upsert) |
-| `transactions[].fee` | no | Non-negative, default `0` |
-| `transactions[].currency` | no | 3-letter code; inferred from ticker suffix when omitted |
+| `transactions[].fee` | no | JSON number from 0 to 1,000,000,000,000; default `0` |
+| `transactions[].currency` | no | One of `USD`, `EUR`, `GBP`, `JPY`, `CNY`, `HKD`, `AUD`, `CAD`, `CHF`, `SGD`; inferred from ticker suffix when omitted |
 | `transactions[].notes` | no | Max 2000 characters |
 | `transactions[].name` | no | Accepted for compatibility; never used for shared asset profiles |
 | `transactions[].market` | no | Accepted for compatibility; shared market is inferred server-side from ticker |
@@ -80,6 +80,7 @@ There is a single write shape: `transactions` is always an array. A single trade
 | `idempotencyKey` | no | Same as the `Idempotency-Key` header |
 
 Writes reuse the same ownership and numeric rules as in-app creates (`portfolio` must be owned; quantity/price > 0; fee ≥ 0; FX via `getPriceUSD`).
+The total transaction value (`quantity × price + fee`) cannot exceed 1,000,000,000,000,000. Missing or invalid FX rates fail the request instead of silently using a 1:1 rate.
 
 ### Atomicity
 
