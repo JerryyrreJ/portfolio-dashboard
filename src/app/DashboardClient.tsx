@@ -27,6 +27,7 @@ import {
   User,
   Bell
 } from 'lucide-react';
+import { applyDashboardPrices } from '@/lib/dashboard-prices';
 import AddTransactionModal from './components/AddTransactionModal';
 import GlobalSearch from './components/GlobalSearch';
 import PortfolioSwitcher from './components/PortfolioSwitcher';
@@ -281,8 +282,8 @@ export default function DashboardClient({
   const [benchmark, setBenchmark] = useState<'SPY' | 'QQQ' | null>(null);
   
   // Local state for unauthenticated users
-  const [localHoldings, setLocalHoldings] = useState<HoldingsGroup[]>(holdingsData);
-  const [localSummary, setLocalSummary] = useState<Summary>(summary);
+  const [, setLocalHoldings] = useState<HoldingsGroup[]>(holdingsData);
+  const [, setLocalSummary] = useState<Summary>(summary);
   const [localChartData, setLocalChartData] = useState<ChartPoint[]>(chartData);
   const [serverChartData, setServerChartData] = useState<ChartPoint[]>(chartData);
   const [isChartLoading, setIsChartLoading] = useState(false);
@@ -301,7 +302,7 @@ export default function DashboardClient({
     prefs.costBasisMethod ?? 'FIFO',
     effectiveSelectedPortfolioIds,
   );
-  const activePortfolioId = ledger.activePortfolioId ?? portfolioId;
+  const activePortfolioId = isGuest ? ledger.activePortfolioId : portfolioId;
   const isLocalPortfolio = isGuest;
   const activePortfolioName = selectionMode === 'multi'
     ? buildPortfolioSelectionLabel(
@@ -320,9 +321,10 @@ export default function DashboardClient({
           countLabel: (count) => `${count} Portfolios`,
         },
       )
-    : (ledger.portfolios.find((portfolio) => portfolio.id === activePortfolioId)?.name ?? portfolioName);
+    : (isGuest ? ledger.portfolios.find((portfolio) => portfolio.id === activePortfolioId)?.name ?? portfolioName : portfolioName);
   const activePortfolios = useMemo(
     () => {
+      if (!isGuest) return portfolios;
       const merged = new Map(portfolios.map((portfolio) => [portfolio.id, portfolio]));
 
       ledger.portfolios.forEach((portfolio) => {
@@ -331,25 +333,24 @@ export default function DashboardClient({
 
       return merged.size > 0 ? Array.from(merged.values()) : portfolios;
     },
-    [ledger.portfolios, portfolios],
+    [isGuest, ledger.portfolios, portfolios],
   );
-  const hasServerDashboardData = holdingsData.some((group) => group.holdings.length > 0)
-    || chartData.length > 0
-    || summary.totalValue !== 0
-    || summary.totalCapGain !== 0
-    || summary.totalCapGainPercentage !== 0
-    || summary.totalRealizedGain !== 0
-    || summary.totalDividendIncome !== 0;
-  const shouldUseLedgerDashboardData = isLocalPortfolio
-    || (ledger.ready && (ledger.transactions.length > 0 || !hasServerDashboardData));
+  const shouldUseLedgerDashboardData = isGuest;
   const selectionHref = !isLocalPortfolio
     ? toPortfolioSelectionHref('/app', effectiveSelectedPortfolioIds)
     : '/app';
   const transactionsHref = !isLocalPortfolio
     ? toPortfolioSelectionHref('/transactions', effectiveSelectedPortfolioIds)
     : '/transactions';
-  const displayHoldings = shouldUseLedgerDashboardData ? ledger.holdings : localHoldings;
-  const displaySummary = shouldUseLedgerDashboardData ? ledger.summary : localSummary;
+  const cloudDashboard = useMemo(() => applyDashboardPrices(holdingsData, summary, livePrices), [holdingsData, summary, livePrices]);
+  const displayHoldings = isGuest ? ledger.holdings : cloudDashboard.holdings;
+  const displaySummary = isGuest ? ledger.summary : cloudDashboard.summary;
+
+  // Existing queued writes still drain during migration. Refresh the cloud view
+  // when that queue settles, without ever displaying the stale local snapshot.
+  useEffect(() => {
+    if (!isGuest && ledger.ready && !ledger.hasPendingSync) router.refresh();
+  }, [isGuest, ledger.ready, ledger.hasPendingSync, router]);
   const displayChartData = useMemo<ChartPoint[]>(() => (
     shouldUseLedgerDashboardData && localChartData.length === 0
       ? [{ date: 'Today', Local: ledger.summary.totalValue, Total: ledger.summary.totalValue }]
@@ -359,7 +360,6 @@ export default function DashboardClient({
   // 切换 portfolio 时显示骨架屏，同步 props → state
   const [isSwitching, setIsSwitching] = useState(false);
   const isFirstRender = useRef(true);
-  const fetchedPriceKeyRef = useRef<string | null>(null);
   const refreshedProfileLogosForPortfolioRef = useRef<string | null>(null);
 
   useEffect(() => {
@@ -430,7 +430,7 @@ export default function DashboardClient({
     void loadChartData();
 
     return () => controller.abort();
-  }, [effectiveSelectedPortfolioIds, isLocalPortfolio, shouldUseLedgerDashboardData]);
+  }, [effectiveSelectedPortfolioIds, isLocalPortfolio, shouldUseLedgerDashboardData, holdingsData, summary]);
 
   useEffect(() => {
     if (!activePortfolioId || isLocalPortfolio) return;
@@ -479,25 +479,17 @@ export default function DashboardClient({
          : String(value);
   };
 
-  // --- 客户端异步获取实时价格 ---
+  // Quotes depend on ticker selection, not derived holdings (which change when
+  // quotes arrive). This avoids both stale snapshots and a quote-fetch loop.
+  const quoteSymbols = [...new Set((isGuest ? ledger.holdings : holdingsData)
+    .flatMap(group => group.holdings.map(holding => holding.ticker)))].sort().join(',');
+  const quotePortfolioKey = effectiveSelectedPortfolioIds.join(',');
   useEffect(() => {
-    // 直接用服务端传下来的 holdingsData 作为 source of truth，避免从
-    // displayHoldings 读（那会在 effect 自身的 setState 后再触发一次读到自己的脏输出）。
-    const tickers = new Set<string>();
-    const sourceHoldings = shouldUseLedgerDashboardData ? ledger.holdings : holdingsData;
-    sourceHoldings.forEach(group => {
-      group.holdings.forEach(h => tickers.add(h.ticker));
-    });
-
-    if (tickers.size === 0) return;
-    const priceKey = `${effectiveSelectedPortfolioIds.join(',')}:${Array.from(tickers).sort().join(',')}`;
-    if (fetchedPriceKeyRef.current === priceKey) return;
-    fetchedPriceKeyRef.current = priceKey;
-
+    if (!quoteSymbols) return;
+    const controller = new AbortController();
     const fetchLivePrices = async () => {
       try {
-        const symbolParam = Array.from(tickers).join(',');
-        const res = await fetch(`/api/stock/batch-quote?symbols=${symbolParam}`);
+        const res = await fetch(`/api/stock/batch-quote?symbols=${quoteSymbols}`, { signal: controller.signal });
 
         if (res.headers.get('X-RateLimit-Exhausted') === 'true' || res.status === 429) {
           setIsRateLimited(true);
@@ -506,45 +498,11 @@ export default function DashboardClient({
         if (!res.ok) return;
 
         const livePrices: Record<string, number> = await res.json();
+        if (controller.signal.aborted) return;
         setLivePrices(livePrices);
 
-        if (Object.keys(livePrices).length === 0) return;
-
-        // 服务端已直接传下 totalCost，不再反推 costBasis
-        let newTotalValue = 0;
-        let newTotalCost = 0;
-
-        const updatedHoldings = sourceHoldings.map(group => ({
-          ...group,
-          holdings: group.holdings.map(h => {
-            const costBasis = h.totalCost;
-            const livePrice = livePrices[h.ticker];
-            if (livePrice && livePrice > 0) {
-              const newValue = livePrice * h.qty;
-              const newCapGain = newValue - costBasis;
-              const newReturnPct = costBasis > 0 ? (newCapGain / costBasis) * 100 : 0;
-
-              newTotalValue += newValue;
-              newTotalCost += costBasis;
-
-              return { ...h, price: livePrice, value: newValue, capGain: newCapGain, return: newReturnPct };
-            }
-            newTotalValue += h.value;
-            newTotalCost += costBasis;
-            return h;
-          })
-        }));
-
-        setLocalHoldings(updatedHoldings);
-        setLocalSummary(prev => ({
-          totalValue: newTotalValue,
-          totalCapGain: newTotalValue - newTotalCost,
-          totalCapGainPercentage: newTotalCost > 0 ? ((newTotalValue - newTotalCost) / newTotalCost) * 100 : 0,
-          totalRealizedGain: prev.totalRealizedGain,
-          totalDividendIncome: prev.totalDividendIncome,
-        }));
       } catch (err) {
-        console.error("Failed to fetch live prices silently:", err);
+        if (!controller.signal.aborted) console.error("Failed to fetch live prices silently:", err);
       }
     };
 
@@ -554,8 +512,9 @@ export default function DashboardClient({
 
     return () => {
       window.clearTimeout(timer);
+      controller.abort();
     };
-  }, [activePortfolioId, effectiveSelectedPortfolioIds, holdingsData, ledger.holdings, shouldUseLedgerDashboardData]);
+  }, [quotePortfolioKey, quoteSymbols]);
 
   // 获取待确认分红数量
   const pendingDividendKey = effectiveSelectedPortfolioIds.join(',');
@@ -917,8 +876,12 @@ export default function DashboardClient({
 
   const handleRefresh = async () => {
     setIsRefreshing(true);
-    await ledger.syncNow();
-    setIsRefreshing(false);
+    try {
+      await ledger.syncNow();
+      if (!isGuest) router.refresh();
+    } finally {
+      setIsRefreshing(false);
+    }
   };
 
   const totalReturnAbs = displaySummary.totalCapGain + (displaySummary.totalDividendIncome || 0);
@@ -1502,7 +1465,8 @@ export default function DashboardClient({
         onClose={() => setIsModalOpen(false)}
         portfolioName={activePortfolioName}
         portfolioId={activePortfolioId}
-        user={user}
+        storage={isGuest ? 'local' : 'cloud'}
+        userId={user?.id}
       />
 
       {!isLocalPortfolio && (

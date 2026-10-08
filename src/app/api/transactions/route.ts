@@ -1,4 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { revalidatePath } from 'next/cache';
+import { normalizeTicker } from '@/lib/transactions/ticker';
 import prisma from '@/lib/prisma';
 import { findOwnedPortfolio, requireAuthenticatedUser } from '@/lib/ownership';
 import {
@@ -30,7 +32,7 @@ export async function POST(request: NextRequest) {
     const body = await request.json();
 
     // 验证必填字段（注意：数字 0 不算缺失，由下面的范围校验去处理）
-    const requiredFields = ['portfolioId', 'assetId', 'type', 'quantity', 'price', 'date'];
+    const requiredFields = ['portfolioId', 'type', 'quantity', 'price', 'date'];
     for (const field of requiredFields) {
       const value = body[field];
       if (value === undefined || value === null || value === '') {
@@ -42,11 +44,26 @@ export async function POST(request: NextRequest) {
     }
 
     // 验证交易类型
-    if (!['BUY', 'SELL'].includes(body.type)) {
+    if (!['BUY', 'SELL', 'DIVIDEND'].includes(body.type)) {
       return NextResponse.json(
-        { error: 'Invalid transaction type. Must be BUY or SELL' },
+        { error: 'Invalid transaction type. Must be BUY, SELL or DIVIDEND' },
         { status: 400 }
       );
+    }
+
+    const ticker = body.ticker === undefined ? undefined : normalizeTicker(body.ticker);
+    if ((body.ticker !== undefined && !ticker)
+      || (!ticker && (typeof body.assetId !== 'string' || !body.assetId.trim()))) {
+      return NextResponse.json({ error: 'A valid ticker or assetId is required' }, { status: 400 });
+    }
+    if (typeof body.portfolioId !== 'string'
+      || (body.notes != null && (typeof body.notes !== 'string' || body.notes.length > 2000))) {
+      return NextResponse.json({ error: 'Invalid portfolioId or notes' }, { status: 400 });
+    }
+    // Manual dividends are a cash amount, represented by one unit. Managed
+    // dividends and DRIP continue to use the dedicated confirmation endpoint.
+    if (body.type === 'DIVIDEND' && (body.quantity !== 1 || (body.fee ?? 0) !== 0)) {
+      return NextResponse.json({ error: 'Manual dividends require quantity 1 and fee 0' }, { status: 400 });
     }
 
     const quantity = parsePositiveNumber(body.quantity, MAX_TRANSACTION_QUANTITY);
@@ -100,6 +117,7 @@ export async function POST(request: NextRequest) {
     const transaction = await persistSessionTrade({
       portfolioId: body.portfolioId,
       assetId: body.assetId,
+      ticker: ticker || undefined,
       type: body.type,
       quantity,
       price,
@@ -108,6 +126,10 @@ export async function POST(request: NextRequest) {
       currency,
       notes: body.notes || null,
     });
+
+    revalidatePath('/app');
+    revalidatePath('/transactions');
+    revalidatePath('/stock/[ticker]', 'page');
 
     return NextResponse.json({
       success: true,

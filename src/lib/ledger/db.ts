@@ -210,13 +210,35 @@ function toLedgerTransactionRecord(input: CreateLedgerTransactionInput): LedgerT
 
 async function enqueueSyncOperation(operation: LedgerSyncOperation): Promise<void> {
   const db = await openLedgerDb();
-  await putMany(db, SYNC_STORE, [operation]);
+  const tx = db.transaction([META_STORE, SYNC_STORE], 'readwrite');
+  const meta = tx.objectStore(META_STORE);
+  const counter = meta.get('sync-sequence');
+  counter.onsuccess = () => {
+    const sequence = Number(counter.result?.value ?? 0) + 1;
+    meta.put({ key: 'sync-sequence', value: String(sequence) });
+    tx.objectStore(SYNC_STORE).put({ ...operation, sequence });
+  };
+  await new Promise<void>((resolve, reject) => {
+    tx.oncomplete = () => resolve();
+    tx.onabort = tx.onerror = () => reject(tx.error ?? new Error('Failed to queue sync operation.'));
+  });
 }
 
 async function getQueuedOperations(namespace: LedgerNamespace): Promise<LedgerSyncOperation[]> {
   const db = await openLedgerDb();
   const rows = await readByIndex<LedgerSyncOperation>(db, SYNC_STORE, 'namespace', namespace);
-  return rows.sort((a, b) => new Date(a.updatedAt).getTime() - new Date(b.updatedAt).getTime());
+  return rows.sort((a, b) => {
+    if (a.sequence !== undefined && b.sequence !== undefined) return a.sequence - b.sequence;
+    // Drain pre-upgrade operations before newly enqueued operations.
+    if (a.sequence !== undefined) return 1;
+    if (b.sequence !== undefined) return -1;
+    const byTime = new Date(a.updatedAt).getTime() - new Date(b.updatedAt).getTime();
+    if (byTime) return byTime;
+    // Legacy timestamps can tie; create the parent before its transactions.
+    const priority = (op: LedgerSyncOperation) => op.entity === 'portfolio'
+      ? (op.action === 'upsert' ? -1 : 1) : 0;
+    return priority(a) - priority(b);
+  });
 }
 
 export async function clearQueuedOperations(ids: string[]): Promise<void> {
@@ -569,13 +591,8 @@ export async function deleteTransaction(namespace: LedgerNamespace, id: string):
   notifyLedgerListeners();
 }
 
-export async function replaceNamespaceData(namespace: LedgerNamespace, payload: LedgerBootstrapPayload): Promise<void> {
+async function importRemoteIntoEmptyNamespace(namespace: LedgerNamespace, payload: LedgerBootstrapPayload): Promise<void> {
   const db = await openLedgerDb();
-  const existingPortfolios = await listPortfolios(namespace);
-  const existingTransactions = await listTransactions(namespace);
-
-  await deleteMany(db, PORTFOLIOS_STORE, existingPortfolios.map((portfolio) => portfolio.storageKey));
-  await deleteMany(db, TRANSACTIONS_STORE, existingTransactions.map((transaction) => transaction.storageKey));
 
   const portfolioRows = payload.portfolios.map((portfolio) => ({
     storageKey: createStorageKey(namespace, portfolio.id),
@@ -613,12 +630,25 @@ export async function replaceNamespaceData(namespace: LedgerNamespace, payload: 
     syncState: 'synced' as const,
   } satisfies LedgerTransactionRecord));
 
-  if (portfolioRows.length > 0) {
-    await putMany(db, PORTFOLIOS_STORE, portfolioRows);
+  // Check emptiness and import atomically, including writes from another tab
+  // or edits made while the cloud request was in flight.
+  const tx = db.transaction([PORTFOLIOS_STORE, TRANSACTIONS_STORE, SYNC_STORE], 'readwrite');
+  const checks = [PORTFOLIOS_STORE, TRANSACTIONS_STORE, SYNC_STORE].map(
+    (store) => tx.objectStore(store).index('namespace').count(namespace),
+  );
+  let completed = 0;
+  for (const check of checks) {
+    check.onsuccess = () => {
+      completed += 1;
+      if (completed !== checks.length || checks.some((request) => request.result > 0)) return;
+      portfolioRows.forEach((row) => tx.objectStore(PORTFOLIOS_STORE).put(row));
+      transactionRows.forEach((row) => tx.objectStore(TRANSACTIONS_STORE).put(row));
+    };
   }
-  if (transactionRows.length > 0) {
-    await putMany(db, TRANSACTIONS_STORE, transactionRows);
-  }
+  await new Promise<void>((resolve, reject) => {
+    tx.oncomplete = () => resolve();
+    tx.onabort = tx.onerror = () => reject(tx.error ?? new Error('Failed to import remote ledger.'));
+  });
 
   notifyLedgerListeners();
 }
@@ -732,36 +762,95 @@ export async function pullRemoteLedger(userId: string): Promise<LedgerBootstrapP
   return response.json() as Promise<LedgerBootstrapPayload>;
 }
 
-export async function pushPendingLedgerChanges(userId: string): Promise<boolean> {
-  const namespace: LedgerNamespace = `user:${userId}`;
-  const operations = await getQueuedOperations(namespace);
-  if (operations.length === 0) return true;
+const pendingPushes = new Map<string, Promise<boolean>>();
 
-  const response = await fetch('/api/sync/push', {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      'X-Ledger-User': userId,
-    },
-    body: JSON.stringify({ operations }),
+// Multiple mounted ledger hooks must not send overlapping batches.
+export function pushPendingLedgerChanges(userId: string): Promise<boolean> {
+  const existing = pendingPushes.get(userId);
+  if (existing) return existing;
+  const pending = pushQueuedChanges(userId).catch(() => false).finally(() => {
+    pendingPushes.delete(userId);
   });
+  pendingPushes.set(userId, pending);
+  return pending;
+}
 
-  if (!response.ok) {
-    return false;
+async function pushQueuedChanges(userId: string): Promise<boolean> {
+  const namespace = getNamespaceForUser(userId);
+  const operations = await getQueuedOperations(namespace);
+  for (let offset = 0; offset < operations.length; offset += 200) {
+    const batch = operations.slice(offset, offset + 200);
+    const response = await fetch('/api/sync/push', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'X-Ledger-User': userId },
+      body: JSON.stringify({ operations: batch }),
+    });
+    if (!response.ok && response.status !== 409) return false;
+    const result = await response.json();
+    // Older servers or malformed responses cannot confirm individual writes.
+    if (!Array.isArray(result?.appliedOperationIds)) return false;
+    const acknowledged = new Set<string>(result.appliedOperationIds);
+    const committed = batch.filter((operation) => acknowledged.has(operation.id));
+    await acknowledgeOperations(namespace, committed);
+    if (committed.length !== batch.length) return false;
   }
-
-  await clearQueuedOperations(operations.map((operation) => operation.id));
-  await markNamespaceSynced(
-    namespace,
-    operations.filter((operation) => operation.entity === 'portfolio' && operation.action === 'upsert').map((operation) => operation.recordId),
-    'portfolio',
-  );
-  await markNamespaceSynced(
-    namespace,
-    operations.filter((operation) => operation.entity === 'transaction' && operation.action === 'upsert').map((operation) => operation.recordId),
-    'transaction',
-  );
   return true;
+}
+
+async function acknowledgeOperations(namespace: LedgerNamespace, operations: LedgerSyncOperation[]) {
+  const db = await openLedgerDb();
+  const tx = db.transaction([SYNC_STORE, PORTFOLIOS_STORE, TRANSACTIONS_STORE], 'readwrite');
+  const queue = tx.objectStore(SYNC_STORE);
+  for (const operation of operations) queue.delete(operation.id);
+  // Read the remaining queue in the same transaction: edits made while the
+  // request was in flight must retain their pending state.
+  const remaining = queue.index('namespace').getAll(namespace);
+  remaining.onsuccess = () => {
+    const pending = remaining.result as LedgerSyncOperation[];
+    for (const operation of operations) {
+      if (operation.action === 'delete'
+        || pending.some((item) => item.entity === operation.entity && item.recordId === operation.recordId)) continue;
+      const store = tx.objectStore(operation.entity === 'portfolio' ? PORTFOLIOS_STORE : TRANSACTIONS_STORE);
+      const request = store.get(createStorageKey(namespace, operation.recordId));
+      request.onsuccess = () => {
+        if (request.result) store.put({ ...request.result, syncState: 'synced' });
+      };
+    }
+  };
+  await new Promise<void>((resolve, reject) => {
+    tx.oncomplete = () => resolve();
+    tx.onabort = tx.onerror = () => reject(tx.error ?? new Error('Failed to acknowledge sync operations.'));
+  });
+  notifyLedgerListeners();
+}
+
+const pendingBootstraps = new Map<string, Promise<boolean>>();
+
+export function bootstrapUserLedger(userId: string): Promise<boolean> {
+  const existing = pendingBootstraps.get(userId);
+  if (existing) return existing;
+  const pending = bootstrapRemoteLedger(userId).catch(() => false).finally(() => {
+    pendingBootstraps.delete(userId);
+  });
+  pendingBootstraps.set(userId, pending);
+  return pending;
+}
+
+async function bootstrapRemoteLedger(userId: string): Promise<boolean> {
+  const namespace = getNamespaceForUser(userId);
+  // A failed pull is not evidence of an empty account. Leave guest data intact
+  // and retry on a later bootstrap rather than uploading a duplicate portfolio.
+  const remote = await pullRemoteLedger(userId);
+  if (!remote) return false;
+  const local = await listPortfolios(namespace);
+  if (local.length === 0 && await readSyncQueueSize(namespace) === 0) {
+    if (remote.portfolios.length > 0) {
+      await importRemoteIntoEmptyNamespace(namespace, remote);
+    } else {
+      await cloneGuestDataIntoUserNamespace(userId);
+    }
+  }
+  return pushPendingLedgerChanges(userId);
 }
 
 export async function getDefaultActivePortfolioId(namespace: LedgerNamespace): Promise<string> {

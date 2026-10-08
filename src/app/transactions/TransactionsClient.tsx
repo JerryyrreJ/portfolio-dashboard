@@ -2,6 +2,7 @@
 
 import React, { startTransition, useEffect, useRef, useState } from 'react';
 import { format } from 'date-fns';
+import { flushLegacyCloudWrites } from '@/lib/transactions/client';
 import { useLocale, useTranslations } from 'next-intl';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
@@ -114,6 +115,7 @@ type ExportPdfRow = {
 };
 
 interface TransactionsClientProps {
+  userId?: string;
   transactions: TransactionWithAsset[];
   total: number;
   totalPages: number;
@@ -162,7 +164,7 @@ function formatExportAmount(num: number, locale: string, decimals: number = 2): 
 export default function TransactionsClient({
   transactions: initialTransactions, total, totalPages, currentPage, limit,
   portfolioId, portfolioName, selectedPortfolioIds = [], selectionMode = 'single', initialPortfolios, logoMap, searchTicker, searchType,
-  buyCount, sellCount, totalVolume, userDisplayName = '',
+  buyCount, sellCount, totalVolume, userDisplayName = '', userId,
 }: TransactionsClientProps) {
   const router = useRouter();
   const t = useTranslations('transactions');
@@ -173,6 +175,7 @@ export default function TransactionsClient({
     cloudSync: !!portfolioId,
   });
   const [transactions, setTransactions] = useState(initialTransactions);
+  useEffect(() => { setTransactions(initialTransactions); }, [initialTransactions]);
   const refreshedProfileLogosForPortfolioRef = useRef<string | null>(null);
   const effectiveSelectedPortfolioIds = selectedPortfolioIds.length > 0
     ? selectedPortfolioIds
@@ -301,6 +304,7 @@ export default function TransactionsClient({
     }
     closeEdit();
     try {
+      await flushLegacyCloudWrites(userId);
       const res = await fetch(`/api/transactions/${tx.id}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
@@ -313,9 +317,7 @@ export default function TransactionsClient({
         }),
       });
       if (!res.ok) throw new Error();
-      if (isManaged) {
-        startTransition(() => router.refresh());
-      }
+      startTransition(() => router.refresh());
     } catch {
       if (!isManaged) {
         setTransactions(prev);
@@ -335,6 +337,7 @@ export default function TransactionsClient({
     }
     setConfirmingId(null);
     try {
+      await flushLegacyCloudWrites(userId);
       const res = await fetch(`/api/transactions/${tx.id}`, { method: 'DELETE' });
       if (!res.ok) throw new Error();
       startTransition(() => router.refresh());

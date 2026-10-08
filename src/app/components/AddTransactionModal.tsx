@@ -1,15 +1,15 @@
 'use client';
 
-/* eslint-disable react-hooks/preserve-manual-memoization */
-
 import React, { useState, useCallback, useEffect, useRef } from 'react';
 import { X, Search as SearchIcon, Loader2, Calendar as CalendarIcon, DollarSign, AlertCircle, CheckCircle, ChevronRight, Hash, ChevronLeft, ChevronDown } from 'lucide-react';
 import { format, addMonths, subMonths, startOfMonth, endOfMonth, startOfWeek, endOfWeek, isSameMonth, isSameDay, eachDayOfInterval } from 'date-fns';
 import { useLocale, useTranslations } from 'next-intl';
 import { useStock } from '@/hooks/useStock';
 import { getCurrencySymbol, USD_RATES } from '@/lib/currency';
-import { createTransaction, getNamespaceForUser } from '@/lib/ledger/db';
-import type { User as SupabaseUser } from '@supabase/supabase-js';
+import { submitTransaction } from '@/lib/transactions/client';
+import { listTransactions } from '@/lib/ledger/db';
+import { derivePortfolioDashboard } from '@/lib/ledger/derive';
+import { useRouter } from 'next/navigation';
 import CachedAssetLogo from './CachedAssetLogo';
 import { inferCurrencyFromTicker } from '@/lib/transactions/ticker';
 
@@ -42,7 +42,8 @@ interface AddTransactionModalProps {
   portfolioId: string;
   defaultTicker?: string;
   defaultTickerName?: string;
-  user?: SupabaseUser | null;
+  storage: 'local' | 'cloud';
+  userId?: string;
 }
 
 interface SearchResult {
@@ -70,8 +71,11 @@ export default function AddTransactionModal({
   portfolioId,
   defaultTicker,
   defaultTickerName,
-  user = null,
+  storage,
+  userId,
 }: AddTransactionModalProps) {
+  const router = useRouter();
+  const submittingRef = useRef(false);
   const t = useTranslations('addTransaction');
   const locale = useLocale();
   const { searchStock, getQuote, getHistoricalPrice, isLoading } = useStock();
@@ -139,6 +143,14 @@ export default function AddTransactionModal({
   const fetchHoldings = useCallback(async () => {
     if (!portfolioId) return;
     try {
+      if (storage === 'local') {
+        const transactions = await listTransactions('guest', portfolioId);
+        const derived = derivePortfolioDashboard(transactions, {});
+        setHoldings(derived.holdings.flatMap(group => group.holdings.map(holding => ({
+          ticker: holding.ticker, name: holding.name, quantity: holding.qty,
+        }))));
+        return;
+      }
       const response = await fetch(`/api/holdings?portfolioId=${portfolioId}`);
       if (response.ok) {
         const data = await response.json();
@@ -147,7 +159,7 @@ export default function AddTransactionModal({
     } catch (error) {
       console.error('Error fetching holdings:', error);
     }
-  }, [portfolioId]);
+  }, [portfolioId, storage]);
 
   const getAvailableShares = useCallback((ticker: string): number => {
     const holding = holdings.find(h => h.ticker === ticker);
@@ -391,6 +403,7 @@ export default function AddTransactionModal({
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (submittingRef.current) return;
     clearSubmissionError();
 
     if (!validateForm() || !selectedStock) {
@@ -409,12 +422,12 @@ export default function AddTransactionModal({
       }
     }
 
+    submittingRef.current = true;
     setSubmitStatus('loading');
     try {
       const exchangeRate = USD_RATES[txCurrency] ?? 1;
       const parsedPrice = parseFloat(price);
-      await createTransaction({
-        namespace: getNamespaceForUser(user?.id),
+      await submitTransaction(storage, {
         portfolioId,
         type: transactionType,
         quantity: transactionType === 'DIVIDEND' ? 1 : Math.abs(parseFloat(shares)),
@@ -432,13 +445,16 @@ export default function AddTransactionModal({
           currency: txCurrency,
           logo: txLogo,
         },
-      });
+      }, userId);
 
-      window.dispatchEvent(new Event('localTransactionsUpdated'));
+      if (storage === 'local') window.dispatchEvent(new Event('localTransactionsUpdated'));
+      else router.refresh();
       queueSuccessClose();
     } catch {
       setSubmitStatus('error');
       setSubmitError(t('recordFailed'));
+    } finally {
+      submittingRef.current = false;
     }
   };
 

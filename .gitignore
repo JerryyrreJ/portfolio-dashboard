@@ -67,3 +67,12 @@ email/
 /tests/*
 !/tests/security/
 !/tests/security/*.test.ts
+
+# Keep ledger synchronization regressions in version control.
+!/tests/ledger-sync.test.ts
+!/tests/ledger-sync-route.test.ts
+!/tests/api/
+/tests/api/*
+!/tests/api/sync-push-ownership.test.ts
+!/tests/consistency/
+!/tests/consistency/*.test.ts

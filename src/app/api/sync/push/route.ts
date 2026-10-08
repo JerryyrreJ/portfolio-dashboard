@@ -103,10 +103,13 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
 
-  const body = await request.json();
-  const operations = Array.isArray(body.operations) ? body.operations as LedgerSyncOperation[] : [];
+  const body: unknown = await request.json().catch(() => null);
+  if (!isRecord(body) || !Array.isArray(body.operations)) {
+    return NextResponse.json({ error: 'Invalid operations' }, { status: 400 });
+  }
+  const operations = body.operations as LedgerSyncOperation[];
   if (operations.length === 0) {
-    return NextResponse.json({ ok: true, applied: 0 });
+    return NextResponse.json({ ok: true, applied: 0, appliedOperationIds: [] });
   }
   if (operations.length > MAX_OPERATIONS_PER_REQUEST) {
     return NextResponse.json(
@@ -117,15 +120,18 @@ export async function POST(request: NextRequest) {
     );
   }
 
-  const orderedOperations = [...operations].sort(
-    (a, b) => new Date(a.updatedAt).getTime() - new Date(b.updatedAt).getTime(),
-  );
+  // Acknowledge only a committed prefix. Applying later operations after a
+  // rejection could let a retry overwrite newer state with an older operation.
+  const appliedOperationIds: string[] = [];
 
-  let applied = 0;
-
-  for (const operation of orderedOperations) {
-    if (!operation || operation.namespace !== `user:${user.id}` || !isRecord(operation.payload)) {
-      continue;
+  for (const operation of operations) {
+    if (!operation || typeof operation.id !== 'string' || !operation.id
+      || typeof operation.recordId !== 'string' || !operation.recordId
+      || operation.namespace !== `user:${user.id}` || !isRecord(operation.payload)
+      || !['portfolio', 'transaction'].includes(operation.entity)
+      || !['upsert', 'delete'].includes(operation.action)
+      || (operation.action === 'upsert' && operation.payload.id !== operation.recordId)) {
+      break;
     }
 
     if (operation.entity === 'portfolio') {
@@ -133,12 +139,12 @@ export async function POST(request: NextRequest) {
         await prisma.portfolio.deleteMany({
           where: { id: operation.recordId, userId: user.id },
         });
-        applied += 1;
+        appliedOperationIds.push(operation.id);
         continue;
       }
 
       const payload = toPortfolioPayload(operation.payload);
-      if (!payload) continue;
+      if (!payload) break;
 
       const existingPortfolio = await prisma.portfolio.findUnique({
         where: { id: payload.id },
@@ -156,12 +162,12 @@ export async function POST(request: NextRequest) {
             settingsUpdatedAt: payload.settingsUpdatedAt ? new Date(payload.settingsUpdatedAt) : null,
           },
         });
-        applied += 1;
+        appliedOperationIds.push(operation.id);
         continue;
       }
 
       if (existingPortfolio.userId !== user.id) {
-        continue;
+        break;
       }
 
       await prisma.portfolio.update({
@@ -173,7 +179,7 @@ export async function POST(request: NextRequest) {
           settingsUpdatedAt: payload.settingsUpdatedAt ? new Date(payload.settingsUpdatedAt) : new Date(),
         },
       });
-      applied += 1;
+      appliedOperationIds.push(operation.id);
       continue;
     }
 
@@ -185,21 +191,21 @@ export async function POST(request: NextRequest) {
             portfolio: { userId: user.id },
           },
         });
-        applied += 1;
+        appliedOperationIds.push(operation.id);
         continue;
       }
 
       const payload = toTransactionPayload(operation.payload);
-      if (!payload) continue;
+      if (!payload) break;
 
       const portfolio = await prisma.portfolio.findFirst({
         where: { id: payload.portfolioId, userId: user.id },
         select: { id: true },
       });
-      if (!portfolio) continue;
+      if (!portfolio) break;
 
       const ticker = normalizeTicker(payload.asset.ticker);
-      if (!ticker) continue;
+      if (!ticker) break;
       const asset = await resolveOrCreateAsset(prisma, { ticker });
 
       const existingTransaction = await prisma.transaction.findUnique({
@@ -234,12 +240,12 @@ export async function POST(request: NextRequest) {
             notes: payload.notes,
           },
         });
-        applied += 1;
+        appliedOperationIds.push(operation.id);
         continue;
       }
 
       if (existingTransaction.portfolio.userId !== user.id) {
-        continue;
+        break;
       }
 
       await prisma.transaction.update({
@@ -262,9 +268,13 @@ export async function POST(request: NextRequest) {
           notes: payload.notes,
         },
       });
-      applied += 1;
+      appliedOperationIds.push(operation.id);
     }
   }
 
-  return NextResponse.json({ ok: true, applied });
+  return NextResponse.json({
+    ok: appliedOperationIds.length === operations.length,
+    applied: appliedOperationIds.length,
+    appliedOperationIds,
+  }, { status: appliedOperationIds.length === operations.length ? 200 : 409 });
 }

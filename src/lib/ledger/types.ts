@@ -48,6 +48,8 @@ export interface LedgerTransactionRecord {
 
 export interface LedgerSyncOperation {
   id: string;
+  /** Local insertion order; legacy queue entries may not have one. */
+  sequence?: number;
   namespace: LedgerNamespace;
   entity: 'portfolio' | 'transaction';
   action: 'upsert' | 'delete';

@@ -199,6 +199,7 @@ export default async function TransactionsPage(props: {
       sellCount={sellCount}
       totalVolume={totalVolume}
       userDisplayName={userDisplayName}
+      userId={user?.id}
     />
   );
 }

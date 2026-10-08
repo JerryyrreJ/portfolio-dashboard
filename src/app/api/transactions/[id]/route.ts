@@ -223,6 +223,9 @@ export async function PATCH(
         }),
       ]));
 
+      revalidatePath('/app');
+      revalidatePath('/transactions');
+      revalidatePath('/stock/[ticker]', 'page');
       return NextResponse.json({
         success: true,
         linked: true,
@@ -276,6 +279,9 @@ export async function PATCH(
       },
     });
 
+    revalidatePath('/app');
+    revalidatePath('/transactions');
+    revalidatePath('/stock/[ticker]', 'page');
     return NextResponse.json({ success: true, transaction: updated });
   } catch (error) {
     console.error('Failed to update transaction:', error);
@@ -336,6 +342,8 @@ export async function DELETE(
       });
 
       revalidatePath('/transactions');
+      revalidatePath('/app');
+      revalidatePath('/stock/[ticker]', 'page');
 
       return NextResponse.json({
         success: true,
@@ -360,6 +368,8 @@ export async function DELETE(
     });
 
     revalidatePath('/transactions');
+    revalidatePath('/app');
+    revalidatePath('/stock/[ticker]', 'page');
 
     return NextResponse.json({
       success: true,

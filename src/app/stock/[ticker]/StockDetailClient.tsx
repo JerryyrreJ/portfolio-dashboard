@@ -253,7 +253,7 @@ const CustomXAxisTick = ({ x, y, payload, visibleTicksCount, index }: CustomXAxi
 
 // ─── Main Component ───────────────────────────────────────────────────────────
 
-export default function StockDetailClient({ stockData }: { stockData: StockData }) {
+export default function StockDetailClient({ stockData, userId }: { stockData: StockData; userId?: string }) {
   const router = useRouter();
   const { fmt, symbol, convert } = useCurrency();
   const { colors } = usePreferences();
@@ -841,6 +841,8 @@ export default function StockDetailClient({ stockData }: { stockData: StockData 
           onClose={() => setIsAddTradeOpen(false)}
           portfolioName={portfolioName}
           portfolioId={portfolioId}
+          storage="cloud"
+          userId={userId}
           defaultTicker={ticker}
           defaultTickerName={name}
         />

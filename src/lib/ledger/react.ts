@@ -1,10 +1,10 @@
 'use client';
 
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import type { User } from '@supabase/supabase-js';
 import {
   clearNamespace,
-  cloneGuestDataIntoUserNamespace,
+  bootstrapUserLedger,
   createPortfolio,
   createTransaction,
   deletePortfolio,
@@ -13,10 +13,8 @@ import {
   getDefaultActivePortfolioId,
   getNamespaceForUser,
   getNamespaceSnapshot,
-  pullRemoteLedger,
   pushPendingLedgerChanges,
   readSyncQueueSize,
-  replaceNamespaceData,
   subscribeLedger,
   updatePortfolio,
   updateTransaction,
@@ -61,9 +59,9 @@ async function loadState(namespace: LedgerNamespace): Promise<LedgerState> {
 }
 
 export function useLedger(user: User | null) {
-  const namespace = getNamespaceForUser(user?.id);
+  const userId = user?.id;
+  const namespace = getNamespaceForUser(userId);
   const [state, setState] = useState<LedgerState>(EMPTY_STATE);
-  const isBootstrappingRef = useRef(false);
 
   useEffect(() => {
     let cancelled = false;
@@ -88,13 +86,10 @@ export function useLedger(user: User | null) {
     let cancelled = false;
 
     const bootstrap = async () => {
-      if (isBootstrappingRef.current) return;
-      isBootstrappingRef.current = true;
-
       try {
         await ensureLegacyMigration();
 
-        if (!user?.id) {
+        if (!userId) {
           if (!cancelled) {
             const nextState = await loadState(namespace);
             setState(nextState);
@@ -102,21 +97,13 @@ export function useLedger(user: User | null) {
           return;
         }
 
-        await cloneGuestDataIntoUserNamespace(user.id);
-        const remote = await pullRemoteLedger(user.id);
-        const local = await loadState(namespace);
-
-        if (remote && local.portfolios.length === 0 && remote.portfolios.length > 0) {
-          await replaceNamespaceData(namespace, remote);
-        }
-
-        await pushPendingLedgerChanges(user.id);
+        await bootstrapUserLedger(userId);
         if (!cancelled) {
           const nextState = await loadState(namespace);
           setState(nextState);
         }
-      } finally {
-        isBootstrappingRef.current = false;
+      } catch {
+        // Keep local data available; a later mount can retry initialization.
       }
     };
 
@@ -125,13 +112,13 @@ export function useLedger(user: User | null) {
     return () => {
       cancelled = true;
     };
-  }, [namespace, user?.id]);
+  }, [namespace, userId]);
 
   useEffect(() => {
-    if (!user?.id) return undefined;
+    if (!userId) return undefined;
 
     const flush = () => {
-      void pushPendingLedgerChanges(user.id);
+      void pushPendingLedgerChanges(userId);
     };
 
     const onVisibilityChange = () => {
@@ -147,7 +134,7 @@ export function useLedger(user: User | null) {
       window.removeEventListener('online', flush);
       document.removeEventListener('visibilitychange', onVisibilityChange);
     };
-  }, [user?.id]);
+  }, [userId]);
 
   const actions = useMemo(() => ({
     createPortfolio: (input: Omit<CreateLedgerPortfolioInput, 'namespace'>) =>
@@ -161,14 +148,14 @@ export function useLedger(user: User | null) {
       updateTransaction({ ...input, namespace }),
     deleteTransaction: (id: string) => deleteTransaction(namespace, id),
     syncNow: async () => {
-      if (!user?.id) return false;
-      const success = await pushPendingLedgerChanges(user.id);
+      if (!userId) return false;
+      const success = await pushPendingLedgerChanges(userId);
       const nextState = await loadState(namespace);
       setState(nextState);
       return success;
     },
-    resetUserNamespace: () => user?.id ? clearNamespace(namespace) : Promise.resolve(),
-  }), [namespace, user?.id]);
+    resetUserNamespace: () => userId ? clearNamespace(namespace) : Promise.resolve(),
+  }), [namespace, userId]);
 
   return {
     ...state,

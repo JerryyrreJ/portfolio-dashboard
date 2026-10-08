@@ -267,8 +267,9 @@ export async function importTransactionsInTransaction(tx: Prisma.TransactionClie
 
 export type PersistSessionTradeInput = {
   portfolioId: string;
-  assetId: string;
-  type: 'BUY' | 'SELL';
+  assetId?: string;
+  ticker?: string;
+  type: 'BUY' | 'SELL' | 'DIVIDEND';
   quantity: number;
   price: number;
   fee: number;
@@ -279,11 +280,15 @@ export type PersistSessionTradeInput = {
 
 export async function persistSessionTrade(input: PersistSessionTradeInput) {
   const { priceUSD, exchangeRate } = await getPriceUSD(input.price, input.currency);
+  const assetId = input.ticker
+    ? (await resolveOrCreateAsset(prisma, { ticker: input.ticker })).id
+    : input.assetId;
+  if (!assetId) throw new Error('Missing asset');
 
   return prisma.transaction.create({
     data: {
       portfolioId: input.portfolioId,
-      assetId: input.assetId,
+      assetId,
       type: input.type,
       quantity: input.quantity,
       price: input.price,

@@ -238,7 +238,7 @@ export default async function StockDetailPage(props: PageProps) {
           type="application/ld+json"
           dangerouslySetInnerHTML={{ __html: JSON.stringify(stockJsonLd) }}
         />
-        <StockDetailClient stockData={stockData} />
+        <StockDetailClient stockData={stockData} userId={user?.id} />
       </>
     )
   }
@@ -306,7 +306,7 @@ export default async function StockDetailPage(props: PageProps) {
         type="application/ld+json"
         dangerouslySetInnerHTML={{ __html: JSON.stringify(stockJsonLd) }}
       />
-      <StockDetailClient stockData={stockData} />
+      <StockDetailClient stockData={stockData} userId={user?.id} />
     </>
   )
 }
